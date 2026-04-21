@@ -156,3 +156,7 @@ temp/
 *.bak
 *.orig
 *.rej
+
+# ---------- Claude ----------
+claude/
+.claude/
