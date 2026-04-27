@@ -35,7 +35,8 @@ async def _best_matches(
     if not embeddings:
         return []
     values_clause = ", ".join(
-        f"(:idx_{i}, CAST(:vec_{i} AS vector))" for i in range(len(embeddings))
+        f"(CAST(:idx_{i} AS int), CAST(:vec_{i} AS vector))"
+        for i in range(len(embeddings))
     )
     stmt = text(
         f"""
@@ -87,9 +88,8 @@ def _build_result(
         match_found=True,
         identity=MatchedIdentity(
             identity_id=identity_id,
-            identity_code=identity_code,
-            display_name=display_name,
-            confidence=confidence,
+            identity_code=identity_code or "",
+            display_name=display_name or "",
         ),
         confidence=confidence,
         det_score=round(face.det_score, 4),
@@ -105,13 +105,19 @@ def _decode_all(images: list[str]) -> tuple[list, list[ImageError]]:
             decoded.append((idx, decode_image(img_b64)))
         except ImageTooLarge:
             errors.append(
-                ImageError(image_index=idx, code="IMAGE_TOO_LARGE",
-                           message="Image exceeds maximum allowed size after decoding")
+                ImageError(
+                    image_index=idx,
+                    code="IMAGE_TOO_LARGE",
+                    message="Image exceeds maximum allowed size after decoding",
+                )
             )
         except ImageDecodeError:
             errors.append(
-                ImageError(image_index=idx, code="INVALID_IMAGE",
-                           message="Image could not be decoded")
+                ImageError(
+                    image_index=idx,
+                    code="INVALID_IMAGE",
+                    message="Image could not be decoded",
+                )
             )
     return decoded, errors
 
@@ -160,8 +166,11 @@ async def verify(
     for (image_index, _img), faces in zip(decoded, faces_per_image, strict=True):
         if not faces:
             image_errors.append(
-                ImageError(image_index=image_index, code="NO_FACE_DETECTED",
-                           message="No face detected in the image")
+                ImageError(
+                    image_index=image_index,
+                    code="NO_FACE_DETECTED",
+                    message="No face detected in the image",
+                )
             )
             continue
         for face_index, face in enumerate(faces):

@@ -5,7 +5,9 @@ from config import settings
 
 class CaptureRequest(BaseModel):
     display_name: str = Field(
-        min_length=1, max_length=255, description="Human-readable name for the identity."
+        min_length=1,
+        max_length=255,
+        description="Human-readable name for the identity.",
     )
     identity_code: str = Field(
         min_length=1,
@@ -42,22 +44,25 @@ class MatchedIdentity(BaseModel):
     identity_id: str
     identity_code: str
     display_name: str
-    confidence: float = Field(description="Cosine similarity in [0, 1].")
 
 
 class FaceResult(BaseModel):
     image_index: int = Field(description="Index of the source image in the request.")
     face_index: int = Field(description="Index of the face within that image.")
-    bbox: list[float] = Field(description="[x1, y1, x2, y2] in resized-image pixel coordinates.")
+    bbox: list[float] = Field(
+        description="[x1, y1, x2, y2] in resized-image pixel coordinates."
+    )
     match_found: bool
     identity: MatchedIdentity | None = None
-    confidence: float
+    confidence: float = Field(description="Cosine similarity in [0, 1].")
     det_score: float = Field(description="Detector confidence in [0, 1].")
 
 
 class ImageError(BaseModel):
     image_index: int
-    code: str = Field(description="One of: NO_FACE_DETECTED, INVALID_IMAGE, IMAGE_TOO_LARGE.")
+    code: str = Field(
+        description="One of: NO_FACE_DETECTED, INVALID_IMAGE, IMAGE_TOO_LARGE."
+    )
     message: str
 
 

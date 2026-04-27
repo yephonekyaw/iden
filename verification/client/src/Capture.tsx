@@ -1,6 +1,6 @@
 import { useRef, useState, type ChangeEvent } from "react";
-
 import { captureFrame, fileToJpegB64, useCamera } from "./camera";
+import { JsonViewer } from "./JsonViewer";
 
 type Stage = "form" | "camera" | "preview" | "submitting" | "done" | "error";
 
@@ -21,11 +21,24 @@ const EMPTY_FIELDS: Fields = {
   department: "",
 };
 
+const FIELD_META: {
+  key: keyof Fields;
+  label: string;
+  type: string;
+  placeholder: string;
+}[] = [
+  { key: "display_name", label: "Full Name", type: "text", placeholder: "e.g. Jane Smith" },
+  { key: "identity_code", label: "Student ID", type: "text", placeholder: "e.g. STU-00123" },
+  { key: "email", label: "School Email", type: "email", placeholder: "e.g. jane@university.edu" },
+  { key: "department", label: "Department", type: "text", placeholder: "e.g. Computer Science" },
+];
+
 export default function Capture() {
   const [stage, setStage] = useState<Stage>("form");
   const [fields, setFields] = useState<Fields>(EMPTY_FIELDS);
   const [errorMsg, setErrorMsg] = useState("");
   const [imageB64, setImageB64] = useState("");
+  const [rawResponse, setRawResponse] = useState<any>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -55,7 +68,7 @@ export default function Capture() {
 
   function proceedFromForm() {
     if (!fields.display_name || !fields.identity_code || !fields.email || !fields.department) {
-      setErrorMsg("Please fill all fields.");
+      setErrorMsg("Please fill in all fields.");
       return;
     }
     setErrorMsg("");
@@ -76,8 +89,9 @@ export default function Capture() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...fields, image_base64: imageB64 }),
       });
+      const body = await r.json().catch(() => ({}));
+      setRawResponse(body);
       if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
         setErrorMsg(body.message || body.detail || `Request failed (${r.status})`);
         setStage("error");
         return;
@@ -94,98 +108,163 @@ export default function Capture() {
     setFields(EMPTY_FIELDS);
     setImageB64("");
     setErrorMsg("");
+    setRawResponse(null);
   }
 
   return (
-    <>
+    <div className="bg-white border border-stone-200 rounded-xl overflow-hidden shadow-sm">
       {stage === "form" && (
-        <div className="card">
-          <label>
-            Name
-            <input
-              value={fields.display_name}
-              onChange={(e) => update("display_name", e.target.value)}
-            />
-          </label>
-          <label>
-            Student ID
-            <input
-              value={fields.identity_code}
-              onChange={(e) => update("identity_code", e.target.value)}
-            />
-          </label>
-          <label>
-            School Email
-            <input
-              value={fields.email}
-              onChange={(e) => update("email", e.target.value)}
-            />
-          </label>
-          <label>
-            Department
-            <input
-              value={fields.department}
-              onChange={(e) => update("department", e.target.value)}
-            />
-          </label>
-          {errorMsg && <p className="error">{errorMsg}</p>}
-          <button onClick={proceedFromForm}>Next</button>
+        <div className="p-6 space-y-5">
+          <div>
+            <h2 className="text-base font-semibold text-stone-900">Enroll Identity</h2>
+            <p className="text-sm text-stone-500 mt-1">Register a new identity in the system.</p>
+          </div>
+
+          <div className="space-y-3">
+            {FIELD_META.map(({ key, label, type, placeholder }) => (
+              <label key={key} className="block">
+                <span className="text-xs font-medium text-stone-500 uppercase tracking-wide">
+                  {label}
+                </span>
+                <input
+                  type={type}
+                  value={fields[key]}
+                  onChange={(e) => update(key, e.target.value)}
+                  placeholder={placeholder}
+                  className="mt-1.5 w-full bg-white border border-stone-300 text-stone-900 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500 focus:border-transparent placeholder-stone-400 transition-shadow"
+                />
+              </label>
+            ))}
+          </div>
+
+          {errorMsg && (
+            <p className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {errorMsg}
+            </p>
+          )}
+
+          <button
+            onClick={proceedFromForm}
+            className="w-full bg-amber-600 hover:bg-amber-500 active:bg-amber-700 text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors duration-150 cursor-pointer"
+          >
+            Continue →
+          </button>
         </div>
       )}
 
       {stage === "camera" && (
-        <div className="card">
-          <video ref={videoRef} playsInline muted />
-          <div className="row">
-            <button onClick={capture}>Capture</button>
+        <div className="p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-stone-900">Capture Face</h2>
+            <p className="text-sm text-stone-500 mt-1">Position your face in the frame.</p>
+          </div>
+          <video
+            ref={videoRef}
+            playsInline
+            muted
+            className="w-full rounded-lg bg-stone-100 aspect-video object-cover"
+          />
+          <div className="grid grid-cols-2 gap-3">
             <button
-              className="secondary"
-              onClick={() => fileInputRef.current?.click()}
+              onClick={capture}
+              className="bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors cursor-pointer"
             >
-              Upload photo
+              Capture
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium rounded-lg px-4 py-2.5 text-sm transition-colors cursor-pointer"
+            >
+              Upload Photo
             </button>
           </div>
           <input
             ref={fileInputRef}
             type="file"
             accept="image/*"
-            className="hidden-file"
+            className="hidden"
             onChange={onFilePicked}
           />
         </div>
       )}
 
       {stage === "preview" && (
-        <div className="card">
-          <img src={`data:image/jpeg;base64,${imageB64}`} alt="captured face" />
-          <div className="row">
-            <button className="secondary" onClick={() => setStage("camera")}>
+        <div className="p-6 space-y-4">
+          <div>
+            <h2 className="text-base font-semibold text-stone-900">Preview</h2>
+            <p className="text-sm text-stone-500 mt-1">Review your photo before submitting.</p>
+          </div>
+          <img
+            src={`data:image/jpeg;base64,${imageB64}`}
+            alt="captured face"
+            className="w-full rounded-lg object-cover"
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <button
+              onClick={() => setStage("camera")}
+              className="bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium rounded-lg px-4 py-2.5 text-sm transition-colors cursor-pointer"
+            >
               Retake
             </button>
-            <button onClick={submit}>Submit</button>
+            <button
+              onClick={submit}
+              className="bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-lg px-4 py-2.5 text-sm transition-colors cursor-pointer"
+            >
+              Submit
+            </button>
           </div>
         </div>
       )}
 
       {stage === "submitting" && (
-        <div className="card">
-          <p>Submitting…</p>
+        <div className="p-12 flex flex-col items-center gap-4">
+          <div className="w-8 h-8 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+          <p className="text-sm text-stone-500">Submitting identity…</p>
         </div>
       )}
 
       {stage === "done" && (
-        <div className="card">
-          <h2>Thank you for your effort</h2>
-          <button onClick={restart}>Capture another</button>
+        <div className="p-6 space-y-5">
+          <div className="flex flex-col items-center gap-3 py-4">
+            <div className="w-12 h-12 bg-emerald-100 border border-emerald-200 rounded-full flex items-center justify-center">
+              <svg className="w-6 h-6 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="text-center">
+              <h2 className="text-base font-semibold text-stone-900">Identity Enrolled</h2>
+              <p className="text-sm text-stone-500 mt-1">
+                {fields.display_name} has been registered successfully.
+              </p>
+            </div>
+          </div>
+
+          {rawResponse && <JsonViewer data={rawResponse} />}
+
+          <button
+            onClick={restart}
+            className="w-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium rounded-lg px-4 py-2.5 text-sm transition-colors cursor-pointer"
+          >
+            Enroll Another
+          </button>
         </div>
       )}
 
       {stage === "error" && (
-        <div className="card">
-          <p className="error">{errorMsg || "Something went wrong."}</p>
-          <button onClick={restart}>Start over</button>
+        <div className="p-6 space-y-4">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+            <p className="text-sm font-medium text-red-700">Error</p>
+            <p className="text-sm text-red-600 mt-1">{errorMsg || "Something went wrong."}</p>
+          </div>
+          {rawResponse && <JsonViewer data={rawResponse} />}
+          <button
+            onClick={restart}
+            className="w-full bg-stone-100 hover:bg-stone-200 text-stone-700 font-medium rounded-lg px-4 py-2.5 text-sm transition-colors cursor-pointer"
+          >
+            Start Over
+          </button>
         </div>
       )}
-    </>
+    </div>
   );
 }
