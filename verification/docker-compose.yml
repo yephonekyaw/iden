@@ -1,0 +1,85 @@
+services:
+
+  # ── PostgreSQL + pgvector ─────────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg18-trixie
+    container_name: iden-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: iden
+      POSTGRES_PASSWORD: iden
+      POSTGRES_DB: iden_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - iden-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iden -d iden_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Verification server ───────────────────────────────────────────────────
+  server:
+    build:
+      context: ./server
+    container_name: iden-server
+    restart: unless-stopped
+    env_file: ./server/.env
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - iden-net
+    # Not exposed externally — only reachable through nginx
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ── nginx (static client + reverse proxy) ────────────────────────────────
+  web:
+    build:
+      context: ./client
+      args:
+        VITE_API_URL: /api/v1
+    container_name: iden-web
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data/letsencrypt:/etc/letsencrypt:ro
+      - ./data/certbot_webroot:/var/www/certbot:ro
+    depends_on:
+      - server
+    networks:
+      - iden-net
+
+  # ── Certbot (auto-renew every 12 h) ──────────────────────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    container_name: iden-certbot
+    restart: unless-stopped
+    volumes:
+      - ./data/letsencrypt:/etc/letsencrypt
+      - ./data/certbot_webroot:/var/www/certbot
+    entrypoint: >
+      /bin/sh -c "trap exit TERM;
+        while :; do
+          certbot renew --webroot -w /var/www/certbot --quiet;
+          sleep 12h & wait $${!};
+        done"
+    depends_on:
+      - web
+
+volumes:
+  postgres_data:
+
+networks:
+  iden-net:
+    driver: bridge
