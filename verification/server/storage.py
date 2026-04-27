@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,3 +28,8 @@ def save_capture(identity: Identity, aligned: np.ndarray) -> None:
         "created_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
     (folder / "record.json").write_text(json.dumps(record))
+
+
+def delete_capture(identity_id: str) -> None:
+    """Best-effort removal of a capture directory (used on commit rollback)."""
+    shutil.rmtree(BASE_DIR / identity_id, ignore_errors=True)

@@ -1,76 +1,186 @@
 from fastapi import APIRouter, Depends, Request
-from sqlalchemy import select
+from fastapi.concurrency import run_in_threadpool
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import settings
 from db import get_session
-from face import DetectedFace, ImageDecodeError, NoFaceFound, detect_all
-from models import Identity
+from face import (
+    DetectedFace,
+    ImageDecodeError,
+    ImageTooLarge,
+    decode_image,
+    detect_all_in_images,
+)
 from responses import error, success
-from schemas import FaceResult, MatchedIdentity, VerifyData, VerifyRequest
+from schemas import (
+    FaceResult,
+    ImageError,
+    MatchedIdentity,
+    VerifyData,
+    VerifyRequest,
+)
 
-router = APIRouter()
+router = APIRouter(tags=["verification"])
 
 
-async def _best_match(
-    session: AsyncSession, embedding: list[float]
-) -> tuple[Identity | None, float]:
-    distance = Identity.embedding.cosine_distance(embedding)
-    stmt = select(Identity, distance.label("distance")).order_by(distance).limit(1)
-    row = (await session.execute(stmt)).first()
-    if row is None:
-        return None, 0.0
-    identity, dist = row
-    return identity, float(1.0 - dist)
+def _vec_literal(v: list[float]) -> str:
+    return "[" + ",".join(f"{x:.8f}" for x in v) + "]"
+
+
+async def _best_matches(
+    session: AsyncSession, embeddings: list[list[float]]
+) -> list[tuple[str | None, str | None, str | None, float | None]]:
+    """One round trip: HNSW probe per embedding via LATERAL join."""
+    if not embeddings:
+        return []
+    values_clause = ", ".join(
+        f"(:idx_{i}, CAST(:vec_{i} AS vector))" for i in range(len(embeddings))
+    )
+    stmt = text(
+        f"""
+        WITH q(idx, vec) AS (VALUES {values_clause})
+        SELECT q.idx,
+               i.identity_id, i.identity_code, i.display_name,
+               1 - (i.embedding <=> q.vec) AS score
+        FROM q
+        LEFT JOIN LATERAL (
+            SELECT identity_id, identity_code, display_name, embedding
+            FROM identities
+            ORDER BY embedding <=> q.vec
+            LIMIT 1
+        ) AS i ON true
+        ORDER BY q.idx
+        """
+    )
+    params: dict[str, object] = {}
+    for i, vec in enumerate(embeddings):
+        params[f"idx_{i}"] = i
+        params[f"vec_{i}"] = _vec_literal(vec)
+    rows = (await session.execute(stmt, params)).all()
+    return [(r.identity_id, r.identity_code, r.display_name, r.score) for r in rows]
 
 
 def _build_result(
-    index: int, face: DetectedFace, identity: Identity | None, score: float
+    image_index: int,
+    face_index: int,
+    face: DetectedFace,
+    match: tuple[str | None, str | None, str | None, float | None],
 ) -> FaceResult:
-    confidence = round(score, 4)
+    identity_id, identity_code, display_name, score = match
+    confidence = round(float(score), 4) if score is not None else 0.0
     bbox = list(face.bbox)
-    if identity is None or score < settings.match_threshold:
+    if identity_id is None or confidence < settings.match_threshold:
         return FaceResult(
-            face_index=index, bbox=bbox,
-            match_found=False, identity=None, confidence=confidence,
+            image_index=image_index,
+            face_index=face_index,
+            bbox=bbox,
+            match_found=False,
+            identity=None,
+            confidence=confidence,
+            det_score=round(face.det_score, 4),
         )
     return FaceResult(
-        face_index=index, bbox=bbox, match_found=True,
+        image_index=image_index,
+        face_index=face_index,
+        bbox=bbox,
+        match_found=True,
         identity=MatchedIdentity(
-            identity_id=identity.identity_id,
-            identity_code=identity.identity_code,
-            display_name=identity.display_name,
+            identity_id=identity_id,
+            identity_code=identity_code,
+            display_name=display_name,
             confidence=confidence,
         ),
         confidence=confidence,
+        det_score=round(face.det_score, 4),
     )
 
 
-@router.post("/verify")
+def _decode_all(images: list[str]) -> tuple[list, list[ImageError]]:
+    """Decode each image; collect per-image errors instead of failing the request."""
+    decoded = []
+    errors: list[ImageError] = []
+    for idx, img_b64 in enumerate(images):
+        try:
+            decoded.append((idx, decode_image(img_b64)))
+        except ImageTooLarge:
+            errors.append(
+                ImageError(image_index=idx, code="IMAGE_TOO_LARGE",
+                           message="Image exceeds maximum allowed size after decoding")
+            )
+        except ImageDecodeError:
+            errors.append(
+                ImageError(image_index=idx, code="INVALID_IMAGE",
+                           message="Image could not be decoded")
+            )
+    return decoded, errors
+
+
+@router.post(
+    "/verify",
+    response_model=VerifyData,
+    status_code=200,
+    summary="Match faces in one or more images against the identity database",
+    description=(
+        "Detects all faces in each provided image and returns the nearest pgvector "
+        "match per face (cosine similarity, threshold `IDEN_MATCH_THRESHOLD`). "
+        "All face matches are resolved in a single batched SQL round trip via a "
+        "LATERAL join against the HNSW index.\n\n"
+        "Per-image decode/detection failures are reported in `image_errors` and "
+        "do not fail the request; the request only fails if the payload is invalid."
+    ),
+    responses={
+        400: {"description": "Invalid request payload."},
+        500: {"description": "Unexpected server error."},
+    },
+)
 async def verify(
     request: Request,
     body: VerifyRequest,
     session: AsyncSession = Depends(get_session),
 ):
-    try:
-        faces = detect_all(body.image_base64)
-    except NoFaceFound:
-        return error(request, code="NO_FACE_DETECTED",
-                     message="No face detected in the image", status=400)
-    except ImageDecodeError:
-        return error(request, code="INVALID_IMAGE",
-                     message="Image could not be decoded", status=400)
+    decoded, image_errors = await run_in_threadpool(_decode_all, body.images)
 
-    results: list[FaceResult] = []
-    for i, face in enumerate(faces):
-        identity, score = await _best_match(session, face.embedding)
-        results.append(_build_result(i, face, identity, score))
+    if not decoded:
+        data = VerifyData(
+            total_images=len(body.images),
+            total_faces=0,
+            matched=0,
+            unmatched=0,
+            results=[],
+            image_errors=image_errors,
+        )
+        return success(request, data.model_dump(), "Verification completed")
+
+    faces_per_image = await run_in_threadpool(
+        detect_all_in_images, [img for _, img in decoded]
+    )
+
+    flat: list[tuple[int, int, DetectedFace]] = []
+    for (image_index, _img), faces in zip(decoded, faces_per_image, strict=True):
+        if not faces:
+            image_errors.append(
+                ImageError(image_index=image_index, code="NO_FACE_DETECTED",
+                           message="No face detected in the image")
+            )
+            continue
+        for face_index, face in enumerate(faces):
+            flat.append((image_index, face_index, face))
+
+    matches = await _best_matches(session, [f.embedding for _, _, f in flat])
+
+    results = [
+        _build_result(img_idx, face_idx, face, match)
+        for (img_idx, face_idx, face), match in zip(flat, matches, strict=True)
+    ]
 
     matched = sum(1 for r in results if r.match_found)
     data = VerifyData(
-        total_faces=len(faces),
+        total_images=len(body.images),
+        total_faces=len(results),
         matched=matched,
-        unmatched=len(faces) - matched,
+        unmatched=len(results) - matched,
         results=results,
+        image_errors=image_errors,
     )
-    return success(request, data.model_dump(), "Verification completed successfully")
+    return success(request, data.model_dump(), "Verification completed")

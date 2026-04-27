@@ -93,10 +93,14 @@ def register_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(Exception)
     async def _unhandled(request: Request, exc: Exception):
-        logger.exception("Unhandled error on %s", request.url.path)
+        logger.exception(
+            "Unhandled error on %s (request_id=%s)",
+            request.url.path,
+            getattr(request.state, "request_id", "-"),
+        )
         return error(
             request,
             code="INTERNAL_ERROR",
-            message=f"{type(exc).__name__}: {exc}",
+            message="Internal server error",
             status=500,
         )
