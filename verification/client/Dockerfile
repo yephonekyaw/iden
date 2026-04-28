@@ -19,4 +19,4 @@ FROM nginx:1.30-alpine3.23-slim
 
 COPY --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80 443
+EXPOSE 3000
