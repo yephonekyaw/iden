@@ -106,5 +106,7 @@ async def capture(
         identity_id=identity.identity_id,
         identity_code=identity.identity_code,
         display_name=identity.display_name,
+        email=identity.email,
+        department=identity.department,
     )
     return success(request, data.model_dump(), "Capture stored", status=201)

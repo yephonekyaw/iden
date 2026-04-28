@@ -30,7 +30,7 @@ def _vec_literal(v: list[float]) -> str:
 
 async def _best_matches(
     session: AsyncSession, embeddings: list[list[float]]
-) -> list[tuple[str | None, str | None, str | None, float | None]]:
+) -> list[tuple[str | None, str | None, str | None, str | None, str | None, float | None]]:
     """One round trip: HNSW probe per embedding via LATERAL join."""
     if not embeddings:
         return []
@@ -42,11 +42,11 @@ async def _best_matches(
         f"""
         WITH q(idx, vec) AS (VALUES {values_clause})
         SELECT q.idx,
-               i.identity_id, i.identity_code, i.display_name,
+               i.identity_id, i.identity_code, i.display_name, i.email, i.department,
                1 - (i.embedding <=> q.vec) AS score
         FROM q
         LEFT JOIN LATERAL (
-            SELECT identity_id, identity_code, display_name, embedding
+            SELECT identity_id, identity_code, display_name, email, department, embedding
             FROM identities
             ORDER BY embedding <=> q.vec
             LIMIT 1
@@ -59,16 +59,19 @@ async def _best_matches(
         params[f"idx_{i}"] = i
         params[f"vec_{i}"] = _vec_literal(vec)
     rows = (await session.execute(stmt, params)).all()
-    return [(r.identity_id, r.identity_code, r.display_name, r.score) for r in rows]
+    return [
+        (r.identity_id, r.identity_code, r.display_name, r.email, r.department, r.score)
+        for r in rows
+    ]
 
 
 def _build_result(
     image_index: int,
     face_index: int,
     face: DetectedFace,
-    match: tuple[str | None, str | None, str | None, float | None],
+    match: tuple[str | None, str | None, str | None, str | None, str | None, float | None],
 ) -> FaceResult:
-    identity_id, identity_code, display_name, score = match
+    identity_id, identity_code, display_name, email, department, score = match
     confidence = round(float(score), 4) if score is not None else 0.0
     bbox = list(face.bbox)
     if identity_id is None or confidence < settings.match_threshold:
@@ -90,6 +93,8 @@ def _build_result(
             identity_id=identity_id,
             identity_code=identity_code or "",
             display_name=display_name or "",
+            email=email or "",
+            department=department or "",
         ),
         confidence=confidence,
         det_score=round(face.det_score, 4),

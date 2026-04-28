@@ -8,7 +8,8 @@ type MatchedIdentity = {
   identity_id: string;
   identity_code: string;
   display_name: string;
-  confidence: number;
+  email: string;
+  department: string;
 };
 
 type FaceResult = {
@@ -234,13 +235,21 @@ export default function Verify() {
                   </span>
                 </div>
                 {face.identity && (
-                  <div className="mt-2 space-y-0.5">
+                  <div className="mt-2 space-y-1.5">
                     <p className="text-sm font-medium text-stone-900">
                       {face.identity.display_name}
                     </p>
-                    <p className="text-xs text-stone-500">
-                      {face.identity.identity_code}
-                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-stone-100 text-stone-600 text-xs font-medium">
+                        {face.identity.identity_code}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-blue-50 text-blue-600 text-xs font-medium">
+                        {face.identity.email}
+                      </span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-amber-50 text-amber-700 text-xs font-medium">
+                        {face.identity.department}
+                      </span>
+                    </div>
                   </div>
                 )}
                 <div className="mt-2 flex gap-4 text-xs text-stone-400">

@@ -26,6 +26,8 @@ class CapturedIdentity(BaseModel):
     identity_id: str = Field(description="UUID assigned to the new identity.")
     identity_code: str
     display_name: str
+    email: str
+    department: str
 
 
 class VerifyRequest(BaseModel):
@@ -44,6 +46,8 @@ class MatchedIdentity(BaseModel):
     identity_id: str
     identity_code: str
     display_name: str
+    email: str
+    department: str
 
 
 class FaceResult(BaseModel):

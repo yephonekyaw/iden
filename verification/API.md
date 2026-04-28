@@ -1,6 +1,6 @@
 # IDEN Verification API
 
-Base URL: `http://<host>/api/v1`
+Base URL: `https://<host>/api/v1`
 
 All endpoints return a consistent JSON envelope described in [Response Format](#response-format). The server must finish loading the face model before any endpoint is ready — poll [`GET /healthz`](#get-healthz) to check.
 
@@ -168,7 +168,9 @@ Only one face needs to be visible; the largest qualifying face is used. Duplicat
   "data": {
     "identity_id": "550e8400-e29b-41d4-a716-446655440000",
     "identity_code": "STU-00123",
-    "display_name": "Jane Smith"
+    "display_name": "Jane Smith",
+    "email": "jane@university.edu",
+    "department": "Computer Science"
   },
   "message": "Capture stored",
   "meta": {
@@ -184,6 +186,8 @@ Only one face needs to be visible; the largest qualifying face is used. Duplicat
 | `identity_id` | `string` | Server-assigned UUID |
 | `identity_code` | `string` | Echoes the submitted `identity_code` |
 | `display_name` | `string` | Echoes the submitted `display_name` |
+| `email` | `string` | Echoes the submitted `email` |
+| `department` | `string` | Echoes the submitted `department` |
 
 **Error Responses:**
 
@@ -240,7 +244,9 @@ Per-image errors (bad images, no faces) are collected into `data.image_errors` a
         "identity": {
           "identity_id": "550e8400-e29b-41d4-a716-446655440000",
           "identity_code": "STU-00123",
-          "display_name": "Jane Smith"
+          "display_name": "Jane Smith",
+          "email": "jane@university.edu",
+          "department": "Computer Science"
         },
         "confidence": 0.9312,
         "det_score": 0.9876
@@ -296,6 +302,8 @@ Per-image errors (bad images, no faces) are collected into `data.image_errors` a
 | `identity_id` | `string` | UUID of the matched identity |
 | `identity_code` | `string` | External identifier (e.g. student ID) |
 | `display_name` | `string` | Human-readable name |
+| `email` | `string` | Email address of the matched identity |
+| `department` | `string` | Department of the matched identity |
 
 **`ImageError` object:**
 
@@ -332,7 +340,9 @@ If one image is unreadable and another has no face, `results` only contains entr
         "identity": {
           "identity_id": "550e8400-e29b-41d4-a716-446655440000",
           "identity_code": "STU-00123",
-          "display_name": "Jane Smith"
+          "display_name": "Jane Smith",
+          "email": "jane@university.edu",
+          "department": "Computer Science"
         },
         "confidence": 0.9312,
         "det_score": 0.9876
