@@ -25,9 +25,12 @@ An open-source Identity Provider (IDP) with facial biometric authentication, bui
 
 ```mermaid
 flowchart TB
-  subgraph External["External Clients"]
+  subgraph External["External Clients — Core"]
     Browser["Browser (User)"]
     ThirdParty["Third-Party OIDC Client"]
+  end
+
+  subgraph ExternalExt["External Clients — Extension"]
     Kiosk["Biometric Kiosk Device"]
   end
 
@@ -37,33 +40,47 @@ flowchart TB
   ThirdParty --> Nginx
   Kiosk --> Nginx
 
-  subgraph Provider["provider :8080 — single FastAPI app (Python 3.14)"]
+  subgraph Core["Core — Default IdP"]
     direction TB
-    AuthZ["AuthZ Server module<br/>/.well-known/*, /oauth2/*"]
-    Admin["Admin RS module<br/>/admin/*"]
-    Entity["Entity RS module<br/>/entity/*"]
-    Biometric["Biometric RS module<br/>/biometric/*"]
+
+    subgraph Provider["provider :8000 — single FastAPI app (Python 3.14)"]
+      direction TB
+      AuthZ["AuthZ Server module<br/>/.well-known/*, /oauth2/*"]
+      Admin["Admin RS module<br/>/admin/*"]
+      Entity["Entity RS module<br/>/entity/*"]
+      Biometric["Biometric RS module<br/>/biometric/*<br/>⟮extension⟯"]
+    end
+
+    AuthUI["auth-ui :4000<br/>/auth/login, /auth/consent"]
+    Dashboard["dashboard :3000<br/>Bootstrapped OIDC client"]
+
+    Postgres[("PostgreSQL :5432")]
+    Redis[("Redis :6379")]
+    MinIO[("MinIO :9000<br/>S3-compatible object store")]
   end
 
-  AuthUI["auth-ui :3001<br/>/auth/login, /auth/consent"]
-  Dashboard["dashboard :3000<br/>Bootstrapped OIDC client"]
-  Engine["Biometric Engine :8000<br/>INTERNAL ONLY · FastAPI + ONNX"]
+  subgraph Extension["Extension — Biometric Credential"]
+    direction TB
+    Engine["Biometric Engine :8000<br/>INTERNAL ONLY · FastAPI + ONNX"]
+    PgVector[("PostgreSQL + pgvector")]
+  end
 
   Nginx -->|"/oauth2/*, /.well-known/*,<br/>/admin/*, /entity/*, /biometric/*"| Provider
   Nginx -->|"/auth/*"| AuthUI
   Nginx -->|"/* (everything else)"| Dashboard
 
   Biometric --> Engine
-
-  Postgres[("PostgreSQL :5432<br/>+ pgvector")]
-  Redis[("Redis :6379")]
-  MinIO[("MinIO :9000<br/>S3-compatible object store")]
+  Engine --> PgVector
+  Engine --> MinIO
 
   Provider --> Postgres
   Provider --> Redis
   Provider --> MinIO
-  Engine --> Postgres
-  Engine --> MinIO
+
+  style Core fill:#1a1a2e,stroke:#4a90d9,stroke-width:2px,color:#ffffff
+  style Extension fill:#2e1a2e,stroke:#d94a90,stroke-width:2px,color:#ffffff,stroke-dasharray: 5 5
+  style ExternalExt fill:#2e1a2e,stroke:#d94a90,stroke-width:2px,color:#ffffff,stroke-dasharray: 5 5
+  style Biometric stroke:#d94a90,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 ---
@@ -75,7 +92,7 @@ flowchart TB
 | **provider** | Python 3.14, FastAPI, Authlib, asyncpg | 8080 | Single FastAPI app hosting four logical modules: AuthZ Server (`/oauth2/*`, `/.well-known/*`), Admin RS (`/admin/*`), Entity RS (`/entity/*`), Biometric RS (`/biometric/*`) |
 | **engine** | Python 3.14, FastAPI, InsightFace, ONNX | 8000 | Internal biometric engine — face detection, embedding, liveness (no external access) |
 | **dashboard** | Next.js 15, React, Tailwind CSS | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client) |
-| **auth-ui** | Next.js 15, React, Tailwind CSS | 3001 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
+| **auth-ui** | Next.js 15, React, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
 | **kiosk** | Hardware + Next.js / native | n/a | Biometric kiosk device — uses `client_credentials` grant to call `biometric-api` |
 | **postgres** | PostgreSQL 16 + pgvector | 5432 | Persistent storage for users, clients, tokens, embeddings, scopes |
 | **redis** | Redis 7 | 6379 | Sessions, login/consent challenges, rate limits |
@@ -144,7 +161,7 @@ The Provider computes `acr` from `amr` at token-issuance time using the table ab
 
 ## Component Interactions & Flows
 
-In all flows below, **Provider** refers to the single FastAPI service on `:8080` — its AuthZ, Admin, Entity, and Biometric modules are called out separately only to clarify which routes are in play.
+In all flows below, **Provider** refers to the single FastAPI service on `:8000` — its AuthZ, Admin, Entity, and Biometric modules are called out separately only to clarify which routes are in play.
 
 ### Flow 1: OIDC Authorization Code Flow (via Auth UI)
 
@@ -467,7 +484,7 @@ erDiagram
 flowchart TB
   Entry["provider/main.py<br/>loads config, mounts routers"]
 
-  subgraph App["FastAPI Application (:8080)"]
+  subgraph App["FastAPI Application (:8000)"]
     direction TB
 
     subgraph Middleware["Middleware Stack"]
@@ -540,9 +557,9 @@ flowchart LR
   subgraph Net["docker-compose network"]
     direction LR
     Nginx["nginx<br/>:80/:443"]
-    Provider["provider<br/>:8080"]
+    Provider["provider<br/>:8000"]
     Dashboard["dashboard<br/>:3000"]
-    AuthUI["auth-ui<br/>:3001"]
+    AuthUI["auth-ui<br/>:4000"]
     Engine["engine<br/>:8000 (internal)"]
     PG[("postgres :5432")]
     RD[("redis :6379")]
