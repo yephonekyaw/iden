@@ -92,7 +92,7 @@ flowchart TB
 | **provider** | Python 3.14, FastAPI, Authlib, asyncpg | 8080 | Single FastAPI app hosting four logical modules: AuthZ Server (`/oauth2/*`, `/.well-known/*`), Admin RS (`/admin/*`), Entity RS (`/entity/*`), Biometric RS (`/biometric/*`) |
 | **engine** | Python 3.14, FastAPI, InsightFace, ONNX | 8000 | Internal biometric engine — face detection, embedding, liveness (no external access) |
 | **dashboard** | Next.js 15, React, Tailwind CSS | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client) |
-| **auth-ui** | Next.js 15, React, Tailwind CSS | 3001 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
+| **auth-ui** | Next.js 15, React, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
 | **kiosk** | Hardware + Next.js / native | n/a | Biometric kiosk device — uses `client_credentials` grant to call `biometric-api` |
 | **postgres** | PostgreSQL 16 + pgvector | 5432 | Persistent storage for users, clients, tokens, embeddings, scopes |
 | **redis** | Redis 7 | 6379 | Sessions, login/consent challenges, rate limits |
