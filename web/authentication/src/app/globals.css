@@ -39,36 +39,36 @@
   --radius-xl: 18px;
 }
 
-/* Catppuccin Latte palette */
+/* Warm cream / parchment palette */
 html.light {
-  --color-bg: #eff1f5;
-  --color-surface: #e6e9ef;
-  --color-surface-raised: #dce0e8;
-  --color-surface-overlay: #e6e9ef;
-  --color-surface-sunken: #dce0e8;
+  --color-bg: #faf4ea;
+  --color-surface: #fbf6ed;
+  --color-surface-raised: #f5ecda;
+  --color-surface-overlay: #fbf6ed;
+  --color-surface-sunken: #f0e4cc;
 
-  --color-border-subtle: #dce0e8;
-  --color-border-default: #ccd0da;
-  --color-border-strong: #bcc0cc;
+  --color-border-subtle: #ece1c8;
+  --color-border-default: #ddccab;
+  --color-border-strong: #b9a481;
 
-  --color-text-primary: #4c4f69;
-  --color-text-secondary: #6c6f85;
-  --color-text-tertiary: #8c8fa1;
-  --color-text-inverse: #ffffff;
+  --color-text-primary: #3a2e22;
+  --color-text-secondary: #6b5a45;
+  --color-text-tertiary: #998566;
+  --color-text-inverse: #fbf6ed;
 
-  --color-primary: #fe640b;
-  --color-primary-hover: #e05a0a;
-  --color-primary-muted: #fde8d8;
-  --color-primary-border: rgba(254, 100, 11, 0.45);
+  --color-primary: #ea580c;
+  --color-primary-hover: #c2410c;
+  --color-primary-muted: #fde3cd;
+  --color-primary-border: rgba(234, 88, 12, 0.45);
 
-  --color-success: #40a02b;
-  --color-success-muted: rgba(64, 160, 43, 0.14);
-  --color-warning: #df8e1d;
-  --color-warning-muted: rgba(223, 142, 29, 0.14);
-  --color-danger: #d20f39;
-  --color-danger-muted: rgba(210, 15, 57, 0.12);
-  --color-info: #1e66f5;
-  --color-info-muted: rgba(30, 102, 245, 0.12);
+  --color-success: #5f8b3e;
+  --color-success-muted: rgba(95, 139, 62, 0.14);
+  --color-warning: #b45309;
+  --color-warning-muted: rgba(180, 83, 9, 0.14);
+  --color-danger: #b91c1c;
+  --color-danger-muted: rgba(185, 28, 28, 0.12);
+  --color-info: #1d4ed8;
+  --color-info-muted: rgba(29, 78, 216, 0.12);
 }
 
 * { border-color: var(--color-border-subtle); }

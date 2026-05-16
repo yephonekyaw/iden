@@ -14,7 +14,13 @@ import type { Organization } from "@/lib/types";
 import Link from "next/link";
 import { ChevronRight, ListChecks } from "lucide-react";
 
-export function OrganizationForm({ org, userFieldCount }: { org: Organization; userFieldCount: number }) {
+export function OrganizationForm({
+  org,
+  userFieldCount,
+}: {
+  org: Organization;
+  userFieldCount: number;
+}) {
   const router = useRouter();
   const [saving, setSaving] = React.useState(false);
   const [form, setForm] = React.useState({
@@ -39,7 +45,11 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
       <PageHeader
         title="Organization"
         subtitle="Tenant identity, branding, and default token policy"
-        actions={<Button onClick={save} loading={saving}>Save changes</Button>}
+        actions={
+          <Button onClick={save} loading={saving}>
+            Save changes
+          </Button>
+        }
       />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -49,7 +59,10 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
           </h3>
           <div className="space-y-2">
             <Label>Organization name</Label>
-            <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            <Input
+              value={form.name}
+              onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+            />
           </div>
           <div className="space-y-2">
             <Label>Slug</Label>
@@ -79,24 +92,31 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
               <input
                 type="color"
                 value={form.primary_color}
-                onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
-                className="h-10 w-12 cursor-pointer rounded-md border border-[var(--color-border-default)] bg-transparent"
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, primary_color: e.target.value }))
+                }
+                className="h-10 w-12 cursor-pointer"
               />
               <Input
                 value={form.primary_color}
-                onChange={(e) => setForm((f) => ({ ...f, primary_color: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, primary_color: e.target.value }))
+                }
                 className="font-mono"
               />
             </div>
             <p className="text-xs text-[var(--color-text-tertiary)]">
-              Applied to the auth UI for relying parties branded under this organization.
+              Applied to the auth UI for relying parties branded under this
+              organization.
             </p>
           </div>
           <div className="space-y-2">
             <Label>Logo</Label>
             <div className="flex items-center gap-3 rounded-md border border-dashed border-[var(--color-border-default)] px-4 py-6 text-sm text-[var(--color-text-secondary)]">
               <span className="flex-1">Upload PNG or SVG — max 1 MB</span>
-              <Button variant="secondary" size="sm">Browse</Button>
+              <Button variant="secondary" size="sm">
+                Browse
+              </Button>
             </div>
           </div>
         </Card>
@@ -110,9 +130,12 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
               <ListChecks className="h-5 w-5" />
             </div>
             <div className="flex-1">
-              <div className="text-sm font-semibold text-[var(--color-text-primary)]">User schema</div>
+              <div className="text-sm font-semibold text-[var(--color-text-primary)]">
+                User schema
+              </div>
               <div className="text-xs text-[var(--color-text-secondary)]">
-                {userFieldCount} custom field{userFieldCount === 1 ? "" : "s"} collected from every user, on top of display name and email.
+                {userFieldCount} custom field{userFieldCount === 1 ? "" : "s"}{" "}
+                collected from every user, on top of display name and email.
               </div>
             </div>
             <ChevronRight className="h-4 w-4 text-[var(--color-text-tertiary)] transition-transform group-hover:translate-x-0.5" />
@@ -124,7 +147,8 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
             Default token policy
           </h3>
           <p className="text-sm text-[var(--color-text-secondary)]">
-            Used as the default when registering a new OIDC client. Individual clients may override.
+            Used as the default when registering a new OIDC client. Individual
+            clients may override.
           </p>
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
@@ -133,7 +157,10 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
                 type="number"
                 value={form.default_access_token_ttl_seconds}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, default_access_token_ttl_seconds: Number(e.target.value) }))
+                  setForm((f) => ({
+                    ...f,
+                    default_access_token_ttl_seconds: Number(e.target.value),
+                  }))
                 }
               />
             </div>
@@ -143,7 +170,10 @@ export function OrganizationForm({ org, userFieldCount }: { org: Organization; u
                 type="number"
                 value={form.default_refresh_token_ttl_seconds}
                 onChange={(e) =>
-                  setForm((f) => ({ ...f, default_refresh_token_ttl_seconds: Number(e.target.value) }))
+                  setForm((f) => ({
+                    ...f,
+                    default_refresh_token_ttl_seconds: Number(e.target.value),
+                  }))
                 }
               />
             </div>
