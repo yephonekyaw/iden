@@ -15,6 +15,7 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { ThemeToggle } from "@/components/shared/theme-toggle";
 import { initials } from "@/lib/utils";
 
 const SEGMENT_LABEL: Record<string, string> = {
@@ -68,6 +69,7 @@ export function Topbar() {
       </nav>
 
       <div className="flex items-center gap-2">
+        <ThemeToggle />
         <button
           type="button"
           className="relative inline-flex h-9 w-9 items-center justify-center rounded-md border border-[var(--color-border-default)] text-[var(--color-text-secondary)] hover:bg-[var(--color-surface-raised)]"

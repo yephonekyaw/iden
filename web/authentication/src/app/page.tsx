@@ -7,6 +7,7 @@ import { ArrowRight, ShieldCheck, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ATTENDE } from "@/lib/mock-client";
 import { ClientTile } from "@/components/auth/client-badge";
+import { ThemeToggle } from "@/components/auth/theme-toggle";
 import { clearFlow, updateFlow } from "@/lib/flow";
 
 export default function DemoClientPage() {
@@ -29,6 +30,9 @@ export default function DemoClientPage() {
 
   return (
     <div className="grid-bg relative flex min-h-screen items-center justify-center p-6">
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="relative w-full max-w-2xl">
         <div className="mb-6 flex items-center justify-between text-xs text-[var(--color-text-tertiary)]">
           <span className="uppercase tracking-[0.18em]">Demo · Connected client</span>

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ORG } from "@/lib/mock-client";
+import { ThemeToggle } from "@/components/auth/theme-toggle";
 
 export function AuthShell({
   children,
@@ -14,6 +15,9 @@ export function AuthShell({
   return (
     <div className="grid-bg relative flex min-h-screen w-full items-center justify-center p-4">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[var(--color-primary-border)] to-transparent" />
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div
         className={cn(
           "relative rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface)]/85 p-7 shadow-2xl shadow-black/40 backdrop-blur-sm",
