@@ -1,0 +1,78 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Geist", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+
+  --color-bg: #0b0f1c;
+  --color-surface: #11172a;
+  --color-surface-raised: #161d33;
+  --color-surface-overlay: #1a2240;
+  --color-surface-sunken: #0a0e1a;
+
+  --color-border-subtle: #1c2540;
+  --color-border-default: #243056;
+  --color-border-strong: #344073;
+
+  --color-text-primary: #e7ecff;
+  --color-text-secondary: #8d97c2;
+  --color-text-tertiary: #5f6a92;
+  --color-text-inverse: #0b0f1c;
+
+  --color-primary: #ff7a1a;
+  --color-primary-hover: #ff8f3d;
+  --color-primary-muted: rgba(255, 122, 26, 0.14);
+  --color-primary-border: rgba(255, 122, 26, 0.45);
+
+  --color-success: #34d399;
+  --color-success-muted: rgba(52, 211, 153, 0.14);
+  --color-warning: #f59e0b;
+  --color-warning-muted: rgba(245, 158, 11, 0.14);
+  --color-danger: #ef4444;
+  --color-danger-muted: rgba(239, 68, 68, 0.14);
+  --color-info: #38bdf8;
+  --color-info-muted: rgba(56, 189, 248, 0.14);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+}
+
+* { border-color: var(--color-border-subtle); }
+
+html, body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection { background: var(--color-primary-muted); color: var(--color-text-primary); }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: var(--color-bg); }
+::-webkit-scrollbar-thumb { background: var(--color-border-default); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-border-strong); }
+
+.grid-bg {
+  background-image:
+    linear-gradient(var(--color-border-subtle) 1px, transparent 1px),
+    linear-gradient(90deg, var(--color-border-subtle) 1px, transparent 1px);
+  background-size: 48px 48px;
+  background-position: -1px -1px;
+}
+
+@keyframes pulse-ring {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.04); opacity: 1; }
+}
+.animate-pulse-ring { animation: pulse-ring 1.6s ease-in-out infinite; }
+
+@keyframes scan {
+  0% { transform: translateY(-50%); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateY(50%); opacity: 0; }
+}
+.animate-scan { animation: scan 2.2s ease-in-out infinite; }

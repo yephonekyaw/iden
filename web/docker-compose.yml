@@ -1,0 +1,30 @@
+services:
+  dashboard:
+    build:
+      context: ./dashboard
+    image: iden-dashboard:latest
+    container_name: iden-dashboard
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+    networks:
+      - iden
+
+  auth-ui:
+    build:
+      context: ./authentication
+    image: iden-auth-ui:latest
+    container_name: iden-auth-ui
+    restart: unless-stopped
+    ports:
+      - "4000:4000"
+    environment:
+      NODE_ENV: production
+    networks:
+      - iden
+
+networks:
+  iden:
+    driver: bridge
