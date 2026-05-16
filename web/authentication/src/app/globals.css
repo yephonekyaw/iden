@@ -39,29 +39,36 @@
   --radius-xl: 18px;
 }
 
+/* Catppuccin Latte palette */
 html.light {
-  --color-bg: #f5f7fb;
-  --color-surface: #ffffff;
-  --color-surface-raised: #ffffff;
-  --color-surface-overlay: #ffffff;
-  --color-surface-sunken: #eceff6;
+  --color-bg: #eff1f5;
+  --color-surface: #e6e9ef;
+  --color-surface-raised: #dce0e8;
+  --color-surface-overlay: #e6e9ef;
+  --color-surface-sunken: #dce0e8;
 
-  --color-border-subtle: #e4e7ef;
-  --color-border-default: #d2d7e3;
-  --color-border-strong: #b3bbcf;
+  --color-border-subtle: #dce0e8;
+  --color-border-default: #ccd0da;
+  --color-border-strong: #bcc0cc;
 
-  --color-text-primary: #0b0f1c;
-  --color-text-secondary: #4b5573;
-  --color-text-tertiary: #7e87a3;
+  --color-text-primary: #4c4f69;
+  --color-text-secondary: #6c6f85;
+  --color-text-tertiary: #8c8fa1;
   --color-text-inverse: #ffffff;
 
-  --color-primary-muted: rgba(255, 122, 26, 0.10);
-  --color-primary-border: rgba(255, 122, 26, 0.40);
+  --color-primary: #fe640b;
+  --color-primary-hover: #e05a0a;
+  --color-primary-muted: #fde8d8;
+  --color-primary-border: rgba(254, 100, 11, 0.45);
 
-  --color-success-muted: rgba(16, 185, 129, 0.10);
-  --color-warning-muted: rgba(217, 119, 6, 0.10);
-  --color-danger-muted: rgba(220, 38, 38, 0.10);
-  --color-info-muted: rgba(14, 165, 233, 0.10);
+  --color-success: #40a02b;
+  --color-success-muted: rgba(64, 160, 43, 0.14);
+  --color-warning: #df8e1d;
+  --color-warning-muted: rgba(223, 142, 29, 0.14);
+  --color-danger: #d20f39;
+  --color-danger-muted: rgba(210, 15, 57, 0.12);
+  --color-info: #1e66f5;
+  --color-info-muted: rgba(30, 102, 245, 0.12);
 }
 
 * { border-color: var(--color-border-subtle); }

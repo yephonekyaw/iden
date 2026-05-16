@@ -40,7 +40,7 @@ export default function DemoClientPage() {
             attende.ubk.ac.th
           </Link>
         </div>
-        <div className="rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface)]/85 p-10 shadow-2xl shadow-black/40 backdrop-blur-sm">
+        <div className="rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface)]/85 p-10 shadow-2xl shadow-black/20 backdrop-blur-sm">
           <div className="flex items-start gap-5">
             <ClientTile client={ATTENDE} size="lg" />
             <div>

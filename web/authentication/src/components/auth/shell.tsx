@@ -20,7 +20,7 @@ export function AuthShell({
       </div>
       <div
         className={cn(
-          "relative rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface)]/85 p-7 shadow-2xl shadow-black/40 backdrop-blur-sm",
+          "relative rounded-2xl border border-[var(--color-border-default)] bg-[var(--color-surface)]/85 p-7 shadow-2xl shadow-black/20 backdrop-blur-sm",
           "w-full",
           width === "md" ? "max-w-md" : "max-w-lg"
         )}
