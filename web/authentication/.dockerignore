@@ -1,11 +1,11 @@
-node_modules
-.next
-.git
-.gitignore
+**/node_modules
+**/.next
+**/.git
+**/.DS_Store
+**/*.tsbuildinfo
 Dockerfile
 .dockerignore
+.gitignore
 npm-debug.log*
 .env*.local
-.DS_Store
-*.tsbuildinfo
 README.md
