@@ -12,6 +12,18 @@ from provider.core.schemas import CamelCaseBaseModel
 
 router = APIRouter()
 
+# Imported here rather than in app.py so the app module stays about wiring the
+# application, not about knowing which modules exist.
+from provider.authz.consent.routes import router as consent_router  # noqa: E402
+from provider.authz.discovery.routes import router as discovery_router  # noqa: E402
+from provider.authz.login.routes import router as login_router  # noqa: E402
+from provider.authz.oauth.routes import router as oauth_router  # noqa: E402
+
+router.include_router(discovery_router)
+router.include_router(oauth_router)
+router.include_router(login_router)
+router.include_router(consent_router)
+
 
 class HealthResponse(CamelCaseBaseModel):
     status: Literal["ok", "degraded"] = Field(

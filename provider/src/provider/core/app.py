@@ -1,15 +1,18 @@
 import uuid
 from collections.abc import Callable
+from urllib.parse import urlencode
 from contextlib import asynccontextmanager
 
 import structlog
 import uvicorn
 from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, RedirectResponse
 
 from provider.core import redis as redis_module
 from provider.core.config import settings
 from provider.core.db import engine
+from provider.authz.oauth.errors import OAuthError, RedirectableError
 from provider.core.errors import IdenError
 from provider.core.logging import configure_logging, logger
 from provider.core.router import router
@@ -72,6 +75,40 @@ async def handle_iden_error(request: Request, exc: IdenError) -> JSONResponse:
         status_code=ERROR_STATUS.get(exc.code, 500), content=body.model_dump(by_alias=True)
     )
 
+
+@app.exception_handler(RedirectableError)
+async def handle_redirectable_error(request: Request, exc: RedirectableError) -> RedirectResponse:
+    """Deliver the error to the client's redirect_uri — RFC 6749 §4.1.2.1.
+
+    Only reachable after client_id and redirect_uri have been validated.
+    """
+    params = {"error": exc.error, "error_description": exc.description}
+    if exc.state:
+        params["state"] = exc.state
+    return RedirectResponse(f"{exc.redirect_uri}?{urlencode(params)}", status_code=303)
+
+
+@app.exception_handler(OAuthError)
+async def handle_oauth_error(request: Request, exc: OAuthError) -> JSONResponse:
+    """RFC 6749 §5.2 fixes this shape; a client library will not understand
+    the project's own error contract here."""
+    headers = {"WWW-Authenticate": 'Basic realm="iden"'} if exc.status_code == 401 else None
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": exc.error, "error_description": exc.description},
+        headers=headers,
+    )
+
+
+# Credentialed requests from the hosted Auth UI and the dashboard: the session
+# cookie must ride along, which requires an explicit origin allow-list.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[settings.iden_auth_ui_base_url, *settings.iden_allowed_admin_origins],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(router, prefix=settings.iden_api_prefix)
 

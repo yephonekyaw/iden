@@ -278,6 +278,10 @@ class RefreshToken(Base, TimestampMixin):
         ForeignKey("users.id", ondelete="CASCADE")
     )
     scope: Mapped[str] = mapped_column(Text)
+    # Carried so a refreshed token reports the same authentication event: acr is
+    # derived from amr, and the original login is not repeated on refresh.
+    acr: Mapped[str] = mapped_column(String(32))
+    amr: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
     # Rotation with reuse detection: presenting an already-rotated token revokes
     # the whole family, on the assumption it was stolen.
     family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))

@@ -1,0 +1,199 @@
+from fastapi import APIRouter, HTTPException, Response
+from sqlalchemy import select
+
+from provider.authz import session_cookie
+from provider.authz.deps import LoginSessionDep
+from provider.authz.login.errors import (
+    ChallengeNotFound,
+    InactiveUser,
+    InvalidCredentials,
+    InvalidTotpCode,
+    NoSession,
+    TotpNotEnrolled,
+)
+from provider.authz.login.schemas import (
+    AuthStepResponse,
+    ChallengeResponse,
+    ChallengeScope,
+    LoginRequest,
+    TotpRequest,
+)
+from provider.authz.login.service import authenticate_password, verify_totp
+from provider.authz.services import auth_methods, challenge_store, session_store
+from provider.authz.services.scope_resolver import OIDC_SCOPES, parse_scope
+from provider.core.config import settings
+from provider.core.db import DBSessionDep
+from provider.core.redis import RedisDep
+from provider.core.schemas import ErrorResponse
+from provider.shared.enums import AmrMethod
+from provider.shared.models import Client, Scope, User
+
+router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
+
+OIDC_SCOPE_DESCRIPTIONS = {
+    "openid": "Sign you in.",
+    "profile": "Your name and username.",
+    "email": "Your email address.",
+}
+
+
+async def _next_step(redis, session, challenge) -> AuthStepResponse:
+    """Whether the assurance the client asked for has been reached yet."""
+    acr = auth_methods.derive_acr(session.amr)
+    amr = auth_methods.normalized_amr(session.amr)
+
+    if not auth_methods.meets(acr, challenge.params.get("acr_values")):
+        return AuthStepResponse(status="totp_required", acr=acr, amr=amr)
+
+    return AuthStepResponse(
+        status="complete",
+        resume_url=challenge_store.resume_url(challenge),
+        acr=acr,
+        amr=amr,
+    )
+
+
+@router.get(
+    "/challenge/{challenge_id}",
+    response_model=ChallengeResponse,
+    summary="Read a pending login or consent challenge",
+    description=(
+        "Everything the Auth UI needs to render its page: which application is "
+        "asking, and for what.\n\n"
+        "**Required scope:** none — the challenge id is the credential, and it "
+        "expires in ten minutes."
+    ),
+    responses={404: {"model": ErrorResponse, "description": "Challenge expired or unknown"}},
+)
+async def read_challenge(
+    challenge_id: str, session: DBSessionDep, redis: RedisDep
+) -> ChallengeResponse:
+    challenge = await challenge_store.get(redis, challenge_id)
+    if challenge is None:
+        raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
+
+    client = await session.scalar(
+        select(Client).where(Client.client_id == challenge.params["client_id"])
+    )
+    requested = parse_scope(challenge.params.get("scope"))
+
+    descriptions = dict(OIDC_SCOPE_DESCRIPTIONS)
+    rows = await session.execute(
+        select(Scope.value, Scope.description).where(Scope.value.in_(requested - OIDC_SCOPES))
+    )
+    descriptions |= {value: text for value, text in rows}
+
+    return ChallengeResponse(
+        client_name=client.name if client else challenge.params["client_id"],
+        scopes=[
+            ChallengeScope(value=value, description=descriptions.get(value, value))
+            for value in sorted(requested)
+        ],
+        acr_values=challenge.params.get("acr_values"),
+        authenticated=challenge.user_id is not None,
+    )
+
+
+@router.post(
+    "/login",
+    response_model=AuthStepResponse,
+    summary="Sign in with a password",
+    description=(
+        "Verifies the password, records `pwd` in the session's `amr`, and "
+        "returns where to go next.\n\n"
+        "When the client requested an assurance level the password alone does "
+        "not reach, the response is `totpRequired` rather than a resume URL.\n\n"
+        "**Required scope:** none — this is how a session is established."
+    ),
+    responses={
+        401: {"model": ErrorResponse, "description": "Email or password incorrect"},
+        403: {"model": ErrorResponse, "description": "Account disabled"},
+        404: {"model": ErrorResponse, "description": "Challenge expired or unknown"},
+    },
+)
+async def login(
+    body: LoginRequest, response: Response, session: DBSessionDep, redis: RedisDep
+) -> AuthStepResponse:
+    challenge = await challenge_store.get(redis, body.challenge_id)
+    if challenge is None:
+        raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
+
+    try:
+        user = await authenticate_password(session, body.email, body.password)
+    except InvalidCredentials as exc:
+        raise HTTPException(status_code=401, detail=exc.message) from exc
+    except InactiveUser as exc:
+        raise HTTPException(status_code=403, detail=exc.message) from exc
+
+    await session.commit()
+
+    login_session = await session_store.create(redis, user.id, AmrMethod.PWD)
+    session_cookie.set_session(response, login_session.id)
+
+    challenge.user_id = user.id
+    await challenge_store.save(redis, challenge)
+
+    return await _next_step(redis, login_session, challenge)
+
+
+@router.post(
+    "/totp",
+    response_model=AuthStepResponse,
+    summary="Verify a time-based one-time code",
+    description=(
+        "Adds `otp` to the session's `amr`, raising its assurance level. Used "
+        "both as a second factor during login and as a mid-session step-up when "
+        "a client requests a higher `acr_values`.\n\n"
+        "**Required scope:** none — requires an existing session cookie."
+    ),
+    responses={
+        400: {"model": ErrorResponse, "description": "Code invalid or no authenticator enrolled"},
+        401: {"model": ErrorResponse, "description": "No session"},
+        404: {"model": ErrorResponse, "description": "Challenge expired or unknown"},
+    },
+)
+async def totp(
+    body: TotpRequest,
+    login_session: LoginSessionDep,
+    session: DBSessionDep,
+    redis: RedisDep,
+) -> AuthStepResponse:
+    if login_session is None:
+        raise HTTPException(status_code=401, detail=NoSession.message)
+
+    challenge = await challenge_store.get(redis, body.challenge_id)
+    if challenge is None:
+        raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
+
+    user = await session.get(User, login_session.user_id)
+
+    try:
+        await verify_totp(session, user, body.code)
+    except (InvalidTotpCode, TotpNotEnrolled) as exc:
+        raise HTTPException(status_code=400, detail=exc.message) from exc
+
+    await session_store.add_method(redis, login_session, AmrMethod.OTP)
+    return await _next_step(redis, login_session, challenge)
+
+
+@router.post(
+    "/biometric",
+    response_model=AuthStepResponse,
+    summary="Sign in with a face",
+    description=(
+        "Adds `face` to the session's `amr`, but only when the engine reports a "
+        "**liveness-verified** match — a match without liveness is not an "
+        "authentication.\n\n"
+        "Returns `501` unless `IDEN_BIOMETRIC_ENABLED` is set. The route exists "
+        "while the module does not so the Auth UI contract is fixed from the "
+        "start; Phase 4 fills in the handler.\n\n"
+        "**Required scope:** none — requires an existing session or challenge."
+    ),
+    responses={501: {"model": ErrorResponse, "description": "Biometric module not enabled"}},
+)
+async def biometric() -> AuthStepResponse:
+    if not settings.iden_biometric_enabled:
+        raise HTTPException(
+            status_code=501, detail="The biometric module is not enabled on this deployment."
+        )
+    raise HTTPException(status_code=501, detail="Biometric login arrives in Phase 4.")
