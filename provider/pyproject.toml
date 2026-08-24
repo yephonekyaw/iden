@@ -10,7 +10,6 @@ requires-python = ">=3.14"
 dependencies = [
     "argon2-cffi>=25.1.0",
     "asyncpg>=0.31.0",
-    "authlib>=1.7.2",
     "cryptography>=50.0.0",
     "fastapi[standard]>=0.141.1",
     "pydantic>=2.13.4",
@@ -29,3 +28,20 @@ provider = "provider.core.app:main"
 [build-system]
 requires = ["uv_build>=0.12.1,<0.13.0"]
 build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+# So `scripts.seed` imports under pytest the same way it does under
+# `uv run python -m scripts.seed`.
+pythonpath = ["."]
+asyncio_mode = "auto"
+# Both are session-scoped so the session-scoped database engine and the tests
+# that use it share one event loop; asyncpg connections cannot cross loops.
+asyncio_default_fixture_loop_scope = "session"
+asyncio_default_test_loop_scope = "session"
