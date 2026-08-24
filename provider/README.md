@@ -314,6 +314,7 @@ erDiagram
 | `RefreshToken` carries `acr` and `amr` | A refreshed token must report the same authentication event as the original login, and the login is not repeated on refresh. `acr` is still derived from `amr` — this just remembers which methods were used. |
 | `ProfileField.user_writable` defines the self-service surface | `PATCH /entity/profile` has no fixed field list — it accepts exactly the fields an admin marked writable. `student_id` belongs to the registrar; `preferred_name` belongs to the student. Same table, same endpoint, opposite permissions. |
 | Profile values live in a table, not a JSONB column | `unique` on `student_id` has to be a database constraint — a check-then-write in the service layer races. Filtering by field stays an indexed query, and renaming a field key rewrites one row instead of every profile. |
+| Scope values are globally unique | A token carries scopes as bare strings and the audience is resolved from the value, so two APIs sharing a value would blend their audiences into one token. Namespace by API: `attendance:records:read`. |
 | Groups do not nest | Recursive resolution is hard to explain, hard to audit, and hard to make fast. Flat membership covers the real cases. |
 | No `tenant_id` on any table | IDEN is single-organization by design — see the [root README](../README.md#single-organization-by-design). |
 
@@ -617,6 +618,20 @@ derivation are the highest value per line in the suite. Every endpoint gets at l
 an authorization failure, and its most interesting failure mode. A test name should state the rule
 being enforced (`test_reuse_revokes_the_whole_family`), not the mechanics.
 
+### Query parameters are camelCase too
+
+FastAPI does not apply Pydantic's alias generator to query parameters, so multi-word ones need an
+explicit alias: `Query(None, alias="groupId")`. Without it a caller sending `groupId` gets an
+unfiltered list rather than an error — a filter that quietly returns everything is worse than one
+that fails.
+
+### Loading relationships on new objects
+
+A freshly constructed model has its relationships *unset*, not empty. Reading one after `commit()`
+triggers a lazy load, which fails inside async code with an unhelpful greenlet error. Either assign
+the related object you already have, or `await session.refresh(obj)` before returning it. This is
+the single most common way to break an async SQLAlchemy route here.
+
 ### Layers
 
 `routes.py` never touches the database. `service.py` never imports FastAPI. Domain exceptions are
@@ -650,5 +665,7 @@ One JSON error shape everywhere, except the OAuth endpoints, which must keep the
 | `403` on an `/admin/*` route with a valid token | The user's roles do not include that scope, or the client's grantable set does not, so it was pruned at issuance. Check `/admin/users/{id}/effective-scopes`. |
 | `401` where you expected `403` | The token is for a different API. Audience is validated before scopes, so a token carrying only `entity:*` gets `401` at an `/admin/*` route — not `403`. `403` means right audience, missing scope. |
 | Scope changes have no effect | Access tokens live 10 minutes. Refresh, or wait for expiry. |
-| `409` deleting a scope or role | It is `is_system`. Seeded catalogue entries are immutable by design. |
+| `409` deleting a scope or role | Either it is `is_system` (seeded entries are immutable by design), or it is still granted to someone — pass `force=true` once revoking those permissions is the intent. |
+| A filter seems to be ignored | Query parameters are camelCase (`?groupId=`, `?isActive=`). An unrecognised one is dropped, and you get an unfiltered list. |
+| `MissingGreenlet` in a route | A relationship was read on a newly created object. Assign it explicitly or `await session.refresh(obj)` after commit. |
 | `/biometric/*` returns 404 | `IDEN_BIOMETRIC_ENABLED` is false, so the module is not mounted. |

@@ -23,6 +23,7 @@ begins.
 - [Phase 3 — Entity RS (self-service)](#phase-3--entity-rs-self-service)
 - [Phase 4 — Biometric module](#phase-4--biometric-module)
 - [Phase 5 — Hardening](#phase-5--hardening)
+- [Known issues](#known-issues)
 - [Why this order](#why-this-order)
 
 ---
@@ -495,6 +496,30 @@ Creating a confidential client returns the cleartext secret **exactly once**; it
 get no secret and must use PKCE. `PUT .../scopes` sets both lists: *grantable* (may be requested on
 behalf of a user) and *granted* (held by the client itself for `client_credentials`).
 
+### Built differently than planned
+
+- **Scope values are globally unique**, not unique per API. A token carries scopes as bare strings
+  and the audience is resolved from the value, so two APIs defining `records:read` would put both
+  their audiences into one token. Namespacing by API (`attendance:records:read`) is how collisions
+  are avoided in practice.
+- **Destructive deletes are guarded by `force=true`.** Deleting an API, scope, or role that is still
+  granted silently strips permissions from whoever held them, so it returns `409` until the caller
+  says explicitly that this is the intent.
+- **Domain errors are mapped centrally**, by exception class, in `core/app.py` — `ApiNotFound` is a
+  `NotFoundError`, so it lands on 404 without a per-route `try/except`. Thirty routes each repeating
+  the same translation would be noise; routes still declare their failures in `responses={...}`.
+- **Query parameters are camelCase-aliased** (`?groupId=`, `?isActive=`). FastAPI does not apply the
+  Pydantic alias generator to query parameters, so without the alias a caller sending `groupId` gets
+  an unfiltered list back — a plausible wrong answer, which is the worst kind.
+- **Email validation is deliberately permissive** (`something@something`). A self-hosted IdP holds
+  internal addresses like `admin@localhost`; `EmailStr` rejects those as special-use domains, which
+  would make the bootstrap administrator un-creatable through IDEN's own API.
+- **`session_store` gained a per-user index.** Sessions are keyed by a hash of a secret only the
+  browser holds, so without it "revoke every session for this user" is unanswerable. Password reset
+  and deactivation both need it, and Phase 3's `/entity/sessions` will too.
+- **Deactivating a user revokes sessions and refresh tokens immediately**, rather than letting the
+  account stay usable until they expire.
+
 ### Done when
 
 A complete admin story runs against a live server using an admin access token from Phase 1:
@@ -509,12 +534,20 @@ A complete admin story runs against a live server using an admin access token fr
 Also verify: deleting a system scope returns `409`; a non-admin token returns `403` on every
 `/admin/*` route; `/docs` shows required scopes on every endpoint.
 
+Tests: `tests/test_access_control_story.py` runs exactly that story end to end — an admin defines a
+permission for a backend IDEN has never heard of, routes it through a role and a group, and a token
+comes out carrying it, with the right `aud`. Plus per-resource tests for authorization, validation,
+system-row protection, and the guarded deletes.
+
 ---
 
 ## Phase 3 — Entity RS (self-service)
 
 **Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
 schema that makes IDEN usable by a university and a company without either one forking it.
+
+**Before starting:** clear KI-1, and take KI-15 (Alembic) and KI-12 (audit log) from
+[Known issues](#known-issues) — all three get more expensive with every phase that passes.
 
 **The governing rule:** *a user may change anything about themselves that does not change what they
 are allowed to do.* Authority is admin territory; everything else is theirs. Roles, groups, and
@@ -699,6 +732,108 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 
 `docker compose up --build` brings up a working deployment; the test suite passes; the OWASP-relevant
 checks — rate limits engaged, no secrets in logs, headers present — all hold.
+
+---
+
+## Known issues
+
+Found in a review after Phase 2. Recorded here so they are scheduled rather than remembered.
+
+**Status** is either *verified* (reproduced against the running app) or *suspected* (reasoned from
+the code, not yet demonstrated). Fix the verified ones on evidence; demonstrate the suspected ones
+with a failing test before changing anything.
+
+### Correctness and security
+
+**KI-1 · Introspection leaks token contents to unauthenticated callers · verified · high**
+`authz/oauth/routes.py` authenticates only *confidential* clients on `/oauth2/introspect` and
+`/oauth2/revoke`. Naming the public `dashboard` client with no secret returns the full token
+contents — `sub`, `scope`, `aud`, `exp`, `jti`. RFC 7662 §2.1 requires the endpoint be protected.
+Anyone who can reach IDEN and holds a token can learn whose it is and what it can do.
+*Cause: "public clients have no secret" was treated as "public clients skip authentication."*
+*Fix:* require a confidential client for both endpoints, or admit a public client only for tokens it
+issued itself, with rate limiting. Fix before any deployment reachable by anyone but you.
+
+**KI-2 · Narrowing a refresh token's scope is permanent · verified · medium**
+`_refresh_token_grant` stores the narrowed set on the rotated token, so a client that once asked for
+less can never get the original grant back. RFC 6749 §6 treats the refresh token as representing the
+original grant, with per-request narrowing as a view of it, not a mutation.
+Note that `tests/test_token_grants.py::test_scope_can_be_narrowed_but_not_widened` currently asserts
+the buggy behaviour — the test agrees with the bug and must change with the code.
+*Fix:* keep the original grant on the token family and intersect per request.
+
+**KI-3 · Single-use enforcement is check-then-write · suspected · medium**
+`oauth/service.consume_code` selects the row, tests `used_at`, then sets it. Under READ COMMITTED two
+concurrent requests can both pass the check and both mint tokens, defeating the single-use property
+that makes a stolen code survivable. `token_service.consume_refresh_token` has the same shape, where
+it also defeats reuse *detection*.
+*Fix:* `SELECT … FOR UPDATE`, or a conditional `UPDATE … WHERE used_at IS NULL` checking `rowcount`.
+Demonstrate with a test that fires both requests concurrently.
+
+**KI-4 · Consent records requested scopes, not granted ones · suspected · medium**
+`consent/routes.py` persists `challenge.params["scope"]`. A user consents to a scope that was pruned
+at issuance because they did not hold it; later they gain the role, and the client uses it without
+ever asking again. The stored grant should be what was actually granted — that is what the user saw
+and agreed to.
+
+**KI-5 · `IndexError` on a client with no grants · verified as latent · low**
+`revoke`/`introspect` read `client.allowed_grants[0]`. Not reachable through the admin API today;
+reachable by a direct database edit, and it yields a 500.
+
+**KI-6 · `GET /admin/groups` is N+1 · verified · low**
+`member_count` runs once per group in the route — 8 queries for 5 groups. One `GROUP BY` away from
+fixed.
+
+### Design calls to ratify or overturn
+
+These are working as written. They are listed because they were decided by default rather than
+deliberately, and each has a real cost.
+
+**KI-7 · `admin:roles:write` is effectively root.** Anyone holding it can add `admin:*` to a role
+they hold. Reasonable for a single-org IdP, but it means "an admin who can only manage groups" is not
+expressible. Expressing it needs a rule such as *you may not grant a scope you do not hold*.
+
+**KI-8 · Nothing prevents locking yourself out.** The `administrator` role can be removed from the
+last admin, or that admin deactivated. `is_system` protects the scope catalogue, not the assignment.
+A "last active administrator" guard is cheap insurance against a one-way door.
+
+**KI-9 · One token may carry several audiences.** Requesting admin and entity scopes yields both in
+`aud`. Standard per RFC 9068, but a compromised resource server can replay the token at the other.
+RFC 8707 (`resource`) is the tighter design if that matters.
+
+**KI-10 · `require_scope` derives the audience from the scope prefix.** `core/auth._audience_for`
+is correct for `admin:`/`entity:`/`biometric:` and silently wrong for anything else — an IDEN route
+guarded by a custom scope would compute a nonexistent audience and 401 every request. Needs a guard
+rail or an explicit audience argument.
+
+**KI-11 · Key rotation needs a restart.** `core/crypto._keys` is `@cache`d at import. The docs call
+rotation "a config change"; it is a config change *and* a restart.
+
+### Operational gaps
+
+**KI-12 · No audit log.** Nothing records who granted which scope to whom, or when. For an
+access-control system this is the largest structural gap, and it is the one that cannot be
+backfilled — history not written is simply lost. Pull at least write-path auditing forward into
+Phase 3 rather than leaving it in Phase 5.
+
+**KI-13 · No rate limiting.** `/api/v1/auth/login` and `/oauth2/token` accept unlimited attempts.
+Argon2 makes each attempt expensive for the server, not the attacker. Phase 5 owns it, but the
+endpoints are live now.
+
+**KI-14 · Expired authorization codes and refresh tokens are never deleted.** Both tables grow
+without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
+
+**KI-15 · Alembic is still scheduled for Phase 5.** The schema has already needed three rounds of
+manual surgery on the dev database, and Phase 3 adds two more tables. Move it to the start of
+Phase 3, before there is data worth keeping.
+
+### Suggested order
+
+1. **KI-1** now — it is a live information leak and a small change.
+2. **KI-15**, then **KI-12**, at the start of Phase 3 — both get more expensive with every phase.
+3. **KI-2, KI-3, KI-4** during Phase 3, each with a failing test first.
+4. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
+5. The rest with Phase 5 hardening.
 
 ---
 

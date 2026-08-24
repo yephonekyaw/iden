@@ -585,8 +585,8 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 |-------|-------|--------|
 | **Phase 0** | Provider foundation — config, database, models, security, seed | Done |
 | **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Done |
-| **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Next |
-| **Phase 3** | Provider Entity RS — self-service profile, credentials, TOTP, permissions | Planned |
+| **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Done |
+| **Phase 3** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Next |
 | **Phase 4** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
 | **Phase 5** | Hardening — rate limiting, audit log, tests, Docker Compose | Planned |
 | **Phase 6** | Frontends — auth-ui and dashboard SPAs | Planned |
@@ -594,6 +594,10 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 
 Phases 0–5 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md). Tests ship with the
 phase that introduces the code — `uv run pytest` from `provider/` runs the suite.
+
+Issues found in review but not yet fixed are tracked in
+[provider/PLAN.md § Known issues](provider/PLAN.md#known-issues). **IDEN is not yet ready for a
+deployment reachable by anyone but its developers** — see KI-1 and KI-13 in particular.
 
 ---
 
