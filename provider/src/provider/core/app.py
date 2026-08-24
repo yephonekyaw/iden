@@ -13,7 +13,13 @@ from provider.core import redis as redis_module
 from provider.core.config import settings
 from provider.core.db import engine
 from provider.authz.oauth.errors import OAuthError, RedirectableError
-from provider.core.errors import IdenError
+from provider.core.errors import (
+    ConflictError,
+    IdenError,
+    ImmutableError,
+    NotFoundError,
+    ValidationError,
+)
 from provider.core.logging import configure_logging, logger
 from provider.core.router import router
 from provider.core.schemas import ErrorResponse
@@ -21,13 +27,15 @@ from provider.core.schemas import ErrorResponse
 configure_logging()
 
 # Domain errors carry no HTTP knowledge, so the mapping lives here — the one
-# place that knows both vocabularies.
-ERROR_STATUS = {
-    "not_found": 404,
-    "conflict": 409,
-    "immutable": 409,
-    "validation_error": 422,
-}
+# place that knows both vocabularies. Matched by class rather than by code, so a
+# package can raise `ApiNotFound` with its own message and still land on 404.
+# Most specific first: ImmutableError is a ConflictError.
+ERROR_STATUS = (
+    (NotFoundError, 404),
+    (ImmutableError, 409),
+    (ConflictError, 409),
+    (ValidationError, 422),
+)
 
 
 @asynccontextmanager
@@ -64,16 +72,19 @@ async def add_request_id(request: Request, call_next: Callable) -> Response | No
 
 @app.exception_handler(IdenError)
 async def handle_iden_error(request: Request, exc: IdenError) -> JSONResponse:
-    """Safety net for domain errors that reach the app un-translated.
+    """Translate a domain exception into the documented JSON error shape.
 
-    Routes are expected to map their own domain exceptions; this keeps an
-    escaped one from becoming an opaque 500.
+    Central rather than per-route: the mapping is uniform across every
+    resource, and thirty routes each repeating the same try/except would add
+    noise without adding meaning. Routes still declare their failures in
+    `responses={...}` so `/docs` stays accurate.
     """
-    logger.warning("Unhandled domain error", code=exc.code, path=request.url.path)
+    status_code = next((code for cls, code in ERROR_STATUS if isinstance(exc, cls)), 500)
+    if status_code >= 500:
+        logger.error("Unmapped domain error", code=exc.code, path=request.url.path)
+
     body = ErrorResponse(code=exc.code, message=exc.message, details=exc.details)
-    return JSONResponse(
-        status_code=ERROR_STATUS.get(exc.code, 500), content=body.model_dump(by_alias=True)
-    )
+    return JSONResponse(status_code=status_code, content=body.model_dump(by_alias=True))
 
 
 @app.exception_handler(RedirectableError)
