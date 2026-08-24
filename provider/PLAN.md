@@ -111,7 +111,20 @@ files from ground rule 1.
 **Goal:** a running app with a real database, real models, hashing, signing keys, and a seed script
 that bootstraps the deployment. No OAuth yet.
 
-### 0.1 Clean up the skeleton
+### 0.1 Dev infrastructure
+
+Phase 0 cannot be verified without a database, so the dev half of Docker Compose comes first:
+`deploy/docker-compose.yml` with `pgvector/pgvector:pg18` and `redis:8-alpine`, both health-checked.
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d
+```
+
+Postgres 18 moved its recommended volume mount to `/var/lib/postgresql` (not `/var/lib/postgresql/data`);
+mounting the old path makes the container refuse to start. The provider image, nginx, minio, and the
+engine stay in Phase 5.
+
+### 0.2 Clean up the skeleton
 
 Three things in the current skeleton need fixing before building on them:
 
@@ -125,7 +138,7 @@ Three things in the current skeleton need fixing before building on them:
 Also add: `uv add "redis[hiredis]" pyjwt cryptography pyotp python-multipart`.
 (`authlib` and `argon2-cffi` are already present.)
 
-### 0.2 Configuration — `core/config.py`
+### 0.3 Configuration — `core/config.py`
 
 Extend the existing `Settings` with everything later phases need. Full table in
 [README.md § Configuration](README.md#configuration). Groups:
@@ -143,7 +156,7 @@ Extend the existing `Settings` with everything later phases need. Full table in
 
 Mirror every field into `.env.example`.
 
-### 0.3 Infrastructure modules
+### 0.4 Infrastructure modules
 
 - **`core/db.py`** — `create_async_engine`, `async_sessionmaker`, a `get_db_session` dependency that
   yields a session and rolls back on exception, and the alias `DBSessionDep`.
@@ -158,7 +171,7 @@ Mirror every field into `.env.example`.
   route returns.
 - **`core/schemas.py`** — `CamelCaseBaseModel` (moved), plus shared paging schemas.
 
-### 0.4 The data model — `shared/models.py`
+### 0.5 The data model — `shared/models.py`
 
 One file, one source of truth. All primary keys are UUIDv7-ish (`uuid.uuid7()`, Python 3.14) unless
 noted. Every table carries `created_at` / `updated_at`.
@@ -204,7 +217,7 @@ Not in Postgres: sessions, login/consent challenges, and the `jti` denylist live
 - `RefreshToken.family_id` + `rotated_to_id` implement rotation with **reuse detection**: presenting
   an already-rotated token revokes the entire family, on the assumption it was stolen.
 
-### 0.5 The system catalogue — `shared/scopes.py`
+### 0.6 The system catalogue — `shared/scopes.py`
 
 A plain declarative structure — no logic — listing the APIs, scopes, and roles the seed upserts.
 
@@ -217,7 +230,7 @@ A plain declarative structure — no logic — listing the APIs, scopes, and rol
 Seeded roles: **`administrator`** (every `admin:*` and `entity:*` scope) and **`member`** (every
 `entity:*` scope). Both `is_system`.
 
-### 0.6 Seed script — `scripts/seed.py`
+### 0.7 Seed script — `scripts/seed.py`
 
 Idempotent, safe to re-run after every model change during development:
 
@@ -232,7 +245,7 @@ Run with `uv run python -m scripts.seed` from `provider/`.
 
 `scripts/gen_keys.py` writes an RSA keypair into `iden_signing_key_dir` for local development.
 
-### 0.7 App wiring — `core/app.py`
+### 0.8 App wiring — `core/app.py`
 
 Keep the existing request-id + structlog middleware. Add: the DB engine and Redis client to the
 lifespan, a `GET /health` returning DB and Redis reachability, and an exception handler translating
@@ -529,8 +542,8 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 - **Tests.** pytest + httpx `ASGITransport` against a throwaway database. Priority order: the scope
   resolver (pure logic, highest value per line), PKCE verification, refresh rotation and reuse
   detection, `require_scope` allow/deny, then a full authorization-code integration test.
-- **Docker.** `Dockerfile` for the provider and a `docker-compose.yml` wiring postgres, redis, minio,
-  nginx, and the provider together.
+- **Docker.** `Dockerfile` for the provider, extending `deploy/docker-compose.yml` (created in Phase 0
+  with postgres and redis) to wire in the provider, minio, and nginx.
 - **Operational endpoints.** `/health` split into liveness and readiness.
 
 ### Done when

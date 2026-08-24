@@ -38,9 +38,13 @@ same guarantee by validating against the published JWKS.
 
 ## Local Development
 
-Python 3.14+, managed by [uv](https://docs.astral.sh/uv/). PostgreSQL 16 with the `pgvector`
-extension, and Redis 7, are expected to be reachable — run them via the root `docker-compose.yml` or
-locally.
+Python 3.14+, managed by [uv](https://docs.astral.sh/uv/), plus PostgreSQL with `pgvector` and Redis:
+
+```bash
+docker compose -f deploy/docker-compose.yml up -d    # postgres:18 + pgvector, redis:8
+```
+
+Then, from the repository root:
 
 ```bash
 cd provider

@@ -1,0 +1,305 @@
+"""Every persisted model in IDEN. One file, one source of truth.
+
+Sessions, login/consent challenges, and the access-token `jti` denylist are
+deliberately absent — they are ephemeral and live in Redis under a TTL, so
+expiry is the storage layer's job rather than a cleanup job's.
+"""
+
+import uuid
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Index,
+    String,
+    Table,
+    Text,
+    UniqueConstraint,
+    func,
+)
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from provider.core.db import Base
+from provider.shared.enums import ClientType
+
+
+def _pk() -> Mapped[uuid.UUID]:
+    return mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid7)
+
+
+class TimestampMixin:
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+# --------------------------------------------------------------------------
+# Join tables
+#
+# Plain association tables: they carry no data of their own, so a mapped class
+# would add a layer without adding anything to say.
+# --------------------------------------------------------------------------
+
+user_groups = Table(
+    "user_groups",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
+)
+
+user_roles = Table(
+    "user_roles",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+group_roles = Table(
+    "group_roles",
+    Base.metadata,
+    Column("group_id", ForeignKey("groups.id", ondelete="CASCADE"), primary_key=True),
+    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+)
+
+role_scopes = Table(
+    "role_scopes",
+    Base.metadata,
+    Column("role_id", ForeignKey("roles.id", ondelete="CASCADE"), primary_key=True),
+    Column("scope_id", ForeignKey("scopes.id", ondelete="CASCADE"), primary_key=True),
+)
+
+# Direct user grants, for one-off exceptions that do not deserve a role.
+user_scopes = Table(
+    "user_scopes",
+    Base.metadata,
+    Column("user_id", ForeignKey("users.id", ondelete="CASCADE"), primary_key=True),
+    Column("scope_id", ForeignKey("scopes.id", ondelete="CASCADE"), primary_key=True),
+)
+
+
+# --------------------------------------------------------------------------
+# Identity
+# --------------------------------------------------------------------------
+
+
+class User(Base, TimestampMixin):
+    __tablename__ = "users"
+
+    id: Mapped[uuid.UUID] = _pk()
+    email: Mapped[str] = mapped_column(String(320), unique=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    display_name: Mapped[str | None] = mapped_column(String(255))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # selectin rather than lazy loading: these sets are small, they are always
+    # needed together when resolving effective scopes, and a lazy load inside
+    # async code fails with an unhelpful greenlet error.
+    groups: Mapped[list["Group"]] = relationship(
+        secondary=user_groups, back_populates="users", lazy="selectin"
+    )
+    roles: Mapped[list["Role"]] = relationship(secondary=user_roles, lazy="selectin")
+    scopes: Mapped[list["Scope"]] = relationship(secondary=user_scopes, lazy="selectin")
+    totp: Mapped["TotpCredential | None"] = relationship(
+        back_populates="user", cascade="all, delete-orphan", uselist=False
+    )
+
+
+class Group(Base, TimestampMixin):
+    __tablename__ = "groups"
+
+    id: Mapped[uuid.UUID] = _pk()
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+
+    users: Mapped[list[User]] = relationship(
+        secondary=user_groups, back_populates="groups"
+    )
+    roles: Mapped[list["Role"]] = relationship(secondary=group_roles, lazy="selectin")
+
+
+class TotpCredential(Base, TimestampMixin):
+    __tablename__ = "totp_credentials"
+
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True
+    )
+    secret: Mapped[str] = mapped_column(String(255))
+    # Enrollment is two-step: the credential only counts once a generated code
+    # has been confirmed, so a mis-scanned QR code cannot lock a user out.
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    user: Mapped[User] = relationship(back_populates="totp")
+
+
+# --------------------------------------------------------------------------
+# Access control
+# --------------------------------------------------------------------------
+
+
+class ResourceApi(Base, TimestampMixin):
+    __tablename__ = "resource_apis"
+
+    id: Mapped[uuid.UUID] = _pk()
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    audience: Mapped[str] = mapped_column(String(512), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    scopes: Mapped[list["Scope"]] = relationship(
+        back_populates="api", cascade="all, delete-orphan"
+    )
+
+
+class Scope(Base, TimestampMixin):
+    __tablename__ = "scopes"
+    __table_args__ = (UniqueConstraint("api_id", "value"),)
+
+    id: Mapped[uuid.UUID] = _pk()
+    api_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("resource_apis.id", ondelete="CASCADE")
+    )
+    value: Mapped[str] = mapped_column(String(128))
+    # Required: this is the sentence a user reads on the consent screen.
+    description: Mapped[str] = mapped_column(Text)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    api: Mapped[ResourceApi] = relationship(back_populates="scopes", lazy="selectin")
+
+
+class Role(Base, TimestampMixin):
+    __tablename__ = "roles"
+
+    id: Mapped[uuid.UUID] = _pk()
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    description: Mapped[str | None] = mapped_column(Text)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    scopes: Mapped[list[Scope]] = relationship(secondary=role_scopes, lazy="selectin")
+
+
+# --------------------------------------------------------------------------
+# OAuth
+# --------------------------------------------------------------------------
+
+
+class Client(Base, TimestampMixin):
+    __tablename__ = "clients"
+
+    id: Mapped[uuid.UUID] = _pk()
+    client_id: Mapped[str] = mapped_column(String(128), unique=True)
+    name: Mapped[str] = mapped_column(String(255))
+    client_type: Mapped[ClientType] = mapped_column(String(32))
+    # Public clients have no secret and prove themselves with PKCE alone.
+    client_secret_hash: Mapped[str | None] = mapped_column(String(255))
+    redirect_uris: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    allowed_grants: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    post_logout_redirect_uris: Mapped[list[str]] = mapped_column(
+        ARRAY(String), default=list
+    )
+    skip_consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    scopes: Mapped[list["ClientScope"]] = relationship(
+        back_populates="client", cascade="all, delete-orphan", lazy="selectin"
+    )
+
+
+class ClientScope(Base, TimestampMixin):
+    """A client's relationship to one scope.
+
+    `grantable` — may be requested on behalf of a user (authorization code).
+    `granted`   — held by the client itself (client credentials).
+    The two are independent: a kiosk holds `biometric:search` outright while a
+    dashboard may only request `admin:users:read` for whoever is logged in.
+    """
+
+    __tablename__ = "client_scopes"
+    __table_args__ = (UniqueConstraint("client_id", "scope_id"),)
+
+    id: Mapped[uuid.UUID] = _pk()
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE")
+    )
+    scope_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("scopes.id", ondelete="CASCADE")
+    )
+    grantable: Mapped[bool] = mapped_column(Boolean, default=True)
+    granted: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    client: Mapped[Client] = relationship(back_populates="scopes")
+    scope: Mapped[Scope] = relationship(lazy="selectin")
+
+
+class AuthorizationCode(Base, TimestampMixin):
+    __tablename__ = "authorization_codes"
+
+    id: Mapped[uuid.UUID] = _pk()
+    # Stored hashed, like every other credential: a database read must not
+    # yield anything usable.
+    code_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    redirect_uri: Mapped[str] = mapped_column(String(2048))
+    scope: Mapped[str] = mapped_column(Text)
+    code_challenge: Mapped[str] = mapped_column(String(128))
+    code_challenge_method: Mapped[str] = mapped_column(String(16))
+    nonce: Mapped[str | None] = mapped_column(String(255))
+    acr: Mapped[str] = mapped_column(String(32))
+    amr: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class RefreshToken(Base, TimestampMixin):
+    __tablename__ = "refresh_tokens"
+    __table_args__ = (Index("ix_refresh_tokens_family_id", "family_id"),)
+
+    id: Mapped[uuid.UUID] = _pk()
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE")
+    )
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    scope: Mapped[str] = mapped_column(Text)
+    # Rotation with reuse detection: presenting an already-rotated token revokes
+    # the whole family, on the assumption it was stolen.
+    family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
+    rotated_to_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("refresh_tokens.id", ondelete="SET NULL")
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ConsentGrant(Base, TimestampMixin):
+    __tablename__ = "consent_grants"
+    __table_args__ = (UniqueConstraint("user_id", "client_id"),)
+
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    client_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("clients.id", ondelete="CASCADE")
+    )
+    scopes: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    granted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )

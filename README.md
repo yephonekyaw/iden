@@ -132,8 +132,8 @@ flowchart TB
 | **dashboard** | Next.js 15, React, Tailwind CSS | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client) |
 | **auth-ui** | Next.js 15, React, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
 | **kiosk** | Hardware + Next.js / native | n/a | Biometric kiosk device — uses `client_credentials` to call the Biometric RS |
-| **postgres** | PostgreSQL 16 + pgvector | 5432 | Users, groups, roles, scopes, APIs, clients, tokens, embeddings |
-| **redis** | Redis 7 | 6379 | Sessions, login/consent challenges, token denylist, rate limits |
+| **postgres** | PostgreSQL 18 + pgvector | 5432 | Users, groups, roles, scopes, APIs, clients, tokens, embeddings |
+| **redis** | Redis 8 | 6379 | Sessions, login/consent challenges, token denylist, rate limits |
 | **minio** | MinIO (S3-compatible) | 9000 | Blob storage — enrollment/verification images, profile photos, audit snapshots. Keeps large binaries out of Postgres. |
 | **nginx** | Nginx Alpine | 80/443 | Reverse proxy, TLS termination, path-based routing |
 
@@ -583,8 +583,8 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 
 | Phase | Focus | Status |
 |-------|-------|--------|
-| **Phase 0** | Provider foundation — config, database, models, security, seed | In Progress |
-| **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Planned |
+| **Phase 0** | Provider foundation — config, database, models, security, seed | Done |
+| **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Next |
 | **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Planned |
 | **Phase 3** | Provider Entity RS — self-service profile, credentials, TOTP, permissions | Planned |
 | **Phase 4** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
