@@ -1,1 +1,619 @@
-# Project IDEN
+# Project IDEN — Open Source Identity & Access Control Provider
+
+An open-source **Identity Provider (IdP)** and **Access Control** system built on the OpenID Connect
+(OIDC) standard, with optional facial biometric authentication. IDEN gives a single organization a
+complete, self-hosted platform for answering the two questions every backend eventually asks:
+
+1. **Who is this?** — email/password login, TOTP-based MFA, and facial recognition, surfaced to
+   applications through standard OIDC.
+2. **What are they allowed to do?** — a runtime-managed permission system where administrators
+   register APIs, define scopes for them, bundle those scopes into roles, and assign roles to users
+   and groups.
+
+Everything deploys via Docker Compose.
+
+---
+
+## Table of Contents
+
+- [Single-Organization by Design](#single-organization-by-design)
+- [System Architecture](#system-architecture)
+- [Component Overview](#component-overview)
+- [Identity & Access Model](#identity--access-model)
+- [Supported Grants](#supported-grants)
+- [Tokens](#tokens)
+- [Authentication Assurance (acr / amr)](#authentication-assurance-acr--amr)
+- [Provider Internal Architecture](#provider-internal-architecture)
+- [Docker Network Topology](#docker-network-topology)
+- [Key Design Decisions](#key-design-decisions)
+- [Quick Start](#quick-start)
+- [Development Phases](#development-phases)
+- [Open Design Questions](#open-design-questions)
+
+---
+
+## Single-Organization by Design
+
+IDEN is **not** a multi-tenant identity SaaS. It is not Auth0, Okta, or Entra ID.
+
+Those products are operated by a vendor and host many unrelated customers side by side, which forces
+a tenant boundary through every table, every query, and every token. IDEN takes the opposite stance:
+
+> **One deployment belongs to exactly one organization.** You clone the repository, deploy it on your
+> own infrastructure, and every user, group, role, scope, client, and biometric template in that
+> database is yours.
+
+What follows from that:
+
+| Consequence | Detail |
+|---|---|
+| **No tenant column, anywhere** | There is no `tenant_id` / `organization_id` on any model. A user simply belongs to *the* organization. This removes an entire dimension of complexity from every query and every authorization check. |
+| **You own the data** | Face embeddings, password hashes, and audit trails never leave infrastructure you control. For biometric data in particular, this is the whole point — see the biometric extension. |
+| **Admins are your staff, not a vendor's** | The `admin:*` scopes grant real, unrestricted control over the deployment. There is no higher authority above them, and no support ticket needed to change anything. |
+| **Groups model your org chart** | Departments, teams, cohorts — whatever structure you have — are modelled as groups, not as tenants. Groups share one user pool and one permission namespace. |
+| **Federation is out of scope (for now)** | IDEN is the source of truth for identity, not a broker in front of other IdPs. Logging in with Google or a corporate SAML IdP is not part of the current design. |
+
+If you need to serve two organizations that must not see each other's data, run two deployments.
+
+---
+
+## System Architecture
+
+```mermaid
+flowchart TB
+  subgraph External["External Clients — Core"]
+    Browser["Browser (User)"]
+    ThirdParty["Third-Party OIDC Client"]
+    Backend["Backend Service<br/>(client_credentials)"]
+  end
+
+  subgraph ExternalExt["External Clients — Extension"]
+    Kiosk["Biometric Kiosk Device"]
+  end
+
+  Nginx["Nginx Reverse Proxy<br/>:80 / :443"]
+
+  Browser --> Nginx
+  ThirdParty --> Nginx
+  Backend --> Nginx
+  Kiosk --> Nginx
+
+  subgraph Core["Core — Default IdP"]
+    direction TB
+
+    subgraph Provider["provider :8000 — single FastAPI app (Python 3.14)"]
+      direction TB
+      AuthZ["AuthZ Server module<br/>/.well-known/*, /oauth2/*"]
+      Admin["Admin RS module<br/>/admin/*<br/>identity + access control"]
+      Entity["Entity RS module<br/>/entity/*"]
+      Biometric["Biometric RS module<br/>/biometric/*<br/>⟮extension · feature-flagged⟯"]
+    end
+
+    AuthUI["auth-ui :4000<br/>/auth/login, /auth/consent"]
+    Dashboard["dashboard :3000<br/>Bootstrapped OIDC client"]
+
+    Postgres[("PostgreSQL :5432")]
+    Redis[("Redis :6379")]
+    MinIO[("MinIO :9000<br/>S3-compatible object store")]
+  end
+
+  subgraph Extension["Extension — Biometric Credential"]
+    direction TB
+    Engine["Biometric Engine :8000<br/>INTERNAL ONLY · FastAPI + ONNX"]
+    PgVector[("PostgreSQL + pgvector")]
+  end
+
+  Nginx -->|"/oauth2/*, /.well-known/*,<br/>/admin/*, /entity/*, /biometric/*"| Provider
+  Nginx -->|"/auth/*"| AuthUI
+  Nginx -->|"/* (everything else)"| Dashboard
+
+  Biometric --> Engine
+  Engine --> PgVector
+  Engine --> MinIO
+
+  Provider --> Postgres
+  Provider --> Redis
+  Provider --> MinIO
+
+  style Core fill:#1a1a2e,stroke:#4a90d9,stroke-width:2px,color:#ffffff
+  style Extension fill:#2e1a2e,stroke:#d94a90,stroke-width:2px,color:#ffffff,stroke-dasharray: 5 5
+  style ExternalExt fill:#2e1a2e,stroke:#d94a90,stroke-width:2px,color:#ffffff,stroke-dasharray: 5 5
+  style Biometric stroke:#d94a90,stroke-width:2px,stroke-dasharray: 5 5
+```
+
+---
+
+## Component Overview
+
+| Component | Tech Stack | Port | Purpose |
+|-----------|-----------|------|---------|
+| **provider** | Python 3.14, FastAPI, Authlib, asyncpg | 8000 | Single FastAPI app hosting four logical modules: AuthZ Server (`/oauth2/*`, `/.well-known/*`), Admin RS (`/admin/*`), Entity RS (`/entity/*`), Biometric RS (`/biometric/*`) |
+| **engine** | Python 3.14, FastAPI, InsightFace, ONNX | 8000 | Internal biometric engine — face detection, embedding, liveness (no external access) |
+| **dashboard** | Next.js 15, React, Tailwind CSS | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client) |
+| **auth-ui** | Next.js 15, React, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
+| **kiosk** | Hardware + Next.js / native | n/a | Biometric kiosk device — uses `client_credentials` to call the Biometric RS |
+| **postgres** | PostgreSQL 16 + pgvector | 5432 | Users, groups, roles, scopes, APIs, clients, tokens, embeddings |
+| **redis** | Redis 7 | 6379 | Sessions, login/consent challenges, token denylist, rate limits |
+| **minio** | MinIO (S3-compatible) | 9000 | Blob storage — enrollment/verification images, profile photos, audit snapshots. Keeps large binaries out of Postgres. |
+| **nginx** | Nginx Alpine | 80/443 | Reverse proxy, TLS termination, path-based routing |
+
+---
+
+## Identity & Access Model
+
+This is the heart of IDEN and the part that changed most from the original design. Earlier drafts
+treated scopes as a fixed list baked into the source code. They are now **first-class data that
+administrators create and manage at runtime**, which is what turns IDEN from an identity provider
+into an identity *and access control* provider.
+
+### The five nouns
+
+| Noun | What it is | Who creates it |
+|---|---|---|
+| **API** (resource server) | A backend that trusts IDEN. Has a name and an **audience** URI (e.g. `https://api.example.org/attendance`). Every token minted for it carries that audience. | Admin |
+| **Scope** | A single permission, owned by exactly one API. A string like `attendance:records:read` plus a human description. | Admin |
+| **Role** | A named bundle of scopes — a job function such as `attendance-officer`. Roles are **global**: one role may bundle scopes from several APIs. | Admin |
+| **Group** | A set of users — a department, team, or cohort. Groups hold roles. Membership is flat; groups do not nest. | Admin |
+| **User** | A person. Holds roles directly, inherits roles from every group they belong to, and may hold individual scope grants for one-off exceptions. | Admin (or kiosk enrollment) |
+
+```mermaid
+flowchart LR
+  User["User"]
+  Group["Group"]
+  Role["Role"]
+  Scope["Scope"]
+  Api["API<br/>(audience)"]
+
+  User -->|"member of"| Group
+  Group -->|"has role"| Role
+  User -->|"has role"| Role
+  Role -->|"bundles"| Scope
+  User -.->|"direct grant<br/>(exception)"| Scope
+  Scope -->|"owned by"| Api
+
+  style Role fill:#1a2e1a,stroke:#4ad990,stroke-width:2px,color:#ffffff
+  style Scope fill:#1a1a2e,stroke:#4a90d9,stroke-width:2px,color:#ffffff
+```
+
+### Why scopes belong to an API, not to a client app
+
+A tempting shortcut is to hang scopes off the OAuth client that requests them. That falls apart the
+moment two apps talk to the same backend: the dashboard SPA and a kiosk both call the attendance
+service, and you would end up defining `attendance:records:read` twice with no single answer to
+"which permissions does the attendance service actually define?"
+
+Anchoring scopes to the **API** keeps two concerns separate:
+
+- The API **defines** what permissions exist and supplies the `aud` value tokens are minted for.
+- A client **requests** a subset of them, and is limited to the subset an admin allowed it.
+
+### Effective scopes
+
+A user's **effective scopes** are the union of three sources:
+
+```text
+effective_user_scopes =
+      scopes granted directly to the user          (exceptions)
+    ∪ scopes of every role assigned to the user    (direct roles)
+    ∪ scopes of every role held by any group       (inherited roles)
+      the user belongs to
+```
+
+### Scope resolution at token issuance
+
+The set of scopes that lands in an access token is an intersection, computed fresh on every issuance:
+
+**Authorization code flow** (a human is present):
+
+```text
+granted = requested ∩ client.allowed_scopes ∩ effective_user_scopes
+```
+
+**Client credentials flow** (no human — the client *is* the identity):
+
+```text
+granted = requested ∩ client.granted_scopes
+```
+
+Two properties worth internalising:
+
+- **Pruning is silent, not an error.** Asking for more than you are entitled to yields a smaller
+  token, not a failed request. This is what lets the dashboard SPA request a broad scope set at
+  `/authorize` and still work correctly for a non-admin user — they simply receive a narrower token.
+- **Permissions are evaluated at issuance, never at the resource server.** Revoking a role takes
+  effect when the next access token is minted, which is why access tokens are short-lived and
+  refresh tokens exist. Resource servers stay completely stateless with respect to identity: they
+  validate the signature, check `aud`, and read `scope`. They never look up a user, a role, or a
+  group.
+
+### System scopes are protected
+
+IDEN seeds its own APIs (`admin`, `entity`, and optionally `biometric`) along with their scopes and a
+bootstrap `administrator` role. Everything seeded is flagged `is_system` and **cannot be renamed or
+deleted** through the admin API. Admin-created APIs, scopes, roles, and groups carry no such flag and
+are fully mutable.
+
+Without that guard, an administrator could delete `admin:roles:write` and permanently lock the
+organization out of its own deployment.
+
+### The admin surface this creates
+
+| Resource | Endpoints |
+|---|---|
+| APIs | `GET/POST /admin/apis`, `GET/PATCH/DELETE /admin/apis/{id}` |
+| Scopes | `GET/POST /admin/apis/{id}/scopes`, `GET/PATCH/DELETE /admin/scopes/{id}` |
+| Roles | `GET/POST /admin/roles`, `GET/PATCH/DELETE /admin/roles/{id}`, `PUT /admin/roles/{id}/scopes` |
+| Groups | `GET/POST /admin/groups`, `GET/PATCH/DELETE /admin/groups/{id}`, `PUT /admin/groups/{id}/roles`, `POST/DELETE /admin/groups/{id}/members` |
+| Users | `GET/POST /admin/users`, `GET/PATCH/DELETE /admin/users/{id}`, `PUT /admin/users/{id}/roles`, `GET /admin/users/{id}/effective-scopes` |
+| Clients | `GET/POST /admin/clients`, `GET/PATCH/DELETE /admin/clients/{id}`, `POST /admin/clients/{id}/rotate-secret` |
+
+`GET /admin/users/{id}/effective-scopes` is deliberately part of the surface: when someone asks *why
+can this person do that?*, the answer should be one request away, with each scope annotated by the
+role or group it came from.
+
+---
+
+## Supported Grants
+
+IDEN implements the two grant types that cover essentially all modern use cases, and deliberately
+**omits the rest**. Implicit and resource-owner-password grants are excluded because they are
+discouraged by [OAuth 2.1](https://oauth.net/2.1/); device code and refresh-only flows are out of
+scope for now.
+
+### 1. Authorization Code + PKCE — for anything with a user
+
+Used by the dashboard SPA, third-party web apps, and mobile apps. **PKCE with `S256` is mandatory for
+every client**, public or confidential — there is no non-PKCE path.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as Client App
+  participant B as Browser
+  participant AZ as IDEN AuthZ
+  participant UI as auth-ui
+  participant RS as Resource Server
+
+  App->>B: redirect to /oauth2/authorize<br/>(client_id, redirect_uri, scope,<br/>state, code_challenge, acr_values)
+  B->>AZ: GET /oauth2/authorize
+  AZ->>AZ: no session? create login challenge
+  AZ-->>B: redirect to auth-ui /auth/login?challenge=…
+  B->>UI: login page
+  UI->>AZ: POST /api/v1/auth/login (credentials)
+  AZ->>AZ: verify, record amr, derive acr
+  AZ-->>B: consent needed? → /auth/consent<br/>else straight back
+  B->>AZ: GET /oauth2/authorize (resumed)
+  AZ->>AZ: resolve scopes<br/>requested ∩ client ∩ user
+  AZ-->>B: redirect to redirect_uri?code=…&state=…
+  B->>App: authorization code
+  App->>AZ: POST /oauth2/token<br/>(code, code_verifier)
+  AZ-->>App: access_token (JWT) + id_token + refresh_token
+  App->>RS: Authorization: Bearer <access_token>
+  RS->>RS: verify signature via JWKS,<br/>check aud + scope
+  RS-->>App: 200
+```
+
+### 2. Client Credentials — for machines
+
+Used by kiosk devices, cron jobs, and service-to-service calls. There is no user, so the token has no
+person behind its `sub`, carries no `id_token`, and gets no refresh token — the client just asks
+again.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant Svc as Backend Service / Kiosk
+  participant AZ as IDEN AuthZ
+  participant RS as Resource Server
+
+  Svc->>AZ: POST /oauth2/token<br/>grant_type=client_credentials<br/>(client_id + client_secret, scope)
+  AZ->>AZ: verify secret (argon2)<br/>granted = requested ∩ client.granted_scopes
+  AZ-->>Svc: access_token (JWT, short-lived)
+  Svc->>RS: Authorization: Bearer <access_token>
+  RS-->>Svc: 200
+```
+
+Only **confidential** clients may use this grant; a public client has no secret to prove with.
+
+---
+
+## Tokens
+
+| Token | Format | Lifetime | Storage |
+|---|---|---|---|
+| **Access token** | Signed JWT (`RS256`) | ~10 minutes | Stateless — nothing stored. A `jti` denylist in Redis handles early revocation. |
+| **ID token** | Signed JWT (`RS256`) | ~10 minutes | Stateless. Identity claims only; never sent to APIs. |
+| **Refresh token** | Opaque random string | ~30 days, sliding | Hashed in Postgres; **rotated on every use**, and reuse of an already-used token revokes the whole family. |
+| **Authorization code** | Opaque random string | 60 seconds, single use | Postgres, bound to `client_id` + `code_challenge`. |
+
+A representative access token payload:
+
+```json
+{
+  "iss": "https://iden.example.org",
+  "sub": "9f1c…",
+  "aud": "https://api.example.org/attendance",
+  "client_id": "dashboard",
+  "scope": "attendance:records:read entity:profile:read",
+  "acr": "iden:loa:2",
+  "amr": ["pwd", "otp"],
+  "jti": "01J…",
+  "iat": 1750000000,
+  "exp": 1750000600
+}
+```
+
+**Why JWT access tokens rather than opaque ones?** IDEN is designed to sit in front of *various*
+resource servers, some of which are not part of this repository and may not even be written in
+Python. A JWT lets any of them validate a request offline against the published JWKS — no network
+call back to IDEN on every request, no shared cache to operate. The cost is that revocation is not
+instantaneous; short lifetimes plus the `jti` denylist bound the exposure.
+
+Public keys are served at `/.well-known/jwks.json` with a `kid` per key, so keys can be rotated
+without downtime: publish the new key, sign with it, retire the old one once outstanding tokens have
+expired.
+
+---
+
+## Authentication Assurance (acr / amr)
+
+IDEN supports multiple authentication methods — password, TOTP, and **facial biometric** — and
+reports them to relying parties using the two standard OIDC id-token claims:
+
+- **`amr`** (Authentication Methods References, [RFC 8176](https://datatracker.ietf.org/doc/html/rfc8176)) — an array naming the methods actually used. IDEN emits values from a fixed set:
+
+  | `amr` value | Meaning |
+  |---|---|
+  | `pwd` | Password |
+  | `otp` | TOTP (RFC 6238) |
+  | `face` | Facial biometric match (liveness-verified) |
+  | `mfa` | Present whenever two or more of the above were used |
+
+- **`acr`** (Authentication Context Class Reference) — a single string naming the assurance *level*. IDEN defines its own taxonomy:
+
+  | `acr` value | Requires |
+  |---|---|
+  | `iden:loa:1` | Any single factor — `pwd`, or `face` with liveness |
+  | `iden:loa:2` | Two factors — e.g. `pwd + otp`, `pwd + face`, `face + otp` |
+  | `iden:loa:3` | Strong — `face` (liveness-verified) plus one additional factor |
+
+### How it plays out in the protocol
+
+- Clients may request a minimum level at `/authorize` using `acr_values=iden:loa:2`.
+- If the user's current session doesn't meet the requested level, the AuthZ module forces a step-up
+  login (e.g. prompts for TOTP after a password-only login) before issuing the code.
+- The issued id_token contains both claims, e.g.:
+  ```json
+  { "sub": "...", "acr": "iden:loa:2", "amr": ["pwd", "face"], ... }
+  ```
+- Discovery (`/.well-known/openid-configuration`) advertises `acr_values_supported` and lists `acr`
+  and `amr` under `claims_supported`.
+
+### How methods map to the login UI
+
+The Auth UI offers a method picker on the login page. Each choice resolves to a distinct AuthZ
+endpoint that appends its method to the session's `amr` list:
+
+| Method | Endpoint | Session gets |
+|---|---|---|
+| Password | `POST /api/v1/auth/login` | `amr += ["pwd"]` |
+| TOTP (step-up) | `POST /api/v1/auth/totp` | `amr += ["otp"]` |
+| Biometric (face) | `POST /api/v1/auth/biometric` | `amr += ["face"]` (only if the engine reports a liveness-verified match) |
+
+`acr` is never stored — it is **derived from `amr` at token-issuance time** using the table above.
+Keeping one source of truth means a step-up midway through a session automatically upgrades the next
+token, with no state to keep in sync.
+
+Each method is registered in a small **auth-method registry**, which is the seam that lets the
+biometric module add `face` without the AuthZ core knowing anything about faces.
+
+---
+
+## Provider Internal Architecture
+
+```mermaid
+flowchart TB
+  Entry["provider/core/app.py<br/>loads config, mounts routers"]
+
+  subgraph App["FastAPI Application (:8000)"]
+    direction TB
+
+    subgraph Middleware["Middleware Stack"]
+      MW1["request-id + structlog"] --> MW2["rate limiter (Redis)"] --> MW3["CORS / security headers"]
+    end
+
+    subgraph AuthZMod["AuthZ Module"]
+      AZ1["/.well-known/openid-configuration"]
+      AZ2["/.well-known/jwks.json"]
+      AZ3["/oauth2/authorize · /token · /userinfo"]
+      AZ4["/oauth2/revoke · /introspect · /logout"]
+      AZ5["/api/v1/auth/login · /totp · /biometric · /consent<br/>(records amr → derives acr)"]
+    end
+
+    subgraph AdminMod["Admin RS Module (scope-gated)"]
+      AD1["/admin/users · admin:users:*"]
+      AD2["/admin/groups · admin:groups:*"]
+      AD3["/admin/roles · admin:roles:*"]
+      AD4["/admin/apis · /admin/scopes · admin:apis:* · admin:scopes:*"]
+      AD5["/admin/clients · admin:clients:*"]
+    end
+
+    subgraph EntityMod["Entity RS Module (scope-gated)"]
+      EN1["/entity/profile"]
+      EN2["/entity/credentials"]
+      EN3["/entity/totp"]
+      EN4["/entity/permissions · /entity/sessions"]
+    end
+
+    subgraph BioMod["Biometric RS Module ⟮feature-flagged⟯"]
+      BI1["/biometric/enroll"]
+      BI2["/biometric/verify"]
+      BI3["/biometric/liveness"]
+      BI4["/biometric/search"]
+    end
+  end
+
+  subgraph Shared["Shared Service Layer"]
+    SV1["scope_resolver<br/>requested ∩ client ∩ user"]
+    SV2["token_service (mint / verify JWT)"]
+    SV3["auth_method registry (pwd · otp · face)"]
+    SV4["oidc provider (Authlib)"]
+    SV5["require_scope() dependency"]
+    SV6["engine_client → engine:8000"]
+  end
+
+  subgraph Storage["Storage Layer"]
+    PG[("PostgreSQL (asyncpg)<br/>user · group · role · scope · api<br/>client · code · refresh_token")]
+    RD[("Redis<br/>session · challenge · jti denylist · rate-limit")]
+  end
+
+  Entry --> App
+  AuthZMod --> Shared
+  AdminMod --> Shared
+  EntityMod --> Shared
+  BioMod --> Shared
+  Shared --> PG
+  Shared --> RD
+
+  style BioMod stroke:#d94a90,stroke-width:2px,stroke-dasharray: 5 5
+```
+
+Because every module lives in the same process, the resource-server modules validate access tokens
+**in-process** against the same key material the AuthZ module signed them with — no introspection
+hop. External resource servers get the same guarantee via JWKS.
+
+---
+
+## Docker Network Topology
+
+```mermaid
+flowchart LR
+  Host(["Host"]) -.-> Nginx
+
+  subgraph Net["docker-compose network"]
+    direction LR
+    Nginx["nginx<br/>:80/:443"]
+    Provider["provider<br/>:8000"]
+    Dashboard["dashboard<br/>:3000"]
+    AuthUI["auth-ui<br/>:4000"]
+    Engine["engine<br/>:8000 (internal)"]
+    PG[("postgres :5432")]
+    RD[("redis :6379")]
+    MN[("minio :9000")]
+
+    Nginx --> Provider
+    Nginx --> Dashboard
+    Nginx --> AuthUI
+    Provider --> Engine
+    Provider --> PG
+    Provider --> RD
+    Provider --> MN
+    Engine --> PG
+    Engine --> MN
+  end
+```
+
+Only `nginx` is exposed to the host. The biometric engine is reachable only from within the Docker
+network.
+
+---
+
+## Key Design Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| Deployment model | Single-organization, self-hosted; no tenant concept | The org owns its own data and its own admins; removes a whole dimension of complexity from every model and query |
+| Authorization model | Scope-only at resource servers; user → role → scope resolved at token issuance | Resource servers stay stateless wrt identity — they read `aud` and `scope`, never look up a user |
+| Scope management | **Admin-managed at runtime**, owned by a registered API | This is what makes IDEN an access-control provider and not just an IdP; system scopes stay immutable to prevent lockout |
+| Role shape | Global named bundles of scopes, assignable to users *and* groups | Matches how organizations actually talk about permissions ("attendance officer"), and one role can span several APIs |
+| Group shape | Flat, non-nesting | Nested groups make effective-permission resolution recursive and hard to explain; flat groups cover the real cases |
+| Supported grants | `authorization_code` + PKCE, `client_credentials` only | The two flows that cover humans and machines; implicit and password grants are discouraged by OAuth 2.1 |
+| PKCE | Mandatory (`S256`) for all clients, public and confidential | One code path, no downgrade attack surface |
+| Token format | JWT access tokens + JWKS; opaque, rotating refresh tokens | External resource servers validate offline; refresh rotation with reuse detection limits theft impact |
+| Revocation | Short access-token TTL + Redis `jti` denylist | The pragmatic middle ground between stateless JWTs and per-request introspection |
+| OIDC library | [Authlib](https://github.com/lepture/authlib) | Most mature Python OIDC library, full spec compliance |
+| Consent | Per-client `skip_consent` flag (default off), persisted grants | First-party apps don't nag your own staff; third-party clients still get a real OIDC consent flow |
+| Service decomposition | One `provider` process with AuthZ + 3 RS modules | One port, one image, one deployable; modules are logical, not physical. The biometric engine is the only sidecar. |
+| Biometric extension | In-repo module behind `IDEN_BIOMETRIC_ENABLED` | IDEN runs and demos with zero biometric infrastructure, yet the module ships and integrates through the auth-method registry |
+| Hosted login UI | Separate `auth-ui` SPA, not embedded | Decouples credential capture from any product surface; only `/authorize` knows about it |
+| Assurance reporting | Standard `amr` + `acr` with IDEN-defined `iden:loa:{1,2,3}` | Relying parties request a minimum via `acr_values`; IDEN enforces step-up when the session falls short |
+| Bootstrapped client | Dashboard SPA registered by the seed script on first start | Avoids the chicken-and-egg of needing an OIDC client to manage OIDC clients |
+| Password hashing | argon2id (time=1, mem=64MB, threads=4) | OWASP recommended, memory-hard |
+| Session storage | Redis with sliding 24h TTL | Fast lookups, automatic expiry |
+| Challenge pattern | Redis with 10min TTL | Ephemeral by design, prevents replay |
+| Database driver | asyncpg + SQLAlchemy 2.0 async ORM | Native async PostgreSQL driver; one source of truth for models |
+| HTTP framework | FastAPI | Async-first, OpenAPI docs, Pydantic validation |
+| Kiosk auth | `client_credentials` against the AuthZ Server | Kiosks are first-class OAuth clients; no user impersonation |
+| Biometric engine | Internal-only Docker network | Face data is never directly reachable from the internet |
+| Vector search | pgvector | Face embedding similarity search without a separate vector DB |
+| Object storage | MinIO (S3-compatible) | Blobs live in object storage, Postgres keeps the row + object key. Swappable for S3, R2, or GCS without code changes. |
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/iden-project/iden.git
+cd iden
+docker compose up --build
+
+# Services available at:
+#   http://localhost                     — Dashboard SPA
+#   http://localhost/auth/login          — Login UI
+#   http://localhost/oauth2/authorize    — OIDC authorize endpoint
+#   http://localhost/.well-known/openid-configuration
+```
+
+### Verify the Setup
+
+```bash
+curl http://localhost/.well-known/openid-configuration
+curl http://localhost/.well-known/jwks.json
+```
+
+The seed script prints the bootstrap administrator's one-time password on first run. Change it
+immediately after logging in.
+
+For backend development without Docker, see [provider/README.md](provider/README.md) and the phased
+build plan in [provider/PLAN.md](provider/PLAN.md).
+
+---
+
+## Development Phases
+
+| Phase | Focus | Status |
+|-------|-------|--------|
+| **Phase 0** | Provider foundation — config, database, models, security, seed | In Progress |
+| **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Planned |
+| **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Planned |
+| **Phase 3** | Provider Entity RS — self-service profile, credentials, TOTP, permissions | Planned |
+| **Phase 4** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
+| **Phase 5** | Hardening — rate limiting, audit log, tests, Docker Compose | Planned |
+| **Phase 6** | Frontends — auth-ui and dashboard SPAs | Planned |
+| **Phase 7** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |
+
+Phases 0–5 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md).
+
+---
+
+## Open Design Questions
+
+- **Entity Resource Server** — how far the self-service surface should extend, and how
+  organization-defined custom profile fields are modelled.
+- **Biometric kiosk handoff** — how a kiosk-enrolled person is later prompted (and authenticated) to
+  complete their profile via the Dashboard SPA.
+- **Biometric engine** — model selection, GPU vs CPU deployment, accuracy/latency targets.
+- **Audit log destination** — Postgres table vs. append-only object storage, and retention policy.
+- **Federation** — whether IDEN should ever broker an upstream IdP (Google, SAML), currently out of
+  scope.
+
+---
+
+## License
+
+Licensed under the **Apache License, Version 2.0** — see [LICENSE](LICENSE) for the full text.
+
+Apache 2.0 is the standard for self-hosted identity infrastructure (Keycloak, Ory, Dex, ZITADEL all
+use it). Beyond the usual permissive terms, it carries an explicit **patent grant**, so an
+organization deploying IDEN is protected from patent claims by its contributors — which matters more
+for security infrastructure than for most software.

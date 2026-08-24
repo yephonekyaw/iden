@@ -1,1 +1,586 @@
-# Project IDEN - Provider Components
+# IDEN Provider
+
+The IDEN backend: a single FastAPI application that is simultaneously an **OpenID Connect provider**
+and an **access-control service**. This document is the reference — setup, configuration, data model,
+endpoints, tokens, and conventions. For the *order of work*, see [PLAN.md](PLAN.md). For the
+system-level picture (Docker topology, frontends, kiosks), see the [root README](../README.md).
+
+One process hosts four logical modules:
+
+| Module | Prefix | What it does |
+|---|---|---|
+| **AuthZ Server** | `/.well-known/*`, `/oauth2/*`, `/api/v1/auth/*` | Issues tokens. Owns login, consent, sessions, and the OIDC protocol surface. |
+| **Admin RS** | `/admin/*` | Manages users, groups, roles, APIs, scopes, and clients. |
+| **Entity RS** | `/entity/*` | Self-service for the signed-in person. |
+| **Biometric RS** | `/biometric/*` | Face enrollment and verification. Mounted only when enabled. |
+
+They are **logical** modules, not services: one port, one image, one deployable. Because they share a
+process, the resource-server modules verify access tokens in-process against the same keys the AuthZ
+module signed them with — no introspection hop. Resource servers *outside* this repository get the
+same guarantee by validating against the published JWKS.
+
+---
+
+## Table of Contents
+
+- [Local Development](#local-development)
+- [Configuration](#configuration)
+- [Package Layout](#package-layout)
+- [Data Model](#data-model)
+- [Access Control in Practice](#access-control-in-practice)
+- [Endpoint Reference](#endpoint-reference)
+- [Tokens & Claims](#tokens--claims)
+- [Request Lifecycle](#request-lifecycle)
+- [Conventions](#conventions)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Local Development
+
+Python 3.14+, managed by [uv](https://docs.astral.sh/uv/). PostgreSQL 16 with the `pgvector`
+extension, and Redis 7, are expected to be reachable — run them via the root `docker-compose.yml` or
+locally.
+
+```bash
+cd provider
+uv sync                              # install dependencies into .venv
+cp .env.example .env                 # then fill it in
+
+uv run python -m scripts.gen_keys    # RSA signing keypair for local dev
+uv run python -m scripts.seed        # extension, tables, system catalogue, bootstrap admin
+
+uv run provider                      # uvicorn on :8000, reload enabled
+```
+
+Then:
+
+- Interactive API docs — <http://localhost:8000/docs>
+- Discovery — <http://localhost:8000/.well-known/openid-configuration>
+- Health — <http://localhost:8000/health>
+
+**Adding a dependency:** `uv add <package>` from `provider/`. Never hand-edit the `pyproject.toml`
+dependency list — `uv` owns it and the lockfile.
+
+**After changing a model:** re-run `uv run python -m scripts.seed`. It is idempotent by design, so
+re-running it during development is the normal path. (Alembic migrations land in Phase 5, once the
+schema stops moving.)
+
+The seed prints the bootstrap administrator's password and the kiosk client's secret **once**. They
+are argon2-hashed on the way into the database and cannot be recovered afterwards — losing them means
+re-seeding into a fresh database.
+
+---
+
+## Configuration
+
+All settings are environment variables prefixed `IDEN_`, loaded by `core/config.py` via
+`pydantic-settings` from the process environment or `.env`.
+
+### Application
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `IDEN_ENV` | `dev` | `dev` or `prod`. Selects console vs JSON log rendering. |
+| `IDEN_LOG_LEVEL` | `info` | Root log level. |
+| `IDEN_API_PREFIX` | *(empty)* | Optional prefix applied to every mounted router. |
+| `IDEN_ALLOWED_ADMIN_ORIGINS` | `[]` | CORS allow-list for the dashboard SPA. |
+
+### Issuer & UI
+
+| Variable | Example | Purpose |
+|---|---|---|
+| `IDEN_ISSUER` | `http://localhost:8000` | The `iss` claim and the base for every advertised endpoint and system audience. Must match exactly what clients use, or signature validation succeeds and issuer validation fails. |
+| `IDEN_AUTH_UI_BASE_URL` | `http://localhost:4000` | Where `/oauth2/authorize` redirects for login and consent. |
+
+### Storage
+
+| Variable | Example |
+|---|---|
+| `IDEN_DATABASE_URL` | `postgresql+asyncpg://iden:iden@localhost:5432/iden` |
+| `IDEN_REDIS_URL` | `redis://localhost:6379/0` |
+
+### Crypto
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `IDEN_SIGNING_KEY_DIR` | `./keys` | Directory of PEM keypairs. Each file's stem becomes its `kid`, which is what makes rotation a config change rather than a rewrite. |
+| `IDEN_SIGNING_ALGORITHM` | `RS256` | JWT signing algorithm. |
+
+### Lifetimes
+
+| Variable | Default | Notes |
+|---|---|---|
+| `IDEN_ACCESS_TOKEN_TTL` | `600` (10 min) | Short on purpose — permission changes take effect at the next issuance. |
+| `IDEN_ID_TOKEN_TTL` | `600` | |
+| `IDEN_REFRESH_TOKEN_TTL` | `2592000` (30 d) | Sliding; rotated on every use. |
+| `IDEN_AUTH_CODE_TTL` | `60` | Single use. |
+| `IDEN_SESSION_TTL` | `86400` (24 h) | Sliding browser session. |
+| `IDEN_CHALLENGE_TTL` | `600` | Login/consent challenges. |
+
+### Bootstrap & extensions
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `IDEN_BOOTSTRAP_ADMIN_EMAIL` | `admin@localhost` | Seeded administrator. |
+| `IDEN_BOOTSTRAP_ADMIN_PASSWORD` | *(generated)* | Generated and printed once if unset. |
+| `IDEN_BIOMETRIC_ENABLED` | `false` | Mounts `/biometric/*`, seeds the biometric API and scopes, and registers the `face` auth method. |
+| `IDEN_ENGINE_BASE_URL` | `http://engine:8000` | Internal biometric engine. Only read when biometric is enabled. |
+
+---
+
+## Package Layout
+
+```text
+provider/
+├── PLAN.md · README.md · pyproject.toml · .env.example
+├── scripts/
+│   ├── seed.py                 # idempotent dev bootstrap
+│   └── gen_keys.py             # local signing keypair
+└── src/provider/
+    ├── core/                   # cross-cutting infrastructure
+    │   ├── app.py              # FastAPI app, middleware, router mounting
+    │   ├── config.py           # Settings
+    │   ├── logging.py          # structlog wiring
+    │   ├── router.py           # root APIRouter
+    │   ├── db.py               # async engine/session, DBSessionDep
+    │   ├── redis.py            # redis client, RedisDep
+    │   ├── security.py         # argon2 hashing, secure random tokens
+    │   ├── crypto.py           # signing keys, JWKS, JWT sign/verify
+    │   ├── auth.py             # require_scope(), CurrentTokenDep
+    │   ├── errors.py           # base domain exception, error contract
+    │   └── schemas.py          # CamelCaseBaseModel, paging
+    ├── shared/
+    │   ├── models.py           # every SQLAlchemy model
+    │   ├── enums.py            # ClientType, GrantType, AmrMethod, AcrLevel, …
+    │   └── scopes.py           # seeded system API/scope/role catalogue
+    ├── authz/
+    │   ├── discovery/ oauth/ login/ consent/
+    │   └── services/           # scope_resolver · token_service · session_store
+    │                           # challenge_store · auth_methods · pkce
+    ├── admin/
+    │   └── users/ groups/ roles/ apis/ scopes/ clients/
+    ├── entity/
+    │   └── profile/ credentials/ totp/ sessions/ permissions/
+    └── biometric/              # feature-flagged
+        └── enroll/ verify/ liveness/ search/ · engine_client.py
+```
+
+### The feature-package rule
+
+Every resource directory contains exactly four files, each with one job:
+
+| File | Contains | Must not contain |
+|---|---|---|
+| `routes.py` | FastAPI handlers, OpenAPI metadata, translation of domain exceptions into `HTTPException` | Database calls |
+| `schemas.py` | Pydantic request/response DTOs and their validation | Business rules |
+| `service.py` | Database and domain logic, raising exceptions from `errors.py` | Any FastAPI import |
+| `errors.py` | Domain exceptions | Anything else |
+
+The point of `service.py` being FastAPI-free is that domain logic stays testable and reusable —
+`scope_resolver.py` is called from three different modules precisely because it knows nothing about
+HTTP.
+
+This is the layout described in [`CODING_STYLE.md` § 1](../CODING_STYLE.md#1-project-structure) and
+`.claude/CLAUDE.md`; the directories above are its concrete form for this service.
+
+---
+
+## Data Model
+
+One source of truth: `shared/models.py`, SQLAlchemy 2.0 async ORM. Sessions, challenges, and the
+`jti` denylist deliberately live in Redis with TTLs rather than in Postgres — they are ephemeral by
+nature and expiry should be the storage layer's job, not a cleanup cron's.
+
+```mermaid
+erDiagram
+  USER ||--o{ USER_GROUP : "belongs to"
+  GROUP ||--o{ USER_GROUP : "has member"
+  USER ||--o{ USER_ROLE : "has"
+  ROLE ||--o{ USER_ROLE : ""
+  GROUP ||--o{ GROUP_ROLE : "has"
+  ROLE ||--o{ GROUP_ROLE : ""
+  ROLE ||--o{ ROLE_SCOPE : "bundles"
+  SCOPE ||--o{ ROLE_SCOPE : ""
+  USER ||--o{ USER_SCOPE : "direct grant"
+  SCOPE ||--o{ USER_SCOPE : ""
+  RESOURCE_API ||--o{ SCOPE : "defines"
+  CLIENT ||--o{ CLIENT_SCOPE : "may request / holds"
+  SCOPE ||--o{ CLIENT_SCOPE : ""
+  USER ||--o| TOTP_CREDENTIAL : "enrolls"
+  USER ||--o{ CONSENT_GRANT : "grants"
+  CLIENT ||--o{ CONSENT_GRANT : ""
+  CLIENT ||--o{ AUTHORIZATION_CODE : "issued"
+  USER ||--o{ AUTHORIZATION_CODE : ""
+  CLIENT ||--o{ REFRESH_TOKEN : "issued"
+  USER ||--o{ REFRESH_TOKEN : ""
+
+  RESOURCE_API {
+    uuid id PK
+    string name
+    string audience UK
+    bool is_system
+  }
+  SCOPE {
+    uuid id PK
+    uuid api_id FK
+    string value
+    string description
+    bool is_system
+  }
+  ROLE {
+    uuid id PK
+    string name UK
+    string description
+    bool is_system
+  }
+  GROUP {
+    uuid id PK
+    string name UK
+  }
+  USER {
+    uuid id PK
+    string email UK
+    string username UK
+    string password_hash
+    bool is_active
+  }
+  CLIENT {
+    uuid id PK
+    string client_id UK
+    string client_type
+    string client_secret_hash
+    array redirect_uris
+    array allowed_grants
+    bool skip_consent
+    bool is_system
+  }
+  REFRESH_TOKEN {
+    uuid id PK
+    string token_hash
+    uuid family_id
+    uuid rotated_to_id
+    datetime revoked_at
+  }
+```
+
+### Invariants worth knowing
+
+| Invariant | Why |
+|---|---|
+| `is_system` rows cannot be renamed or deleted through the API | An admin deleting `admin:roles:write` would lock the organization out of its own deployment, permanently. |
+| Authorization codes, refresh tokens, and client secrets are stored **hashed** | A database read must never yield a usable credential. Same reasoning as passwords. |
+| `RefreshToken.family_id` + `rotated_to_id` | Rotation with reuse detection: presenting an already-rotated token revokes the whole family, on the assumption it was stolen. |
+| `Scope.description` is required | It is the sentence a user reads on the consent screen. An undescribed permission is one nobody can consent to meaningfully. |
+| Groups do not nest | Recursive resolution is hard to explain, hard to audit, and hard to make fast. Flat membership covers the real cases. |
+| No `tenant_id` on any table | IDEN is single-organization by design — see the [root README](../README.md#single-organization-by-design). |
+
+---
+
+## Access Control in Practice
+
+### The model in one line
+
+```text
+User ──┬── direct scope grants (exceptions)
+       ├── direct roles ─────────┐
+       └── groups ── group roles ┴──> Role ──> Scopes ──> owned by an API (audience)
+```
+
+`effective_user_scopes` is the union of all three sources, computed by
+`authz/services/scope_resolver.py` — the single implementation used by token issuance
+(`/oauth2/token`), by the admin provenance endpoint (`/admin/users/{id}/effective-scopes`), and by
+self-service (`/entity/permissions`).
+
+### What actually lands in a token
+
+| Grant | Formula |
+|---|---|
+| `authorization_code` | `requested ∩ client.grantable_scopes ∩ effective_user_scopes` |
+| `client_credentials` | `requested ∩ client.granted_scopes` |
+
+Pruning is **silent** — asking for more than you hold yields a narrower token, not an error. That is
+what allows the dashboard SPA to request a broad scope set at `/authorize` and still behave correctly
+for a non-admin user.
+
+Permissions are evaluated **at issuance, never at the resource server**. A resource server verifies
+the signature, checks `aud`, and reads `scope`. It never looks up a user, a role, or a group. The
+corollary: revoking a role takes effect at the next token issuance, which is why access tokens live
+for ten minutes.
+
+### System scope catalogue
+
+Seeded by `scripts/seed.py` from `shared/scopes.py`, all flagged `is_system`.
+
+**API `admin`** — audience `{IDEN_ISSUER}/admin`
+
+| Scope | Allows |
+|---|---|
+| `admin:users:read` / `admin:users:write` | View / manage users, their roles, and direct grants |
+| `admin:groups:read` / `admin:groups:write` | View / manage groups, membership, and group roles |
+| `admin:roles:read` / `admin:roles:write` | View / manage roles and their scope bundles |
+| `admin:apis:read` / `admin:apis:write` | View / manage registered resource APIs |
+| `admin:scopes:read` / `admin:scopes:write` | View / manage scopes under an API |
+| `admin:clients:read` / `admin:clients:write` | View / manage OAuth clients and their secrets |
+
+**API `entity`** — audience `{IDEN_ISSUER}/entity`
+
+| Scope | Allows |
+|---|---|
+| `entity:profile:read` / `entity:profile:write` | Read / update my own profile |
+| `entity:credentials:write` | Change my own password |
+| `entity:totp:read` / `entity:totp:enroll` | View / enrol and remove my TOTP credential |
+| `entity:sessions:read` / `entity:sessions:revoke` | List / revoke my active sessions |
+| `entity:permissions:read` | See my own roles, groups, and effective scopes |
+
+**API `biometric`** — audience `{IDEN_ISSUER}/biometric`, seeded only when `IDEN_BIOMETRIC_ENABLED`
+
+| Scope | Allows |
+|---|---|
+| `biometric:enroll` | Enrol a face template |
+| `biometric:verify` | 1:1 verification against a claimed identity |
+| `biometric:search` | 1:N identification (the kiosk's "who is this?") |
+| `biometric:liveness` | Liveness check only |
+
+**Seeded roles:** `administrator` (all `admin:*` and `entity:*`) and `member` (all `entity:*`).
+
+### Adding a permission to your own API
+
+The flow the whole design exists to support — no code changes, no redeploy:
+
+1. `POST /admin/apis` — register the API with its audience URI (once).
+2. `POST /admin/apis/{id}/scopes` — define `attendance:records:read` with a description.
+3. `PUT /admin/roles/{id}/scopes` — bundle it into `attendance-officer`.
+4. `PUT /admin/groups/{id}/roles` — give the role to the *Registrar* group.
+5. `PUT /admin/clients/{id}/scopes` — allow the calling client to request it.
+
+The next token minted for anyone in that group carries the scope, with `aud` set to the API's
+audience. Your resource server validates it against `/.well-known/jwks.json` and needs to know
+nothing else about IDEN.
+
+---
+
+## Endpoint Reference
+
+`Auth` column: **public** = no credentials; **client** = client authentication; **bearer** = access
+token with the named scope; **session** = browser session cookie. `Phase` refers to [PLAN.md](PLAN.md).
+
+### AuthZ — discovery & OAuth
+
+| Method | Path | Auth | Purpose | Phase |
+|---|---|---|---|---|
+| `GET` | `/.well-known/openid-configuration` | public | Provider metadata; `scopes_supported` is read live from the database | 1 |
+| `GET` | `/.well-known/jwks.json` | public | Public signing keys, one JWK per `kid` | 1 |
+| `GET` | `/oauth2/authorize` | session | Start authorization code + PKCE; redirects to `auth-ui` when login or consent is needed | 1 |
+| `POST` | `/oauth2/token` | client | `authorization_code`, `refresh_token`, `client_credentials` | 1 |
+| `GET` | `/oauth2/userinfo` | bearer `openid` | Claims filtered by granted scopes | 1 |
+| `POST` | `/oauth2/revoke` | client | RFC 7009 — revoke a refresh family or denylist a `jti` | 1 |
+| `POST` | `/oauth2/introspect` | client | RFC 7662 | 1 |
+| `GET` | `/oauth2/logout` | session | End session, honour `post_logout_redirect_uri` | 1 |
+
+### AuthZ — login & consent (consumed by `auth-ui`)
+
+| Method | Path | Auth | Purpose | Phase |
+|---|---|---|---|---|
+| `GET` | `/api/v1/auth/challenge/{id}` | public | Pending client name + requested scopes, for rendering the page | 1 |
+| `POST` | `/api/v1/auth/login` | public | Password login; appends `pwd` to the session `amr` | 1 |
+| `POST` | `/api/v1/auth/totp` | session | TOTP verification / step-up; appends `otp` | 1 |
+| `POST` | `/api/v1/auth/biometric` | session | Face login; appends `face`. `501` unless biometric is enabled | 1 stub / 4 |
+| `POST` | `/api/v1/auth/consent` | session | Persist or deny a consent grant, then resume `/authorize` | 1 |
+
+### Admin RS
+
+| Method | Path | Scope | Phase |
+|---|---|---|---|
+| `GET` `POST` | `/admin/apis` | `admin:apis:read` / `:write` | 2 |
+| `GET` `PATCH` `DELETE` | `/admin/apis/{id}` | `admin:apis:read` / `:write` | 2 |
+| `GET` `POST` | `/admin/apis/{api_id}/scopes` | `admin:scopes:read` / `:write` | 2 |
+| `GET` `PATCH` `DELETE` | `/admin/scopes/{id}` | `admin:scopes:read` / `:write` | 2 |
+| `GET` `POST` | `/admin/roles` | `admin:roles:read` / `:write` | 2 |
+| `GET` `PATCH` `DELETE` | `/admin/roles/{id}` | `admin:roles:read` / `:write` | 2 |
+| `GET` `PUT` | `/admin/roles/{id}/scopes` | `admin:roles:read` / `:write` | 2 |
+| `GET` `POST` | `/admin/groups` | `admin:groups:read` / `:write` | 2 |
+| `GET` `PATCH` `DELETE` | `/admin/groups/{id}` | `admin:groups:read` / `:write` | 2 |
+| `PUT` | `/admin/groups/{id}/roles` | `admin:groups:write` | 2 |
+| `GET` `POST` `DELETE` | `/admin/groups/{id}/members` | `admin:groups:read` / `:write` | 2 |
+| `GET` `POST` | `/admin/users` | `admin:users:read` / `:write` | 2 |
+| `GET` `PATCH` `DELETE` | `/admin/users/{id}` | `admin:users:read` / `:write` | 2 |
+| `PUT` | `/admin/users/{id}/roles` | `admin:users:write` | 2 |
+| `PUT` | `/admin/users/{id}/scopes` | `admin:users:write` | 2 |
+| `POST` | `/admin/users/{id}/reset-password` | `admin:users:write` | 2 |
+| `GET` | `/admin/users/{id}/effective-scopes` | `admin:users:read` | 2 |
+| `GET` `POST` | `/admin/clients` | `admin:clients:read` / `:write` | 2 |
+| `GET` `PATCH` `DELETE` | `/admin/clients/{id}` | `admin:clients:read` / `:write` | 2 |
+| `POST` | `/admin/clients/{id}/rotate-secret` | `admin:clients:write` | 2 |
+| `PUT` | `/admin/clients/{id}/scopes` | `admin:clients:write` | 2 |
+
+`PUT` on a relationship (`.../roles`, `.../scopes`) **replaces the whole set** rather than adding to
+it. Set semantics make the endpoint idempotent and the dashboard's editing UI trivial.
+
+### Entity RS
+
+Every route derives the user from the token's `sub` and never accepts a user id from the caller.
+
+| Method | Path | Scope | Phase |
+|---|---|---|---|
+| `GET` `PATCH` | `/entity/profile` | `entity:profile:read` / `:write` | 3 |
+| `POST` | `/entity/credentials/password` | `entity:credentials:write` | 3 |
+| `POST` | `/entity/totp/enroll` · `/entity/totp/confirm` | `entity:totp:enroll` | 3 |
+| `GET` `DELETE` | `/entity/totp` | `entity:totp:read` / `:enroll` | 3 |
+| `GET` | `/entity/sessions` | `entity:sessions:read` | 3 |
+| `DELETE` | `/entity/sessions/{id}` | `entity:sessions:revoke` | 3 |
+| `GET` | `/entity/permissions` | `entity:permissions:read` | 3 |
+
+### Biometric RS — mounted only when `IDEN_BIOMETRIC_ENABLED=true`
+
+| Method | Path | Scope | Phase |
+|---|---|---|---|
+| `POST` | `/biometric/enroll` | `biometric:enroll` | 4 |
+| `POST` | `/biometric/verify` | `biometric:verify` | 4 |
+| `POST` | `/biometric/search` | `biometric:search` | 4 |
+| `POST` | `/biometric/liveness` | `biometric:liveness` | 4 |
+
+---
+
+## Tokens & Claims
+
+| Token | Format | Lifetime | Storage |
+|---|---|---|---|
+| Access | Signed JWT (`RS256`) | 10 min | Stateless; early revocation via a Redis `jti` denylist |
+| ID | Signed JWT (`RS256`) | 10 min | Stateless; identity claims only, never sent to an API |
+| Refresh | Opaque random string | 30 days, sliding | Hashed in Postgres, rotated on every use, reuse revokes the family |
+| Authorization code | Opaque random string | 60 s, single use | Hashed in Postgres, bound to `client_id` + `code_challenge` |
+
+### Access token claims
+
+| Claim | Meaning |
+|---|---|
+| `iss` | `IDEN_ISSUER` |
+| `sub` | User id — or the client id for `client_credentials`, where no person is involved |
+| `aud` | Audience of the API owning the granted scopes; a list when scopes span several APIs |
+| `client_id` | The client that requested the token |
+| `scope` | Space-delimited granted scopes, already pruned |
+| `acr` / `amr` | Assurance level and the methods actually used |
+| `jti` | Unique id — the handle used for revocation |
+| `iat` / `exp` | Issued-at and expiry |
+
+### `amr` and `acr`
+
+`amr` accumulates on the **session** as the user authenticates; `acr` is **derived from `amr` at
+issuance time and never stored**. One source of truth means a mid-session step-up automatically
+upgrades the next token, with no state to keep in sync.
+
+| `amr` | Method | | `acr` | Requires |
+|---|---|---|---|---|
+| `pwd` | Password | | `iden:loa:1` | Any single factor |
+| `otp` | TOTP | | `iden:loa:2` | Any two factors |
+| `face` | Liveness-verified face match | | `iden:loa:3` | `face` plus one more factor |
+| `mfa` | Added whenever two or more were used | | | |
+
+A client requests a minimum with `acr_values=iden:loa:2` at `/authorize`; if the session falls short,
+IDEN forces a step-up before issuing the code.
+
+Each method is registered in `authz/services/auth_methods.py`. That registry is the seam that lets
+the biometric module add `face` without the AuthZ core knowing anything about faces.
+
+### Validating an IDEN token from your own resource server
+
+1. Fetch and cache `{issuer}/.well-known/jwks.json`; select the key by the token header's `kid`.
+2. Verify the signature, then `iss`, `exp`, and — critically — that `aud` contains **your** API's
+   audience. Skipping the `aud` check means accepting a token minted for a different service.
+3. Check that the required scope is present in `scope`.
+4. Do not look up the user. Everything you are authorized to know is in the token.
+
+---
+
+## Request Lifecycle
+
+Where a request goes, and which file owns each step:
+
+```text
+nginx
+  → core/app.py            request-id + structlog binding
+  → rate limiter           Redis fixed window                       (Phase 5)
+  → CORS / security headers
+  → routes.py              validate the request body via schemas.py
+      · resource server?   core/auth.require_scope(...)
+                           verify signature + iss + aud + exp
+                           reject denylisted jti  → 401
+                           check required scope   → 403
+      · authz endpoint?    session_store / challenge_store
+  → service.py             DB work via DBSessionDep; raises domain errors
+  → routes.py              domain error → HTTPException
+  → core/errors.py         → the documented JSON error shape
+```
+
+`401` versus `403` is a deliberate distinction: `401` means *authenticate again*, `403` means
+*authentication will not help — you lack the scope*.
+
+---
+
+## Conventions
+
+Beyond `CODING_STYLE.md`, which applies in full:
+
+### Every endpoint documents itself
+
+`/docs` is the contract the frontends are built against, so an endpoint that is not self-explanatory
+there is not finished:
+
+```python
+@router.post(
+    "",
+    response_model=ScopeResponse,
+    status_code=201,
+    summary="Create a scope",
+    description=(
+        "Defines a new permission under the given API.\n\n"
+        "**Required scope:** `admin:scopes:write`"
+    ),
+    responses={
+        404: {"description": "API not found"},
+        409: {"description": "A scope with this value already exists for the API"},
+    },
+    dependencies=[Depends(require_scope("admin:scopes:write"))],
+)
+```
+
+Rules: explicit `response_model` (never inferred from the return type), explicit `status_code` for
+non-200 successes (`201` create, `204` delete), `summary` and `description` always, `responses` for
+every documented non-2xx, `tags` on the router, `Field(description=...)` on non-obvious fields, and
+`Literal[...]` for enums so allowed values show up in the docs.
+
+### Layers
+
+`routes.py` never touches the database. `service.py` never imports FastAPI. Domain exceptions are
+raised in services and translated in routes — that is the only place `HTTPException` appears.
+
+### Secrets
+
+All password and client-secret hashing goes through `core/security.py` (argon2id). Cleartext secrets
+are returned **once**, on create and on rotate, and are never stored or logged.
+
+### Logging
+
+Use the configured structlog logger, never `print()`. Every log line already carries a `request_id`
+from the middleware. Log identifiers, not payloads — never a password, token, secret, or face image.
+
+### Errors
+
+One JSON error shape everywhere, except the OAuth endpoints, which must keep the RFC 6749 format
+(`error`, `error_description`) or clients will not understand them.
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| `invalid_client` on `/oauth2/token` | `client_id` unknown, wrong secret, or the client is not allowed that grant. Check `allowed_grants`. |
+| `invalid_grant` with a fresh code | The code expired (60 s), was already used, `redirect_uri` differs from the authorize request, or the PKCE verifier does not match. |
+| Token validates but the resource server rejects it | Almost always `aud`. The scopes granted belong to a different API than the one being called. |
+| Signature verification fails after a restart | `gen_keys` regenerated the keypair. Tokens signed with the old key are unverifiable; re-authenticate. |
+| `403` on an `/admin/*` route with a valid token | The user's roles do not include that scope, or the client's grantable set does not, so it was pruned at issuance. Check `/admin/users/{id}/effective-scopes`. |
+| Scope changes have no effect | Access tokens live 10 minutes. Refresh, or wait for expiry. |
+| `409` deleting a scope or role | It is `is_system`. Seeded catalogue entries are immutable by design. |
+| `/biometric/*` returns 404 | `IDEN_BIOMETRIC_ENABLED` is false, so the module is not mounted. |

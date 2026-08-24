@@ -4,21 +4,52 @@ A concise guide for keeping code consistent, readable, and easy for both humans 
 
 ## 1. Project Structure
 
-Organize code by responsibility and keep the structure predictable.
+Organize code **by feature, not by layer**. A reader looking for everything about one resource
+should find it in one directory, not scattered across four.
 
-Typical backend layout:
+Backend layout:
 
 ```text
 app/
-├── core/           # config, logging, app setup, shared errors
-├── database/       # models, sessions, database utilities
-├── dependencies/   # dependency injection and external clients
-├── routers/        # HTTP/API endpoints
-├── schemas/        # request/response/data schemas
-├── services/       # reusable domain logic, only when actually needed
-├── tasks/          # background or long-running workflows
-└── utils/          # generic reusable helpers
+├── core/                   # cross-cutting infrastructure
+│   ├── app.py              # application setup, middleware, router mounting
+│   ├── config.py           # settings
+│   ├── logging.py          # logger configuration
+│   ├── db.py               # engine, session, session dependency
+│   ├── security.py         # hashing and secret generation
+│   ├── auth.py             # authentication/authorization dependencies
+│   ├── errors.py           # base domain exception, error contract
+│   └── schemas.py          # shared base schemas
+├── shared/                 # code every module depends on
+│   ├── models.py           # all ORM models — one source of truth
+│   └── enums.py            # shared enums
+└── <module>/               # one directory per bounded area
+    └── <resource>/         # one directory per resource — the feature package
+        ├── routes.py
+        ├── schemas.py
+        ├── service.py
+        └── errors.py
 ```
+
+### The feature package
+
+Every resource directory contains the same four files, each with one job:
+
+| File | Contains | Must not contain |
+|---|---|---|
+| `routes.py` | HTTP handlers, API documentation metadata, translation of domain exceptions into HTTP errors | Database calls |
+| `schemas.py` | Request/response DTOs and their validation | Business rules |
+| `service.py` | Database and domain logic, raising exceptions from `errors.py` | Any web-framework import |
+| `errors.py` | Domain exceptions | Anything else |
+
+Keeping `service.py` framework-free is what makes domain logic testable in isolation and reusable
+from more than one route — which is the whole reason for the split.
+
+Not every resource needs all four files. A resource with no failure modes of its own does not need
+an `errors.py`. Create a file when there is something to put in it.
+
+Add a directory for background workflows, external clients, or generic helpers when one is actually
+needed — `tasks/`, `clients/`, `utils/` — not preemptively.
 
 Do not create new architectural layers without a clear reason.
 
@@ -195,24 +226,39 @@ Avoid deeply nested conditionals when guard clauses make the logic clearer.
 
 ## 8. Async vs Sync
 
-Use `async` only when the underlying operation is asynchronous.
+Use `async` for genuinely asynchronous I/O. Keep ordinary computation and synchronous APIs synchronous.
 
 Typical async work:
 
-- HTTP requests;
-- async storage clients;
-- async file operations;
-- other async libraries.
+* HTTP requests using async clients;
+* async storage clients;
+* async database operations;
+* other libraries that provide native async APIs.
 
 Typical sync work:
 
-- synchronous database drivers;
-- normal CPU/local operations;
-- synchronous libraries.
+* normal CPU/local operations;
+* synchronous libraries;
+* simple data transformation and validation;
+* operations that do not perform asynchronous I/O.
 
-Do not make a function async just because its caller is async.
+Do not make a function `async` just because its caller is async.
 
-Do not wrap synchronous operations in unnecessary `await` patterns.
+```python
+def calculate_score(values: list[int]) -> float:
+    return sum(values) / len(values)
+
+
+async def process_request() -> float:
+    data = await fetch_data()
+    return calculate_score(data)
+```
+
+Avoid calling slow or blocking synchronous I/O directly from async code, as it can block the event loop. When necessary, use an async alternative or move the blocking work to a thread pool.
+
+Do not wrap synchronous operations in unnecessary `async`/`await` patterns.
+
+**Rule of thumb:** `async` is useful when the function needs to `await` asynchronous operations. More `async` does not automatically mean better performance or better code.
 
 ---
 
