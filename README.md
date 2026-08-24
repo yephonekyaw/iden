@@ -127,7 +127,7 @@ flowchart TB
 
 | Component | Tech Stack | Port | Purpose |
 |-----------|-----------|------|---------|
-| **provider** | Python 3.14, FastAPI, Authlib, asyncpg | 8000 | Single FastAPI app hosting four logical modules: AuthZ Server (`/oauth2/*`, `/.well-known/*`), Admin RS (`/admin/*`), Entity RS (`/entity/*`), Biometric RS (`/biometric/*`) |
+| **provider** | Python 3.14, FastAPI, SQLAlchemy, asyncpg | 8000 | Single FastAPI app hosting four logical modules: AuthZ Server (`/oauth2/*`, `/.well-known/*`), Admin RS (`/admin/*`), Entity RS (`/entity/*`), Biometric RS (`/biometric/*`) |
 | **engine** | Python 3.14, FastAPI, InsightFace, ONNX | 8000 | Internal biometric engine — face detection, embedding, liveness (no external access) |
 | **dashboard** | Next.js 15, React, Tailwind CSS | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client) |
 | **auth-ui** | Next.js 15, React, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
@@ -457,7 +457,7 @@ flowchart TB
     SV1["scope_resolver<br/>requested ∩ client ∩ user"]
     SV2["token_service (mint / verify JWT)"]
     SV3["auth_method registry (pwd · otp · face)"]
-    SV4["oidc provider (Authlib)"]
+    SV4["oauth flows (authorize · token)"]
     SV5["require_scope() dependency"]
     SV6["engine_client → engine:8000"]
   end
@@ -531,7 +531,7 @@ network.
 | PKCE | Mandatory (`S256`) for all clients, public and confidential | One code path, no downgrade attack surface |
 | Token format | JWT access tokens + JWKS; opaque, rotating refresh tokens | External resource servers validate offline; refresh rotation with reuse detection limits theft impact |
 | Revocation | Short access-token TTL + Redis `jti` denylist | The pragmatic middle ground between stateless JWTs and per-request introspection |
-| OIDC library | [Authlib](https://github.com/lepture/authlib) | Most mature Python OIDC library, full spec compliance |
+| OIDC implementation | Hand-written on [PyJWT](https://github.com/jpadilla/pyjwt) | Authlib's authorization-server integrations target Flask and Django; its Starlette module is a *client*, not a provider. Wrapping its framework-agnostic core would mean maintaining an adapter that hides the protocol. With only two grants to support, explicit code is smaller and readable end to end. |
 | Consent | Per-client `skip_consent` flag (default off), persisted grants | First-party apps don't nag your own staff; third-party clients still get a real OIDC consent flow |
 | Service decomposition | One `provider` process with AuthZ + 3 RS modules | One port, one image, one deployable; modules are logical, not physical. The biometric engine is the only sidecar. |
 | Biometric extension | In-repo module behind `IDEN_BIOMETRIC_ENABLED` | IDEN runs and demos with zero biometric infrastructure, yet the module ships and integrates through the auth-method registry |
@@ -584,25 +584,35 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 | Phase | Focus | Status |
 |-------|-------|--------|
 | **Phase 0** | Provider foundation — config, database, models, security, seed | Done |
-| **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Next |
-| **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Planned |
+| **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Done |
+| **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Next |
 | **Phase 3** | Provider Entity RS — self-service profile, credentials, TOTP, permissions | Planned |
 | **Phase 4** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
 | **Phase 5** | Hardening — rate limiting, audit log, tests, Docker Compose | Planned |
 | **Phase 6** | Frontends — auth-ui and dashboard SPAs | Planned |
 | **Phase 7** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |
 
-Phases 0–5 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md).
+Phases 0–5 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md). Tests ship with the
+phase that introduces the code — `uv run pytest` from `provider/` runs the suite.
 
 ---
 
 ## Open Design Questions
 
-- **Entity Resource Server** — how far the self-service surface should extend, and how
-  organization-defined custom profile fields are modelled.
+- ~~**Entity Resource Server** — how far the self-service surface should extend, and how
+  organization-defined custom profile fields are modelled.~~ **Settled:** a user may change anything
+  about themselves that does not change what they are allowed to do; profile fields are defined by
+  administrators at runtime, with per-field read/write permissions deciding what self-service means.
+  See [provider/PLAN.md § Phase 3](provider/PLAN.md#phase-3--entity-rs-self-service).
 - **Biometric kiosk handoff** — how a kiosk-enrolled person is later prompted (and authenticated) to
   complete their profile via the Dashboard SPA.
 - **Biometric engine** — model selection, GPU vs CPU deployment, accuracy/latency targets.
+- **Multi-valued profile fields** — a person with two phone numbers. Deferred: single-valued covers
+  the cases that motivated the feature, and `UNIQUE (user_id, field_id)` is what makes uniqueness
+  simple.
+- **External systems of record** — when a university's SIS owns `department`, IDEN should probably
+  sync rather than store it authoritatively. For now `user_writable=false` plus admin API writes is
+  the integration point.
 - **Audit log destination** — Postgres table vs. append-only object storage, and retention policy.
 - **Federation** — whether IDEN should ever broker an upstream IdP (Google, SAML), currently out of
   scope.

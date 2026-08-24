@@ -66,6 +66,17 @@ Then:
 **Adding a dependency:** `uv add <package>` from `provider/`. Never hand-edit the `pyproject.toml`
 dependency list — `uv` owns it and the lockfile.
 
+**Running the tests:**
+
+```bash
+uv run pytest                             # 124 tests, ~5s
+uv run pytest tests/test_scope_resolver.py -q
+```
+
+They use their own `iden_test` database (created and dropped per run) and Redis logical database 15,
+so they never touch your development data. The app is driven in-process over ASGI — no server to
+start. See [PLAN.md § Testing](PLAN.md#testing) for how the fixtures work.
+
 **After changing a model:** re-run `uv run python -m scripts.seed`. It is idempotent by design, so
 re-running it during development is the normal path. (Alembic migrations land in Phase 5, once the
 schema stops moving.)
@@ -211,6 +222,9 @@ erDiagram
   RESOURCE_API ||--o{ SCOPE : "defines"
   CLIENT ||--o{ CLIENT_SCOPE : "may request / holds"
   SCOPE ||--o{ CLIENT_SCOPE : ""
+  USER ||--o{ USER_PROFILE_VALUE : "has"
+  PROFILE_FIELD ||--o{ USER_PROFILE_VALUE : "defines"
+  GROUP ||--o{ PROFILE_FIELD : "scopes (optional)"
   USER ||--o| TOTP_CREDENTIAL : "enrolls"
   USER ||--o{ CONSENT_GRANT : "grants"
   CLIENT ||--o{ CONSENT_GRANT : ""
@@ -249,6 +263,24 @@ erDiagram
     string password_hash
     bool is_active
   }
+  PROFILE_FIELD {
+    uuid id PK
+    string key UK
+    string data_type
+    bool required
+    bool unique
+    bool user_readable
+    bool user_writable
+    uuid group_id FK
+    string claim_name
+    string claim_scope
+  }
+  USER_PROFILE_VALUE {
+    uuid id PK
+    uuid user_id FK
+    uuid field_id FK
+    string value
+  }
   CLIENT {
     uuid id PK
     string client_id UK
@@ -262,6 +294,9 @@ erDiagram
   REFRESH_TOKEN {
     uuid id PK
     string token_hash
+    string scope
+    string acr
+    array amr
     uuid family_id
     uuid rotated_to_id
     datetime revoked_at
@@ -276,6 +311,9 @@ erDiagram
 | Authorization codes, refresh tokens, and client secrets are stored **hashed** | A database read must never yield a usable credential. Same reasoning as passwords. |
 | `RefreshToken.family_id` + `rotated_to_id` | Rotation with reuse detection: presenting an already-rotated token revokes the whole family, on the assumption it was stolen. |
 | `Scope.description` is required | It is the sentence a user reads on the consent screen. An undescribed permission is one nobody can consent to meaningfully. |
+| `RefreshToken` carries `acr` and `amr` | A refreshed token must report the same authentication event as the original login, and the login is not repeated on refresh. `acr` is still derived from `amr` — this just remembers which methods were used. |
+| `ProfileField.user_writable` defines the self-service surface | `PATCH /entity/profile` has no fixed field list — it accepts exactly the fields an admin marked writable. `student_id` belongs to the registrar; `preferred_name` belongs to the student. Same table, same endpoint, opposite permissions. |
+| Profile values live in a table, not a JSONB column | `unique` on `student_id` has to be a database constraint — a check-then-write in the service layer races. Filtering by field stays an indexed query, and renaming a field key rewrites one row instead of every profile. |
 | Groups do not nest | Recursive resolution is hard to explain, hard to audit, and hard to make fast. Flat membership covers the real cases. |
 | No `tenant_id` on any table | IDEN is single-organization by design — see the [root README](../README.md#single-organization-by-design). |
 
@@ -326,6 +364,7 @@ Seeded by `scripts/seed.py` from `shared/scopes.py`, all flagged `is_system`.
 | `admin:apis:read` / `admin:apis:write` | View / manage registered resource APIs |
 | `admin:scopes:read` / `admin:scopes:write` | View / manage scopes under an API |
 | `admin:clients:read` / `admin:clients:write` | View / manage OAuth clients and their secrets |
+| `admin:profile-fields:read` / `admin:profile-fields:write` | View / define the organization's profile fields |
 
 **API `entity`** — audience `{IDEN_ISSUER}/entity`
 
@@ -335,6 +374,7 @@ Seeded by `scripts/seed.py` from `shared/scopes.py`, all flagged `is_system`.
 | `entity:credentials:write` | Change my own password |
 | `entity:totp:read` / `entity:totp:enroll` | View / enrol and remove my TOTP credential |
 | `entity:sessions:read` / `entity:sessions:revoke` | List / revoke my active sessions |
+| `entity:connections:read` / `entity:connections:revoke` | See / withdraw the applications I have granted access to |
 | `entity:permissions:read` | See my own roles, groups, and effective scopes |
 
 **API `biometric`** — audience `{IDEN_ISSUER}/biometric`, seeded only when `IDEN_BIOMETRIC_ENABLED`
@@ -391,6 +431,13 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 | `POST` | `/api/v1/auth/totp` | session | TOTP verification / step-up; appends `otp` | 1 |
 | `POST` | `/api/v1/auth/biometric` | session | Face login; appends `face`. `501` unless biometric is enabled | 1 stub / 4 |
 | `POST` | `/api/v1/auth/consent` | session | Persist or deny a consent grant, then resume `/authorize` | 1 |
+| `POST` | `/api/v1/auth/password-reset` | public | Begin recovery. Always `202`, even for an unknown address — a different answer would enumerate accounts | 3 |
+| `POST` | `/api/v1/auth/password-reset/confirm` | public | Single-use token, 15-minute TTL; revokes every session and refresh token on success | 3 |
+
+Login returns `complete` with a `resumeUrl`, or `totpRequired` when the client asked for an
+assurance level a password alone does not reach. It never reports `consentRequired`: consent is
+decided by `/authorize`, which is the only endpoint that knows the full picture, and the browser
+reaches it again by following `resumeUrl`.
 
 ### Admin RS
 
@@ -417,6 +464,8 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 | `GET` `PATCH` `DELETE` | `/admin/clients/{id}` | `admin:clients:read` / `:write` | 2 |
 | `POST` | `/admin/clients/{id}/rotate-secret` | `admin:clients:write` | 2 |
 | `PUT` | `/admin/clients/{id}/scopes` | `admin:clients:write` | 2 |
+| `GET` `POST` | `/admin/profile-fields` | `admin:profile-fields:read` / `:write` | 3 |
+| `GET` `PATCH` `DELETE` | `/admin/profile-fields/{id}` | `admin:profile-fields:read` / `:write` | 3 |
 
 `PUT` on a relationship (`.../roles`, `.../scopes`) **replaces the whole set** rather than adding to
 it. Set semantics make the endpoint idempotent and the dashboard's editing UI trivial.
@@ -428,12 +477,19 @@ Every route derives the user from the token's `sub` and never accepts a user id 
 | Method | Path | Scope | Phase |
 |---|---|---|---|
 | `GET` `PATCH` | `/entity/profile` | `entity:profile:read` / `:write` | 3 |
-| `POST` | `/entity/credentials/password` | `entity:credentials:write` | 3 |
+| `GET` | `/entity/profile/schema` | `entity:profile:read` | 3 |
+| `POST` | `/entity/credentials/password` | `entity:credentials:write` + fresh auth | 3 |
+| `POST` | `/entity/credentials/email` | `entity:credentials:write` + fresh auth | 3 |
 | `POST` | `/entity/totp/enroll` · `/entity/totp/confirm` | `entity:totp:enroll` | 3 |
 | `GET` `DELETE` | `/entity/totp` | `entity:totp:read` / `:enroll` | 3 |
 | `GET` | `/entity/sessions` | `entity:sessions:read` | 3 |
 | `DELETE` | `/entity/sessions/{id}` | `entity:sessions:revoke` | 3 |
+| `GET` `DELETE` | `/entity/connections` | `entity:connections:read` / `:revoke` | 3 |
 | `GET` | `/entity/permissions` | `entity:permissions:read` | 3 |
+
+Sensitive routes are additionally gated by `require_fresh_auth(max_age=300)`: a valid access token is
+not enough to change a password or remove a second factor, because an attacker holding a stolen
+token would otherwise take over the account outright. They must pass a login they cannot complete.
 
 ### Biometric RS — mounted only when `IDEN_BIOMETRIC_ENABLED=true`
 
@@ -554,6 +610,13 @@ non-200 successes (`201` create, `204` delete), `summary` and `description` alwa
 every documented non-2xx, `tags` on the router, `Field(description=...)` on non-obvious fields, and
 `Literal[...]` for enums so allowed values show up in the docs.
 
+### Tests belong to the phase that adds the code
+
+Pure logic gets unit tests with no database and no fixtures — the scope resolver, PKCE, and acr
+derivation are the highest value per line in the suite. Every endpoint gets at least a success case,
+an authorization failure, and its most interesting failure mode. A test name should state the rule
+being enforced (`test_reuse_revokes_the_whole_family`), not the mechanics.
+
 ### Layers
 
 `routes.py` never touches the database. `service.py` never imports FastAPI. Domain exceptions are
@@ -585,6 +648,7 @@ One JSON error shape everywhere, except the OAuth endpoints, which must keep the
 | Token validates but the resource server rejects it | Almost always `aud`. The scopes granted belong to a different API than the one being called. |
 | Signature verification fails after a restart | `gen_keys` regenerated the keypair. Tokens signed with the old key are unverifiable; re-authenticate. |
 | `403` on an `/admin/*` route with a valid token | The user's roles do not include that scope, or the client's grantable set does not, so it was pruned at issuance. Check `/admin/users/{id}/effective-scopes`. |
+| `401` where you expected `403` | The token is for a different API. Audience is validated before scopes, so a token carrying only `entity:*` gets `401` at an `/admin/*` route — not `403`. `403` means right audience, missing scope. |
 | Scope changes have no effect | Access tokens live 10 minutes. Refresh, or wait for expiry. |
 | `409` deleting a scope or role | It is `is_system`. Seeded catalogue entries are immutable by design. |
 | `/biometric/*` returns 404 | `IDEN_BIOMETRIC_ENABLED` is false, so the module is not mounted. |

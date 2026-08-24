@@ -49,6 +49,30 @@ collected here so a phase can be executed without flipping between files.
    list.
 7. **New resource ⇒ new scope.** Add it to `shared/scopes.py`, include it in the seeded system
    catalogue, and re-run the seed.
+8. **Tests ship with the phase that introduces the code**, not at the end. Pure logic gets unit
+   tests (no database, no fixtures); every endpoint gets at least a success case, an authorization
+   failure, and its most interesting failure mode. `uv run pytest` must be green before a phase is
+   called done.
+
+### Testing
+
+Tests live in `provider/tests/` and run against a real PostgreSQL database (`iden_test`), created
+once per session and truncated between tests. Not SQLite: the models use PostgreSQL arrays and
+UUIDs, and a test passing on a different engine than production proves less than it appears to.
+Redis uses logical database 15, flushed around every test, so a run can never disturb a developer's
+live session.
+
+```bash
+uv run pytest              # everything
+uv run pytest -q tests/test_scope_resolver.py
+```
+
+The `client` fixture drives the app in-process over ASGI — no live server, no port. Its `base_url`
+matches `IDEN_ISSUER` on purpose: `/authorize` builds absolute resume URLs from the issuer, and a
+cookie set on one host is not sent to another, so a mismatch silently breaks the login round-trip.
+
+The `catalogue` fixture seeds through the **real** functions in `scripts/seed.py`, so drift between
+the seed and the tests surfaces as a failure rather than as a surprise in production.
 
 ---
 
@@ -136,7 +160,8 @@ Three things in the current skeleton need fixing before building on them:
 | `pydantic-settings` is imported by `core/config.py` but is only a transitive dependency | `uv add pydantic-settings` |
 
 Also add: `uv add "redis[hiredis]" pyjwt cryptography pyotp python-multipart`.
-(`authlib` and `argon2-cffi` are already present.)
+(`argon2-cffi` is already present. `authlib` was removed: its authorization-server integrations
+are Flask- and Django-only, so it would buy an adapter layer rather than an implementation.)
 
 ### 0.3 Configuration — `core/config.py`
 
@@ -264,6 +289,9 @@ open http://localhost:8000/docs      # renders, health documented
 
 Plus: `psql` shows every table, and the system scope rows are present with `is_system = true`.
 
+*Tests arrived with Phase 1 — see the Testing section above. Phase 0's schema and seed are covered
+indirectly by every integration test, which seeds through `scripts/seed.py`.*
+
 ---
 
 ## Phase 1 — AuthZ core
@@ -277,6 +305,10 @@ the phase where the OAuth concepts actually get learned, so build the services b
 | File | Responsibility |
 |---|---|
 | `pkce.py` | `verify_challenge(verifier, challenge, method)` — `S256` only; `plain` is rejected. ~10 lines. |
+
+Write the RFC section into a comment wherever behaviour is non-obvious (PKCE: RFC 7636 §4.6;
+redirect_uri matching: RFC 6749 §3.1.2.3; token error codes: RFC 6749 §5.2). Hand-rolling means the
+spec is the reference, and a reader should not have to go looking for which rule a line enforces.
 | `session_store.py` | Redis-backed login session: `sub`, `amr` list, `authenticated_at`, sliding 24h TTL. Keyed by an opaque id held in an `HttpOnly` `Secure` `SameSite=Lax` cookie. |
 | `challenge_store.py` | Redis-backed 10-minute, single-use challenges carrying the pending `/authorize` parameters across the redirect to `auth-ui` and back. |
 | `auth_methods.py` | The registry. Each method declares a name (`pwd`, `otp`, `face`) and a verify callable. `pwd` and `otp` register here; Phase 4 adds `face` **without touching this file's callers**. |
@@ -375,6 +407,28 @@ curl -s -X POST localhost:8000/oauth2/token \
 # 6. a token missing a required scope hits 403; a tampered token hits 401
 ```
 
+Then, as the real check: `uv run pytest` — 124 tests covering PKCE against the RFC 7636 vector, acr
+derivation, the scope resolver, discovery, the full authorization code flow, refresh rotation and
+reuse detection, client credentials, revocation, introspection, logout, and `require_scope`.
+
+---
+
+### Built differently than planned
+
+Recorded so the code and this plan do not drift apart:
+
+- **`RefreshToken` gained `acr` and `amr` columns.** A refreshed access token has to report the
+  original authentication event, and nothing else remembers it.
+- **Login never returns `consent_required`.** It returns `complete` or `totp_required`; consent is
+  decided by `/authorize`, the only endpoint holding the full request. Fewer places know the rules.
+- **`/oauth2/userinfo` does not use `require_scope`.** That helper derives an audience from the
+  scope's prefix, which is meaningless for `openid`. Userinfo verifies the token itself and gates on
+  the `openid` scope instead — OIDC Core §5.3.
+- **CORS middleware moved up from Phase 5.** The Auth UI is a separate origin and sends the session
+  cookie, so credentialed CORS is what makes login work at all rather than a hardening extra.
+- **A token for the wrong API returns `401`, not `403`.** Audience is validated as part of the token,
+  before any scope comparison. Worth knowing before it looks like a bug.
+
 ---
 
 ## Phase 2 — Admin RS (identity & access control)
@@ -459,29 +513,124 @@ Also verify: deleting a system scope returns `409`; a non-admin token returns `4
 
 ## Phase 3 — Entity RS (self-service)
 
-**Goal:** what a signed-in person can do for themselves. Every route reads `sub` from the access
-token and never accepts a user id from the caller — that alone removes an entire class of IDOR bugs.
+**Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
+schema that makes IDEN usable by a university and a company without either one forking it.
+
+**The governing rule:** *a user may change anything about themselves that does not change what they
+are allowed to do.* Authority is admin territory; everything else is theirs. Roles, groups, and
+scopes are therefore absent from this module entirely.
+
+Every route derives the user from the token's `sub` and never accepts a user id from the caller —
+that alone removes an entire class of IDOR bugs.
+
+### 3.1 Organization-defined profile fields
+
+The feature that makes the Entity RS worth building. A university needs `student_id`, `department`,
+`enrollment_year`; a company needs `employee_id`, `cost_centre`, `manager`. IDEN ships neither —
+administrators define fields at runtime, exactly as they define scopes.
+
+**`ProfileField`** (`admin/profile_fields/`, new scopes `admin:profile-fields:read|write`):
+
+| Column | Purpose |
+|---|---|
+| `key` | `student_id` — stable identifier, referenced by claim mapping |
+| `label`, `description` | What the form renders |
+| `data_type` | `string` · `integer` · `boolean` · `date` · `enum` · `email` · `phone` · `url` |
+| `options` | Allowed values when `data_type` is `enum` |
+| `required`, `unique` | `unique` becomes a database constraint, not a service-layer check |
+| `validators` | `pattern` / `min` / `max` / `min_length` / `max_length` |
+| **`user_readable`, `user_writable`** | The pair that defines the self-service surface |
+| `group_id` | Optional. Bound to a group, the field applies only to its members — how students and staff get different fields without a second grouping concept |
+| `claim_name`, `claim_scope` | Optional token claim, released only when that scope was granted |
+| `display_order`, `is_system` | Form ordering; `email`/`username`/`display_name` are built in |
+
+**`UserProfileValue`** — one row per user per field, `UNIQUE (user_id, field_id)`, plus a partial
+unique index on `(field_id, value)` for fields marked unique.
+
+Why a values table rather than a JSONB column on `users`:
+
+- **Uniqueness is a real constraint.** `student_id` must not collide. With JSONB that needs a
+  partial unique index created *per field at runtime* — DDL triggered by an admin API call. A
+  check-then-write in the service layer races under load.
+- **Filtering works.** "Every user in Computer Science" is an indexed query, not a GIN scan.
+- **Renaming a field is free.** Values reference `field_id`, so changing a key rewrites one row
+  rather than every user's profile.
+
+The cost is that values are stored as text with `data_type` driving the cast at the boundary, and
+one extra query per profile read. Both are acceptable; the constraint story is not negotiable.
+Keycloak's `USER_ATTRIBUTE` table is the same shape, for the same reasons.
+
+**`user_writable` is what the self-service surface *means*.** `PATCH /entity/profile` does not have
+a fixed field list — it accepts precisely the fields an admin marked writable. `student_id` is set
+by the registrar through the admin API and is read-only to the student; `preferred_name` is theirs.
+Same table, same endpoint, opposite permissions.
+
+**Custom claims are opt-in.** A field is invisible to clients until someone sets `claim_name` and
+`claim_scope`. Data minimization by default, and it reuses the Phase 2 scope system rather than
+inventing a parallel release mechanism. Validate `claim_name` against the reserved OIDC claim names
+so a custom field cannot shadow `sub`, `iss`, or `aud`.
+
+### 3.2 Self-service endpoints
 
 | Package | Endpoints | Scope |
 |---|---|---|
-| `entity/profile/` | `GET /entity/profile`, `PATCH /entity/profile` | `entity:profile:read` / `:write` |
-| `entity/credentials/` | `POST /entity/credentials/password` (requires the current password) | `entity:credentials:write` |
-| `entity/totp/` | `POST /entity/totp/enroll` → secret + otpauth URI, `POST /entity/totp/confirm`, `DELETE /entity/totp` | `entity:totp:enroll` / `:read` |
+| `entity/profile/` | `GET /entity/profile`, `PATCH /entity/profile`, `GET /entity/profile/schema` | `entity:profile:read` / `:write` |
+| `entity/credentials/` | `POST /entity/credentials/password`, `POST /entity/credentials/email` (+ verification) | `entity:credentials:write` |
+| `entity/totp/` | `POST /entity/totp/enroll`, `/confirm`, `GET`/`DELETE /entity/totp` | `entity:totp:read` / `:enroll` |
 | `entity/sessions/` | `GET /entity/sessions`, `DELETE /entity/sessions/{id}` | `entity:sessions:read` / `:revoke` |
-| `entity/permissions/` | `GET /entity/permissions` — my roles, groups, and effective scopes | `entity:permissions:read` |
+| `entity/connections/` | `GET /entity/connections`, `DELETE /entity/connections/{client_id}` | `entity:connections:read` / `:revoke` (new) |
+| `entity/permissions/` | `GET /entity/permissions` | `entity:permissions:read` |
 
-Notes worth encoding:
-- A password change revokes every refresh token for that user, and clears their other sessions.
-- TOTP enrollment is two-step: the credential only becomes active once a generated code is
-  confirmed, so a user cannot lock themselves out with a mis-scanned QR code.
-- `GET /entity/permissions` reuses the same `scope_resolver.py` as Phases 1 and 2. Three callers,
-  one implementation.
+`GET /entity/profile/schema` returns the field definitions the user may see, so the dashboard renders
+the form from data instead of hardcoding one organization's fields into a general-purpose IdP.
+
+`/entity/connections` closes a Phase 1 gap: `ConsentGrant` rows are persisted but the user currently
+has no way to see which applications hold access, or to withdraw it.
+
+### 3.3 Freshness for sensitive operations
+
+`require_fresh_auth(max_age=300)` in `core/auth.py`, checking the token's `auth_time`, applied to
+password change, email change, TOTP removal, and session revocation.
+
+A valid access token is not enough for these: an attacker holding a stolen token could otherwise take
+over the account outright. Requiring a *recent* authentication forces them back through the login
+they cannot complete. Returns `403` with `error="insufficient_user_authentication"` and the required
+`max_age`, so the client knows to send the user through a re-auth rather than giving up.
+
+### 3.4 Password reset
+
+Belongs to the AuthZ module, not here: a locked-out user has no token, so no Entity RS route can
+help them. Without it every forgotten password is an admin support ticket.
+
+- `POST /api/v1/auth/password-reset` — always returns `202`, whether or not the email exists. A
+  different response for unknown addresses turns this into an account-enumeration oracle.
+- `POST /api/v1/auth/password-reset/confirm` — single-use token, 15-minute TTL, hashed in Redis.
+  On success: revoke every refresh token and clear every session for that user.
+- Delivery sits behind a small `notifier` interface that writes the link to the log in dev. Choosing
+  an SMTP provider is a Phase 5 concern and should not block this.
+
+### Other rules worth encoding
+
+- A password or email change revokes every refresh token and clears the user's other sessions.
+- TOTP enrollment is two-step — the credential activates only once a generated code is confirmed, so
+  a mis-scanned QR code cannot lock someone out.
+- `GET /entity/permissions` reuses `scope_resolver.scope_provenance()`. Three callers, one
+  implementation.
+- **Not offered:** account deletion. In a single-organization deployment the organization owns the
+  identity — a student cannot delete their university account. Offer a deactivation *request* if the
+  affordance is wanted.
 
 ### Done when
 
-A non-admin user can log in, read and update their profile, enrol and confirm TOTP, then complete a
-fresh login at `iden:loa:2` with `amr: ["pwd","otp"]`, and see their own permissions — all with a
-token that carries no `admin:*` scope. Changing the password invalidates the old refresh token.
+A non-admin user can sign in, read and update only the fields marked writable, and be rejected when
+they try to write `student_id`. An admin defines a new field bound to the Students group, and it
+appears in that user's `/entity/profile/schema` but not a staff member's. A field with
+`claim_name` set shows up in the ID token only when its `claim_scope` was granted. Password change
+requires a fresh authentication and invalidates the old refresh token. A forgotten password can be
+recovered without an administrator.
+
+Tests: per ground rule 8 — unit tests for field validation and the writability filter, integration
+tests for the schema endpoint, the writability rejection, claim release, and freshness.
 
 ---
 
@@ -539,9 +688,9 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
   CORS restricted to `iden_allowed_admin_origins`.
 - **Error contract.** One documented JSON error shape everywhere except the OAuth endpoints, which
   keep the RFC format.
-- **Tests.** pytest + httpx `ASGITransport` against a throwaway database. Priority order: the scope
-  resolver (pure logic, highest value per line), PKCE verification, refresh rotation and reuse
-  detection, `require_scope` allow/deny, then a full authorization-code integration test.
+- **Test coverage review.** The suite grows with each phase, so this is a gap review rather than a
+  build: coverage measurement, concurrency cases (two simultaneous refreshes of one token), and
+  failure injection (Redis down, database down).
 - **Docker.** `Dockerfile` for the provider, extending `deploy/docker-compose.yml` (created in Phase 0
   with postgres and redis) to wire in the provider, minio, and nginx.
 - **Operational endpoints.** `/health` split into liveness and readiness.
