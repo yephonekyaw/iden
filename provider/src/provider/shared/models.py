@@ -163,13 +163,15 @@ class ResourceApi(Base, TimestampMixin):
 
 class Scope(Base, TimestampMixin):
     __tablename__ = "scopes"
-    __table_args__ = (UniqueConstraint("api_id", "value"),)
 
     id: Mapped[uuid.UUID] = _pk()
     api_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("resource_apis.id", ondelete="CASCADE")
     )
-    value: Mapped[str] = mapped_column(String(128))
+    # Globally unique, not merely unique per API: a token carries scopes as bare
+    # strings, and the audience is resolved from the value. Two APIs sharing a
+    # value would put both their audiences in one token.
+    value: Mapped[str] = mapped_column(String(128), unique=True)
     # Required: this is the sentence a user reads on the consent screen.
     description: Mapped[str] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
