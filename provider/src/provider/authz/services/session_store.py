@@ -31,6 +31,16 @@ def _key(session_id: str) -> str:
     return f"session:{hash_token(session_id)}"
 
 
+def _user_key(user_id: UUID) -> str:
+    """Index of a user's live sessions.
+
+    Sessions are keyed by a hash of an id nobody but the browser holds, so
+    without this index there is no way to answer "sign me out everywhere" or to
+    invalidate sessions when a password changes.
+    """
+    return f"user_sessions:{user_id}"
+
+
 async def create(redis: Redis, user_id: UUID, method: str) -> Session:
     session = Session(
         id=generate_token(),
@@ -39,6 +49,8 @@ async def create(redis: Redis, user_id: UUID, method: str) -> Session:
         authenticated_at=datetime.now(UTC),
     )
     await _save(redis, session)
+    await redis.sadd(_user_key(user_id), _key(session.id))
+    await redis.expire(_user_key(user_id), settings.iden_session_ttl)
     return session
 
 
@@ -82,4 +94,18 @@ async def add_method(redis: Redis, session: Session, method: str) -> Session:
 
 
 async def delete(redis: Redis, session_id: str) -> None:
+    session = await get(redis, session_id)
     await redis.delete(_key(session_id))
+    if session is not None:
+        await redis.srem(_user_key(session.user_id), _key(session_id))
+
+
+async def delete_all_for_user(redis: Redis, user_id: UUID) -> int:
+    """Sign a user out everywhere. Used when a password changes or an account
+    is deactivated — a credential change that leaves old sessions alive has not
+    really taken effect."""
+    keys = await redis.smembers(_user_key(user_id))
+    if keys:
+        await redis.delete(*keys)
+    await redis.delete(_user_key(user_id))
+    return len(keys)
