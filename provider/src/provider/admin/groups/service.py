@@ -1,0 +1,140 @@
+from uuid import UUID
+
+from sqlalchemy import delete, func, insert, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from provider.admin.groups.errors import (
+    GroupNameTaken,
+    GroupNotFound,
+    UnknownRoles,
+    UnknownUsers,
+)
+from provider.admin.groups.schemas import GroupCreate, GroupUpdate
+from provider.shared.models import Group, Role, User, user_groups
+
+
+async def resolve_roles(session: AsyncSession, role_ids: list[UUID]) -> list[Role]:
+    if not role_ids:
+        return []
+
+    roles = list(await session.scalars(select(Role).where(Role.id.in_(role_ids))))
+    if len(roles) != len(set(role_ids)):
+        found = {role.id for role in roles}
+        raise UnknownRoles(missing=[str(i) for i in set(role_ids) - found])
+
+    return roles
+
+
+async def list_groups(session: AsyncSession, *, limit: int, offset: int) -> tuple[list[Group], int]:
+    total = await session.scalar(select(func.count(Group.id)))
+    groups = list(
+        await session.scalars(select(Group).order_by(Group.name).limit(limit).offset(offset))
+    )
+    return groups, total
+
+
+async def get_group(session: AsyncSession, group_id: UUID) -> Group:
+    group = await session.get(Group, group_id)
+    if group is None:
+        raise GroupNotFound
+    return group
+
+
+async def member_count(session: AsyncSession, group_id: UUID) -> int:
+    return await session.scalar(
+        select(func.count()).select_from(user_groups).where(user_groups.c.group_id == group_id)
+    )
+
+
+async def create_group(session: AsyncSession, data: GroupCreate) -> Group:
+    if await session.scalar(select(Group).where(Group.name == data.name)):
+        raise GroupNameTaken
+
+    group = Group(name=data.name, description=data.description)
+    session.add(group)
+    await session.commit()
+    # Refreshed so its relationships are loaded: on a new object they are unset,
+    # and reading one in the response would trigger a lazy load, which fails
+    # inside async code.
+    await session.refresh(group)
+    return group
+
+
+async def update_group(session: AsyncSession, group_id: UUID, data: GroupUpdate) -> Group:
+    group = await get_group(session, group_id)
+
+    if data.name is not None and data.name != group.name:
+        if await session.scalar(select(Group).where(Group.name == data.name)):
+            raise GroupNameTaken
+        group.name = data.name
+
+    if data.description is not None:
+        group.description = data.description
+
+    await session.commit()
+    return group
+
+
+async def set_group_roles(session: AsyncSession, group_id: UUID, role_ids: list[UUID]) -> Group:
+    group = await get_group(session, group_id)
+    group.roles = await resolve_roles(session, role_ids)
+    await session.commit()
+    return group
+
+
+async def list_members(
+    session: AsyncSession, group_id: UUID, *, limit: int, offset: int
+) -> tuple[list[User], int]:
+    await get_group(session, group_id)
+
+    total = await member_count(session, group_id)
+    members = list(
+        await session.scalars(
+            select(User)
+            .join(user_groups, user_groups.c.user_id == User.id)
+            .where(user_groups.c.group_id == group_id)
+            .order_by(User.email)
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    return members, total
+
+
+async def add_members(session: AsyncSession, group_id: UUID, user_ids: list[UUID]) -> None:
+    await get_group(session, group_id)
+
+    found = set(await session.scalars(select(User.id).where(User.id.in_(user_ids))))
+    if len(found) != len(set(user_ids)):
+        raise UnknownUsers(missing=[str(i) for i in set(user_ids) - found])
+
+    existing = set(
+        await session.scalars(
+            select(user_groups.c.user_id).where(user_groups.c.group_id == group_id)
+        )
+    )
+    new = found - existing
+    if new:
+        await session.execute(
+            insert(user_groups),
+            [{"user_id": user_id, "group_id": group_id} for user_id in new],
+        )
+
+    await session.commit()
+
+
+async def remove_member(session: AsyncSession, group_id: UUID, user_id: UUID) -> None:
+    await get_group(session, group_id)
+    await session.execute(
+        delete(user_groups).where(
+            user_groups.c.group_id == group_id, user_groups.c.user_id == user_id
+        )
+    )
+    await session.commit()
+
+
+async def delete_group(session: AsyncSession, group_id: UUID) -> None:
+    """Removes the group, its role bindings, and its memberships — never its users."""
+    group = await get_group(session, group_id)
+    await session.delete(group)
+    await session.commit()
