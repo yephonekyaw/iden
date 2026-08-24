@@ -173,3 +173,32 @@ async def client(engine, redis) -> AsyncClient:
 def scope_of(catalogue):
     """Look up a seeded Scope by its value."""
     return lambda value: catalogue["scopes"][value]
+
+
+@pytest.fixture
+async def token_for(db, admin_user, dashboard):
+    """Mint an access token carrying exactly the given scopes.
+
+    Lets a test assert on authorization directly, without running a login flow
+    it is not the subject of.
+    """
+    from provider.authz.services import token_service
+
+    async def _mint(*scopes: str, user: User | None = None) -> dict[str, str]:
+        token, _, _ = await token_service.mint_access_token(
+            db,
+            subject=str((user or admin_user).id),
+            client=dashboard,
+            scopes=set(scopes),
+            acr="iden:loa:1",
+            amr=["pwd"],
+        )
+        return {"Authorization": f"Bearer {token}"}
+
+    return _mint
+
+
+@pytest.fixture
+async def admin_headers(token_for, catalogue):
+    """Every admin scope — for tests whose subject is the resource, not the gate."""
+    return await token_for(*[v for v in catalogue["scopes"] if v.startswith("admin:")])
