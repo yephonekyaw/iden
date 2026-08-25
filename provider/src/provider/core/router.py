@@ -28,7 +28,20 @@ from provider.authz.consent.routes import router as consent_router  # noqa: E402
 from provider.authz.discovery.routes import router as discovery_router  # noqa: E402
 from provider.authz.login.routes import router as login_router  # noqa: E402
 from provider.authz.oauth.routes import router as oauth_router  # noqa: E402
+from provider.entity.connections.routes import (  # noqa: E402
+    router as entity_connections_router,
+)
+from provider.entity.credentials.routes import (  # noqa: E402
+    router as entity_credentials_router,
+)
+from provider.entity.permissions.routes import (  # noqa: E402
+    router as entity_permissions_router,
+)
 from provider.entity.profile.routes import router as entity_profile_router  # noqa: E402
+from provider.entity.sessions.routes import (  # noqa: E402
+    router as entity_sessions_router,
+)
+from provider.entity.totp.routes import router as entity_totp_router  # noqa: E402
 
 router.include_router(discovery_router)
 router.include_router(oauth_router)
@@ -45,6 +58,11 @@ router.include_router(admin_profile_fields_router)
 router.include_router(admin_audit_router)
 
 router.include_router(entity_profile_router)
+router.include_router(entity_credentials_router)
+router.include_router(entity_totp_router)
+router.include_router(entity_sessions_router)
+router.include_router(entity_connections_router)
+router.include_router(entity_permissions_router)
 
 
 class HealthResponse(CamelCaseBaseModel):

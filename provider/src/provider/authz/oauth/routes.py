@@ -386,6 +386,7 @@ async def _authorization_code_grant(
         scopes=scopes,
         acr=record.acr,
         amr=record.amr,
+        authenticated_at=record.authenticated_at,
     )
 
     refresh = None
@@ -509,6 +510,7 @@ async def _rotate(
         scopes=granted,
         acr=record.acr,
         amr=record.amr,
+        authenticated_at=record.authenticated_at,
     )
     access_expires_at = tokens.now() + timedelta(seconds=expires_in)
 

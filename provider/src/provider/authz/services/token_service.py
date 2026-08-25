@@ -47,6 +47,7 @@ async def mint_access_token(
     scopes: set[str],
     acr: str | None = None,
     amr: list[str] | None = None,
+    authenticated_at: datetime | None = None,
 ) -> tuple[str, str, int]:
     """Returns (token, jti, expires_in)."""
     issued_at = now()
@@ -71,6 +72,11 @@ async def mint_access_token(
         claims["acr"] = acr
     if amr:
         claims["amr"] = amr
+    # RFC 9068 §2.2.1. A resource server cannot demand a *recent* sign-in for a
+    # sensitive action without knowing when the sign-in happened, and it only
+    # ever sees the access token — the ID token belongs to the client.
+    if authenticated_at:
+        claims["auth_time"] = int(authenticated_at.timestamp())
 
     return sign_jwt(claims), jti, settings.iden_access_token_ttl
 

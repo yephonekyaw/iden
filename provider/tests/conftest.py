@@ -223,6 +223,9 @@ async def token_for(db, admin_user, dashboard):
             scopes=set(scopes),
             acr="iden:loa:1",
             amr=["pwd"],
+            # Freshly authenticated, so the token satisfies require_fresh_auth.
+            # A test about staleness moves the clock instead.
+            authenticated_at=token_service.now(),
         )
         return {"Authorization": f"Bearer {token}"}
 
@@ -279,3 +282,56 @@ def no_grace(monkeypatch):
     window closed, and waiting thirty seconds for it is not an option.
     """
     monkeypatch.setattr(settings, "iden_refresh_grace_period", 0)
+
+
+@pytest.fixture
+async def member(db, catalogue) -> User:
+    """An ordinary person: every entity scope, no admin authority."""
+    user = User(
+        email="student@test.local",
+        username="student",
+        display_name="A Student",
+        password_hash=hash_secret("correct-horse-battery-staple"),
+    )
+    user.roles = [catalogue["roles"]["member"]]
+    db.add(user)
+    await db.commit()
+    return user
+
+
+@pytest.fixture
+async def entity_headers(token_for, member, catalogue):
+    return await token_for(
+        *[v for v in catalogue["scopes"] if v.startswith("entity:")], user=member
+    )
+
+
+@pytest.fixture
+async def self_headers(token_for, catalogue):
+    """Every entity scope, for the administrator — the person the login flow
+    helpers sign in as."""
+    return await token_for(*[v for v in catalogue["scopes"] if v.startswith("entity:")])
+
+
+@pytest.fixture
+async def stale_headers(db, member, dashboard, catalogue):
+    """A token for a sign-in that happened an hour ago.
+
+    The clock is moved in the token rather than in the process: `auth_time` is
+    what the freshness check reads, and minting it old is both closer to the
+    real case and free of global state.
+    """
+    from datetime import timedelta
+
+    from provider.authz.services import token_service
+
+    token, _, _ = await token_service.mint_access_token(
+        db,
+        subject=str(member.id),
+        client=dashboard,
+        scopes={v for v in catalogue["scopes"] if v.startswith("entity:")},
+        acr="iden:loa:1",
+        amr=["pwd"],
+        authenticated_at=token_service.now() - timedelta(hours=1),
+    )
+    return {"Authorization": f"Bearer {token}"}

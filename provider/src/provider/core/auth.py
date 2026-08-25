@@ -1,5 +1,6 @@
 """The gate every resource-server route depends on."""
 
+import time
 import uuid
 from dataclasses import dataclass
 from typing import Annotated
@@ -121,3 +122,41 @@ def require_scope(*required: str):
 
 # For routes that need an authenticated caller but gate on nothing further.
 CurrentTokenDep = Annotated[AccessToken, Depends(require_scope())]
+
+
+def require_fresh_auth(max_age: int = 300):
+    """Demand a *recent* authentication, not merely a valid token.
+
+    A valid access token is not enough to change a password, an email address,
+    or an authenticator: someone holding a stolen one could take the account
+    over outright. Requiring a login within `max_age` seconds sends them back
+    through the one step they cannot complete.
+
+    The refusal follows RFC 9470 — `insufficient_user_authentication` with the
+    `max_age` that would satisfy it, so a client knows to send the user through
+    a re-authentication rather than giving up. `/authorize` accepts the same
+    `max_age`, which is what makes the round trip work.
+    """
+
+    async def dependency(request: Request, token: CurrentTokenDep) -> AccessToken:
+        authenticated_at = token.claims.get("auth_time")
+        age = time.time() - authenticated_at if authenticated_at else None
+
+        if age is None or age > max_age:
+            raise HTTPException(
+                status_code=403,
+                detail="This action needs a recent sign-in.",
+                headers={
+                    "WWW-Authenticate": (
+                        'Bearer error="insufficient_user_authentication", '
+                        f'error_description="A sign-in within {max_age}s is '
+                        f'required", max_age={max_age}'
+                    )
+                },
+            )
+        return token
+
+    return dependency
+
+
+FreshTokenDep = Annotated[AccessToken, Depends(require_fresh_auth())]

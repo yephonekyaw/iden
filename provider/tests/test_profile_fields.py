@@ -6,8 +6,7 @@ either of them forking it.
 
 import pytest
 
-from provider.core.security import hash_secret
-from provider.shared.models import Group, User
+from provider.shared.models import Group
 
 pytestmark = pytest.mark.usefixtures("admin_user", "dashboard")
 
@@ -24,28 +23,6 @@ PREFERRED_NAME = {
     "label": "Preferred name",
     "userWritable": True,
 }
-
-
-@pytest.fixture
-async def member(db, catalogue) -> User:
-    """An ordinary person: every entity scope, no admin authority."""
-    user = User(
-        email="student@test.local",
-        username="student",
-        display_name="A Student",
-        password_hash=hash_secret("correct-horse-battery-staple"),
-    )
-    user.roles = [catalogue["roles"]["member"]]
-    db.add(user)
-    await db.commit()
-    return user
-
-
-@pytest.fixture
-async def entity_headers(token_for, member, catalogue):
-    return await token_for(
-        *[v for v in catalogue["scopes"] if v.startswith("entity:")], user=member
-    )
 
 
 async def define(client, admin_headers, body: dict):

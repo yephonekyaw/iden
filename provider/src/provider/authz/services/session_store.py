@@ -36,6 +36,11 @@ class Session:
         return hash_token(self.id)
 
 
+def public_id_of(session_id: str) -> str:
+    """The public name of a session id — see `Session.public_id`."""
+    return hash_token(session_id)
+
+
 def _key(session_id: str) -> str:
     # Hashed like any other credential: a Redis dump must not yield usable
     # session ids.
@@ -105,6 +110,59 @@ async def get(redis: Redis, session_id: str | None) -> Session | None:
         amr=data["amr"],
         authenticated_at=datetime.fromisoformat(data["authenticated_at"]),
     )
+
+
+async def list_for_user(redis: Redis, user_id: UUID) -> list[Session]:
+    """Every live session for this person, named by `public_id`.
+
+    The raw session id is never returned: it is the cookie, and an endpoint that
+    handed one back would let anyone with read access to a person's session list
+    assume any of them. The `id` on these is the public one, and the `Session`
+    returned here cannot be used to authenticate.
+    """
+    keys = [str(key) for key in await redis.smembers(_user_key(user_id))]
+    sessions = []
+
+    for key in keys:
+        raw = await redis.get(key)
+        if raw is None:
+            # Expired between the index read and now; the index is cleaned up
+            # lazily rather than transactionally.
+            await redis.srem(_user_key(user_id), key)
+            continue
+        data = json.loads(raw)
+        sessions.append(
+            Session(
+                id=key.removeprefix("session:"),
+                user_id=UUID(data["user_id"]),
+                amr=data["amr"],
+                authenticated_at=datetime.fromisoformat(data["authenticated_at"]),
+            )
+        )
+
+    return sorted(sessions, key=lambda s: s.authenticated_at, reverse=True)
+
+
+async def clients_for_public_id(redis: Redis, public_id: str) -> set[str]:
+    return {
+        str(value) for value in await redis.smembers(f"session_clients:{public_id}")
+    }
+
+
+async def delete_by_public_id(redis: Redis, user_id: UUID, public_id: str) -> bool:
+    """Delete one of a person's own sessions, named by its public id.
+
+    The ownership check is the point: a public id is not a credential, so
+    nothing about holding one implies the right to end that session.
+    """
+    key = f"session:{public_id}"
+    raw = await redis.get(key)
+    if raw is None or UUID(json.loads(raw)["user_id"]) != user_id:
+        return False
+
+    await redis.delete(key, f"session_clients:{public_id}")
+    await redis.srem(_user_key(user_id), key)
+    return True
 
 
 async def add_client(redis: Redis, session_id: str, client_id: str) -> None:
