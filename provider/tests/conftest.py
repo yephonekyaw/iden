@@ -171,8 +171,9 @@ async def kiosk(db, catalogue) -> tuple[Client, str]:
 
 
 @pytest.fixture
-async def client(engine, redis) -> AsyncGenerator[AsyncClient]:
+async def client(engine, redis, monkeypatch) -> AsyncGenerator[AsyncClient]:
     """An HTTP client wired to the app in-process — no live server, no port."""
+    from provider.core import audit
     from provider.core.app import app
 
     factory = async_sessionmaker(engine, expire_on_commit=False)
@@ -183,6 +184,10 @@ async def client(engine, redis) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_db_session] = override_db
     app.dependency_overrides[get_redis] = lambda: redis
+    # The audit middleware runs outside the dependency system, so its session
+    # factory has to be redirected separately — otherwise it writes to the
+    # developer's own database while the rest of the test uses iden_test.
+    monkeypatch.setattr(audit, "session_factory", factory)
 
     # base_url matches the configured issuer on purpose: /authorize builds
     # absolute resume URLs from it, and a cookie set on one host is not sent to

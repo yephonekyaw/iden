@@ -1,11 +1,13 @@
 """The gate every resource-server route depends on."""
 
+import uuid
 from dataclasses import dataclass
 from typing import Annotated
 
 import jwt
 from fastapi import Depends, HTTPException, Request
 
+from provider.core.audit import set_actor
 from provider.core.config import settings
 from provider.core.crypto import verify_jwt
 from provider.core.redis import RedisDep
@@ -33,6 +35,14 @@ def _audience_for(scope: str) -> str:
     resource servers, never here.
     """
     return f"{settings.iden_issuer}/{scope.split(':')[0]}"
+
+
+def _is_uuid(value: str) -> bool:
+    try:
+        uuid.UUID(value)
+    except ValueError:
+        return False
+    return True
 
 
 def _bearer(request: Request) -> str:
@@ -84,6 +94,15 @@ def require_scope(*required: str):
                 status_code=403,
                 detail=f"Missing required scope: {' '.join(sorted(missing))}",
             )
+
+        # A client_credentials token's subject is the client itself, not a
+        # person, so only parse it as a user id when it is one.
+        subject = claims["sub"]
+        set_actor(
+            request,
+            user_id=uuid.UUID(subject) if _is_uuid(subject) else None,
+            client_id=claims["client_id"],
+        )
 
         aud = claims["aud"]
         return AccessToken(

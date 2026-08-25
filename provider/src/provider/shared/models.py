@@ -20,7 +20,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import ARRAY, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from provider.core.db import Base
@@ -309,3 +309,44 @@ class ConsentGrant(Base, TimestampMixin):
     granted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
+
+
+class AuditEvent(Base):
+    """One row per state-changing request. Append-only: never updated, never
+    deleted by the application.
+
+    No TimestampMixin — `updated_at` on an append-only table would be a lie, and
+    `occurred_at` is the only time that means anything here.
+    """
+
+    __tablename__ = "audit_events"
+    __table_args__ = (
+        Index("ix_audit_events_occurred_at", "occurred_at"),
+        Index("ix_audit_events_actor_user_id", "actor_user_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    # The route template rather than the resolved path — "POST
+    # /admin/users/{user_id}/roles" groups, "POST /admin/users/9f2.../roles"
+    # does not. The id it stands in for is in `target`.
+    action: Mapped[str] = mapped_column(String(160))
+    status_code: Mapped[int]
+    target: Mapped[str | None] = mapped_column(String(255))
+
+    # SET NULL, not CASCADE: deleting a user must not erase the record of what
+    # they did. `actor_label` holds their email as it was at the time, for the
+    # same reason — after the deletion it is all that is left of who this was.
+    actor_user_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL")
+    )
+    actor_label: Mapped[str | None] = mapped_column(String(255))
+    # The OAuth `client_id` string, not a foreign key: it is the stable public
+    # name of the client, and the token carries it directly.
+    actor_client: Mapped[str | None] = mapped_column(String(128))
+
+    ip: Mapped[str | None] = mapped_column(String(45))
+    user_agent: Mapped[str | None] = mapped_column(String(512))
+    detail: Mapped[dict] = mapped_column(JSONB, default=dict)

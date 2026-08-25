@@ -1,6 +1,6 @@
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from sqlalchemy import select
 
 from provider.authz.consent.schemas import ConsentRequest, ConsentResponse
@@ -9,6 +9,7 @@ from provider.authz.deps import LoginSessionDep
 from provider.authz.login.errors import ChallengeNotFound, NoSession
 from provider.authz.services import challenge_store
 from provider.authz.services.scope_resolver import parse_scope, resolve_for_user
+from provider.core.audit import set_actor
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.schemas import ErrorResponse
@@ -35,6 +36,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
 )
 async def consent(
     body: ConsentRequest,
+    request: Request,
     login_session: LoginSessionDep,
     session: DBSessionDep,
     redis: RedisDep,
@@ -61,6 +63,8 @@ async def consent(
     user = await session.get(User, login_session.user_id)
     if user is None:
         raise HTTPException(status_code=401, detail=NoSession.message)
+
+    set_actor(request, user_id=user.id)
 
     client = await session.scalar(
         select(Client).where(Client.client_id == challenge.params["client_id"])

@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
 from provider.core import redis as redis_module
+from provider.core.audit import AuditMiddleware
 from provider.core.config import settings
 from provider.core.db import engine
 from provider.authz.oauth.errors import OAuthError, RedirectableError
@@ -116,6 +117,10 @@ async def handle_oauth_error(request: Request, exc: OAuthError) -> JSONResponse:
         headers=headers,
     )
 
+
+# Every state-changing request leaves a permanent record. Added before CORS so
+# it wraps the routing that populates the route template it records.
+app.add_middleware(AuditMiddleware)
 
 # Credentialed requests from the hosted Auth UI and the dashboard: the session
 # cookie must ride along, which requires an explicit origin allow-list.

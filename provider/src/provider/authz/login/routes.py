@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Response
+from fastapi import APIRouter, HTTPException, Request, Response
 from sqlalchemy import select
 
 from provider.authz import session_cookie
@@ -21,6 +21,7 @@ from provider.authz.login.schemas import (
 from provider.authz.login.service import authenticate_password, verify_totp
 from provider.authz.services import auth_methods, challenge_store, session_store
 from provider.authz.services.scope_resolver import OIDC_SCOPES, parse_scope
+from provider.core.audit import set_actor
 from provider.core.config import settings
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
@@ -116,7 +117,11 @@ async def read_challenge(
     },
 )
 async def login(
-    body: LoginRequest, response: Response, session: DBSessionDep, redis: RedisDep
+    body: LoginRequest,
+    request: Request,
+    response: Response,
+    session: DBSessionDep,
+    redis: RedisDep,
 ) -> AuthStepResponse:
     challenge = await challenge_store.get(redis, body.challenge_id)
     if challenge is None:
@@ -130,6 +135,9 @@ async def login(
         raise HTTPException(status_code=403, detail=exc.message) from exc
 
     await session.commit()
+    # A failed attempt is audited too, with no actor — the submitted email is
+    # in the entry's detail, and it is a claim, not an identity.
+    set_actor(request, user_id=user.id)
 
     login_session = await session_store.create(redis, user.id, AmrMethod.PWD)
     session_cookie.set_session(response, login_session.id)
@@ -161,6 +169,7 @@ async def login(
 )
 async def totp(
     body: TotpRequest,
+    request: Request,
     login_session: LoginSessionDep,
     session: DBSessionDep,
     redis: RedisDep,
@@ -175,6 +184,8 @@ async def totp(
     user = await session.get(User, login_session.user_id)
     if user is None:
         raise HTTPException(status_code=401, detail=NoSession.message)
+
+    set_actor(request, user_id=user.id)
 
     try:
         await verify_totp(session, user, body.code)
