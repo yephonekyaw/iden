@@ -1,10 +1,12 @@
 from typing import Literal
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Response
 from pydantic import Field
+from redis.asyncio import Redis
 from redis.exceptions import RedisError
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
@@ -67,6 +69,12 @@ router.include_router(entity_connections_router)
 router.include_router(entity_permissions_router)
 
 
+class LivenessResponse(CamelCaseBaseModel):
+    status: Literal["alive"] = Field(
+        description="Constant. The process answered, which is the whole question."
+    )
+
+
 class HealthResponse(CamelCaseBaseModel):
     status: Literal["ok", "degraded"] = Field(
         description="`ok` only when every dependency is reachable."
@@ -90,6 +98,10 @@ class HealthResponse(CamelCaseBaseModel):
     tags=["health"],
 )
 async def health(session: DBSessionDep, redis: RedisDep) -> HealthResponse:
+    return await _dependencies(session, redis)
+
+
+async def _dependencies(session: AsyncSession, redis: Redis) -> HealthResponse:
     try:
         await session.execute(text("select 1"))
         database = "ok"
@@ -104,3 +116,46 @@ async def health(session: DBSessionDep, redis: RedisDep) -> HealthResponse:
 
     status = "ok" if database == "ok" and cache == "ok" else "degraded"
     return HealthResponse(status=status, database=database, redis=cache)
+
+
+@router.get(
+    "/health/live",
+    response_model=LivenessResponse,
+    summary="Liveness probe",
+    description=(
+        "Whether the process is running. Touches no dependency, and answers "
+        "`200` whenever it can answer at all.\n\n"
+        "This is what an orchestrator should **restart** on. A liveness probe "
+        "that checks the database restarts every replica the moment the "
+        "database has a bad minute, which turns a recoverable outage into a "
+        "restart loop. Use `/health/ready` to decide where to send traffic.\n\n"
+        "**Required scope:** none — this endpoint is public."
+    ),
+    tags=["health"],
+)
+async def liveness() -> LivenessResponse:
+    return LivenessResponse(status="alive")
+
+
+@router.get(
+    "/health/ready",
+    response_model=HealthResponse,
+    summary="Readiness probe",
+    description=(
+        "Whether the provider can serve a request end to end: PostgreSQL and "
+        "Redis both reachable.\n\n"
+        "Unlike `/health`, an unreachable dependency answers **503**, so a load "
+        "balancer takes this replica out of rotation without anyone parsing the "
+        "body. Nothing here warrants a restart — see `/health/live`.\n\n"
+        "**Required scope:** none — this endpoint is public."
+    ),
+    responses={503: {"description": "A dependency is unreachable."}},
+    tags=["health"],
+)
+async def readiness(
+    session: DBSessionDep, redis: RedisDep, response: Response
+) -> HealthResponse:
+    health = await _dependencies(session, redis)
+    if health.status != "ok":
+        response.status_code = 503
+    return health
