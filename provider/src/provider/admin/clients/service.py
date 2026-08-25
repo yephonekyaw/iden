@@ -31,13 +31,18 @@ async def _apply_scopes(
 ) -> None:
     await _validate_scope_ids(session, set(grantable) | set(granted))
 
-    existing = {link.scope_id: link for link in await session.scalars(
-        select(ClientScope).where(ClientScope.client_id == client.id)
-    )}
+    existing = {
+        link.scope_id: link
+        for link in await session.scalars(
+            select(ClientScope).where(ClientScope.client_id == client.id)
+        )
+    }
 
     wanted = set(grantable) | set(granted)
     for scope_id in wanted:
-        link = existing.get(scope_id) or ClientScope(client_id=client.id, scope_id=scope_id)
+        link = existing.get(scope_id) or ClientScope(
+            client_id=client.id, scope_id=scope_id
+        )
         link.grantable = scope_id in grantable
         link.granted = scope_id in granted
         session.add(link)
@@ -47,10 +52,14 @@ async def _apply_scopes(
             await session.delete(link)
 
 
-async def list_clients(session: AsyncSession, *, limit: int, offset: int) -> tuple[list[Client], int]:
+async def list_clients(
+    session: AsyncSession, *, limit: int, offset: int
+) -> tuple[list[Client], int]:
     total = await session.scalar(select(func.count(Client.id)))
     clients = list(
-        await session.scalars(select(Client).order_by(Client.client_id).limit(limit).offset(offset))
+        await session.scalars(
+            select(Client).order_by(Client.client_id).limit(limit).offset(offset)
+        )
     )
     return clients, total
 
@@ -62,7 +71,9 @@ async def get_client(session: AsyncSession, client_id: UUID) -> Client:
     return client
 
 
-async def create_client(session: AsyncSession, data: ClientCreate) -> tuple[Client, str | None]:
+async def create_client(
+    session: AsyncSession, data: ClientCreate
+) -> tuple[Client, str | None]:
     if await session.scalar(select(Client).where(Client.client_id == data.client_id)):
         raise ClientIdTaken
 
@@ -84,21 +95,34 @@ async def create_client(session: AsyncSession, data: ClientCreate) -> tuple[Clie
     session.add(client)
     await session.flush()
 
-    await _apply_scopes(session, client, data.grantable_scope_ids, data.granted_scope_ids)
+    await _apply_scopes(
+        session, client, data.grantable_scope_ids, data.granted_scope_ids
+    )
     await session.commit()
     await session.refresh(client)
     return client, secret
 
 
-async def update_client(session: AsyncSession, client_id: UUID, data: ClientUpdate) -> Client:
+async def update_client(
+    session: AsyncSession, client_id: UUID, data: ClientUpdate
+) -> Client:
     client = await get_client(session, client_id)
 
-    for field in ("name", "allowed_grants", "redirect_uris", "post_logout_redirect_uris", "skip_consent"):
+    for field in (
+        "name",
+        "allowed_grants",
+        "redirect_uris",
+        "post_logout_redirect_uris",
+        "skip_consent",
+    ):
         value = getattr(data, field)
         if value is not None:
             setattr(client, field, value)
 
-    if GrantType.AUTHORIZATION_CODE in client.allowed_grants and not client.redirect_uris:
+    if (
+        GrantType.AUTHORIZATION_CODE in client.allowed_grants
+        and not client.redirect_uris
+    ):
         raise RedirectUriRequired
 
     await session.commit()

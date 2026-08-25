@@ -57,23 +57,31 @@ async def count_scopes(session: AsyncSession, api_id: UUID) -> int:
 async def create_api(session: AsyncSession, data: ApiCreate) -> ResourceApi:
     if await session.scalar(select(ResourceApi).where(ResourceApi.name == data.name)):
         raise ApiNameTaken
-    if await session.scalar(select(ResourceApi).where(ResourceApi.audience == data.audience)):
+    if await session.scalar(
+        select(ResourceApi).where(ResourceApi.audience == data.audience)
+    ):
         raise AudienceTaken
 
-    api = ResourceApi(name=data.name, audience=data.audience, description=data.description)
+    api = ResourceApi(
+        name=data.name, audience=data.audience, description=data.description
+    )
     session.add(api)
     await session.commit()
     await session.refresh(api)
     return api
 
 
-async def update_api(session: AsyncSession, api_id: UUID, data: ApiUpdate) -> ResourceApi:
+async def update_api(
+    session: AsyncSession, api_id: UUID, data: ApiUpdate
+) -> ResourceApi:
     api = await get_api(session, api_id)
     if api.is_system:
         raise SystemApiImmutable
 
     if data.name is not None and data.name != api.name:
-        if await session.scalar(select(ResourceApi).where(ResourceApi.name == data.name)):
+        if await session.scalar(
+            select(ResourceApi).where(ResourceApi.name == data.name)
+        ):
             raise ApiNameTaken
         api.name = data.name
 
@@ -100,7 +108,9 @@ async def api_scopes_in_use(session: AsyncSession, api_id: UUID) -> bool:
             .where(user_scopes.c.scope_id.in_(scope_ids))
         )
         or await session.scalar(
-            select(func.count()).select_from(ClientScope).where(ClientScope.scope_id.in_(scope_ids))
+            select(func.count())
+            .select_from(ClientScope)
+            .where(ClientScope.scope_id.in_(scope_ids))
         )
     )
 

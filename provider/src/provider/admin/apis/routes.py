@@ -38,7 +38,9 @@ def to_response(api, scope_count: int) -> ApiResponse:
     dependencies=[READ],
 )
 async def list_apis(session: DBSessionDep, page: PaginationDep) -> Page[ApiResponse]:
-    apis, counts, total = await service.list_apis(session, limit=page.limit, offset=page.offset)
+    apis, counts, total = await service.list_apis(
+        session, limit=page.limit, offset=page.offset
+    )
 
     return Page[ApiResponse](
         items=[to_response(api, counts.get(api.id, 0)) for api in apis],
@@ -57,7 +59,9 @@ async def list_apis(session: DBSessionDep, page: PaginationDep) -> Page[ApiRespo
         "Scopes are then defined under it via `POST /admin/apis/{id}/scopes`.\n\n"
         "**Required scope:** `admin:apis:write`"
     ),
-    responses={409: {"model": ErrorResponse, "description": "Name or audience already in use"}},
+    responses={
+        409: {"model": ErrorResponse, "description": "Name or audience already in use"}
+    },
     dependencies=[WRITE],
 )
 async def create_api(body: ApiCreate, session: DBSessionDep) -> ApiResponse:
@@ -91,11 +95,16 @@ async def read_api(api_id: UUID, session: DBSessionDep) -> ApiResponse:
     ),
     responses={
         404: {"model": ErrorResponse, "description": "No such API"},
-        409: {"model": ErrorResponse, "description": "Name taken, or the API is system-defined"},
+        409: {
+            "model": ErrorResponse,
+            "description": "Name taken, or the API is system-defined",
+        },
     },
     dependencies=[WRITE],
 )
-async def update_api(api_id: UUID, body: ApiUpdate, session: DBSessionDep) -> ApiResponse:
+async def update_api(
+    api_id: UUID, body: ApiUpdate, session: DBSessionDep
+) -> ApiResponse:
     api = await service.update_api(session, api_id, body)
     return to_response(api, await service.count_scopes(session, api_id))
 
@@ -113,14 +122,19 @@ async def update_api(api_id: UUID, body: ApiUpdate, session: DBSessionDep) -> Ap
     ),
     responses={
         404: {"model": ErrorResponse, "description": "No such API"},
-        409: {"model": ErrorResponse, "description": "System API, or its scopes are still in use"},
+        409: {
+            "model": ErrorResponse,
+            "description": "System API, or its scopes are still in use",
+        },
     },
     dependencies=[WRITE],
 )
 async def delete_api(
     api_id: UUID,
     session: DBSessionDep,
-    force: bool = Query(False, description="Delete even though the scopes are still granted."),
+    force: bool = Query(
+        False, description="Delete even though the scopes are still granted."
+    ),
 ) -> Response:
     await service.delete_api(session, api_id, force=force)
     return Response(status_code=204)

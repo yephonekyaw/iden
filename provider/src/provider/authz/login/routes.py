@@ -63,7 +63,9 @@ async def _next_step(redis, session, challenge) -> AuthStepResponse:
         "**Required scope:** none — the challenge id is the credential, and it "
         "expires in ten minutes."
     ),
-    responses={404: {"model": ErrorResponse, "description": "Challenge expired or unknown"}},
+    responses={
+        404: {"model": ErrorResponse, "description": "Challenge expired or unknown"}
+    },
 )
 async def read_challenge(
     challenge_id: str, session: DBSessionDep, redis: RedisDep
@@ -79,7 +81,9 @@ async def read_challenge(
 
     descriptions = dict(OIDC_SCOPE_DESCRIPTIONS)
     rows = await session.execute(
-        select(Scope.value, Scope.description).where(Scope.value.in_(requested - OIDC_SCOPES))
+        select(Scope.value, Scope.description).where(
+            Scope.value.in_(requested - OIDC_SCOPES)
+        )
     )
     descriptions |= {value: text for value, text in rows}
 
@@ -147,7 +151,10 @@ async def login(
         "**Required scope:** none — requires an existing session cookie."
     ),
     responses={
-        400: {"model": ErrorResponse, "description": "Code invalid or no authenticator enrolled"},
+        400: {
+            "model": ErrorResponse,
+            "description": "Code invalid or no authenticator enrolled",
+        },
         401: {"model": ErrorResponse, "description": "No session"},
         404: {"model": ErrorResponse, "description": "Challenge expired or unknown"},
     },
@@ -189,11 +196,14 @@ async def totp(
         "start; Phase 4 fills in the handler.\n\n"
         "**Required scope:** none — requires an existing session or challenge."
     ),
-    responses={501: {"model": ErrorResponse, "description": "Biometric module not enabled"}},
+    responses={
+        501: {"model": ErrorResponse, "description": "Biometric module not enabled"}
+    },
 )
 async def biometric() -> AuthStepResponse:
     if not settings.iden_biometric_enabled:
         raise HTTPException(
-            status_code=501, detail="The biometric module is not enabled on this deployment."
+            status_code=501,
+            detail="The biometric module is not enabled on this deployment.",
         )
     raise HTTPException(status_code=501, detail="Biometric login arrives in Phase 4.")

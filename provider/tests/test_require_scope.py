@@ -20,11 +20,15 @@ async def guarded(redis):
     app = FastAPI()
 
     @app.get("/admin/users")
-    async def admin_route(token: AccessToken = Depends(require_scope("admin:users:read"))):
+    async def admin_route(
+        token: AccessToken = Depends(require_scope("admin:users:read")),
+    ):
         return {"sub": token.subject}
 
     @app.get("/entity/profile")
-    async def entity_route(token: AccessToken = Depends(require_scope("entity:profile:read"))):
+    async def entity_route(
+        token: AccessToken = Depends(require_scope("entity:profile:read")),
+    ):
         return {"sub": token.subject}
 
     app.dependency_overrides[get_redis] = lambda: redis
@@ -72,7 +76,9 @@ async def test_missing_token_is_401_with_a_challenge_header(guarded):
 
 async def test_wrong_auth_scheme_is_401(guarded, mint):
     token, _ = await mint("admin:users:read")
-    response = await guarded.get("/admin/users", headers={"Authorization": f"Basic {token}"})
+    response = await guarded.get(
+        "/admin/users", headers={"Authorization": f"Basic {token}"}
+    )
 
     assert response.status_code == 401
 

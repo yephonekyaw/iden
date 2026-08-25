@@ -14,16 +14,18 @@ class ClientCreate(CamelCaseBaseModel):
         pattern=r"^[a-zA-Z0-9._-]+$",
         description="The public identifier the client sends at /authorize and /token.",
     )
-    name: str = Field(max_length=255, description="Shown to users on the consent screen.")
+    name: str = Field(
+        max_length=255, description="Shown to users on the consent screen."
+    )
     client_type: Literal["public", "confidential"] = Field(
         description=(
             "`public` — browser or mobile app; no secret, PKCE only. "
             "`confidential` — a backend that can keep a secret."
         )
     )
-    allowed_grants: list[Literal["authorization_code", "refresh_token", "client_credentials"]] = (
-        Field(default_factory=lambda: [GrantType.AUTHORIZATION_CODE.value])
-    )
+    allowed_grants: list[
+        Literal["authorization_code", "refresh_token", "client_credentials"]
+    ] = Field(default_factory=lambda: [GrantType.AUTHORIZATION_CODE.value])
     redirect_uris: list[str] = Field(
         default_factory=list, description="Matched exactly at /authorize. No wildcards."
     )
@@ -36,7 +38,8 @@ class ClientCreate(CamelCaseBaseModel):
         ),
     )
     grantable_scope_ids: list[UUID] = Field(
-        default_factory=list, description="Scopes this client may request on behalf of a user."
+        default_factory=list,
+        description="Scopes this client may request on behalf of a user.",
     )
     granted_scope_ids: list[UUID] = Field(
         default_factory=list,
@@ -93,4 +96,6 @@ class ClientCreated(ClientResponse):
 
 
 class SecretRotated(CamelCaseBaseModel):
-    client_secret: str = Field(description="Shown once. The previous secret stops working now.")
+    client_secret: str = Field(
+        description="Shown once. The previous secret stops working now."
+    )

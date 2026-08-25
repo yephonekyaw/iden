@@ -38,7 +38,9 @@ async def authenticate_client(
         raise InvalidClient("Unknown client.")
 
     if client.client_type == ClientType.CONFIDENTIAL:
-        if not client_secret or not verify_secret(client.client_secret_hash, client_secret):
+        if not client_secret or not verify_secret(
+            client.client_secret_hash, client_secret
+        ):
             raise InvalidClient()
     elif client_secret:
         raise InvalidClient("A public client must not present a secret.")

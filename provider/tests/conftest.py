@@ -140,7 +140,11 @@ async def kiosk(db, catalogue) -> tuple[Client, str]:
     await db.flush()
 
     granted = catalogue["scopes"]["entity:profile:read"]
-    db.add(ClientScope(client_id=client.id, scope_id=granted.id, grantable=False, granted=True))
+    db.add(
+        ClientScope(
+            client_id=client.id, scope_id=granted.id, grantable=False, granted=True
+        )
+    )
     await db.commit()
     return client, secret
 

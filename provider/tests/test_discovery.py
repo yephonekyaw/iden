@@ -28,7 +28,11 @@ async def test_a_new_scope_appears_without_a_restart(client, catalogue, db):
     from provider.shared.models import Scope
 
     api_id = catalogue["scopes"]["admin:users:read"].api_id
-    db.add(Scope(api_id=api_id, value="attendance:records:read", description="Read records."))
+    db.add(
+        Scope(
+            api_id=api_id, value="attendance:records:read", description="Read records."
+        )
+    )
     await db.commit()
 
     body = (await client.get("/.well-known/openid-configuration")).json()

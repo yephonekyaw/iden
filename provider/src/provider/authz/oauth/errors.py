@@ -11,7 +11,9 @@ class OAuthError(Exception):
 
     status_code = 400
 
-    def __init__(self, error: str, description: str, status_code: int | None = None) -> None:
+    def __init__(
+        self, error: str, description: str, status_code: int | None = None
+    ) -> None:
         self.error = error
         self.description = description
         if status_code is not None:
@@ -27,7 +29,9 @@ class RedirectableError(OAuthError):
     authorization endpoint into an open redirector.
     """
 
-    def __init__(self, error: str, description: str, redirect_uri: str, state: str | None) -> None:
+    def __init__(
+        self, error: str, description: str, redirect_uri: str, state: str | None
+    ) -> None:
         super().__init__(error, description)
         self.redirect_uri = redirect_uri
         self.state = state

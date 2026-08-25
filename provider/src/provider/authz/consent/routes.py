@@ -48,7 +48,10 @@ async def consent(
 
     if not body.approved:
         await challenge_store.delete(redis, challenge.id)
-        params = {"error": "access_denied", "error_description": "The user refused the request."}
+        params = {
+            "error": "access_denied",
+            "error_description": "The user refused the request.",
+        }
         if state := challenge.params.get("state"):
             params["state"] = state
         return ConsentResponse(
@@ -60,7 +63,9 @@ async def consent(
         select(Client).where(Client.client_id == challenge.params["client_id"])
     )
 
-    await record_consent(session, user, client, parse_scope(challenge.params.get("scope")))
+    await record_consent(
+        session, user, client, parse_scope(challenge.params.get("scope"))
+    )
     await session.commit()
 
     return ConsentResponse(redirect_url=challenge_store.resume_url(challenge))

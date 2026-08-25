@@ -36,7 +36,9 @@ class ScopeResponse(CamelCaseBaseModel):
     id: UUID
     api_id: UUID
     api_name: str
-    audience: str = Field(description="The `aud` a token carrying this scope will have.")
+    audience: str = Field(
+        description="The `aud` a token carrying this scope will have."
+    )
     value: str
     description: str
     is_system: bool

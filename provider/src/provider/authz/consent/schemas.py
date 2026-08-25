@@ -5,7 +5,9 @@ from provider.core.schemas import CamelCaseBaseModel
 
 class ConsentRequest(CamelCaseBaseModel):
     challenge_id: str
-    approved: bool = Field(description="False records a denial and returns the user to the client.")
+    approved: bool = Field(
+        description="False records a denial and returns the user to the client."
+    )
 
 
 class ConsentResponse(CamelCaseBaseModel):

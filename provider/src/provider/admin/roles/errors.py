@@ -13,7 +13,9 @@ class RoleNameTaken(ConflictError):
 
 class SystemRoleImmutable(ImmutableError):
     code = "system_role_immutable"
-    message = "IDEN's own roles cannot be renamed, deleted, or have their scopes changed."
+    message = (
+        "IDEN's own roles cannot be renamed, deleted, or have their scopes changed."
+    )
 
 
 class RoleInUse(ConflictError):

@@ -1,4 +1,9 @@
-from provider.core.errors import ConflictError, ImmutableError, NotFoundError, ValidationError
+from provider.core.errors import (
+    ConflictError,
+    ImmutableError,
+    NotFoundError,
+    ValidationError,
+)
 
 
 class ClientNotFound(NotFoundError):
@@ -26,7 +31,9 @@ class PublicClientHasNoSecret(ValidationError):
 
 class RedirectUriRequired(ValidationError):
     code = "redirect_uri_required"
-    message = "A client using the authorization code grant needs at least one redirect URI."
+    message = (
+        "A client using the authorization code grant needs at least one redirect URI."
+    )
 
 
 class UnknownScopes(NotFoundError):

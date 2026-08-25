@@ -109,7 +109,9 @@ class TestAuthorizationCodeResolution:
         subject = user(roles=[role("r", "a:read")])
         app = client(grantable=["a:read", "admin:users:write"])
 
-        assert resolve_for_user({"a:read", "admin:users:write"}, app, subject) == {"a:read"}
+        assert resolve_for_user({"a:read", "admin:users:write"}, app, subject) == {
+            "a:read"
+        }
 
     def test_a_scope_the_client_may_not_request_is_dropped(self):
         subject = user(roles=[role("r", "a:read", "b:read")])

@@ -26,7 +26,9 @@ class GroupRoleAssignment(CamelCaseBaseModel):
 
 
 class MemberAssignment(CamelCaseBaseModel):
-    user_ids: list[UUID] = Field(description="Users to add. Already-members are ignored.")
+    user_ids: list[UUID] = Field(
+        description="Users to add. Already-members are ignored."
+    )
 
 
 class RoleSummary(CamelCaseBaseModel):

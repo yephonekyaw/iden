@@ -17,7 +17,10 @@ def pkce_pair() -> tuple[str, str]:
 
 
 def query_of(response) -> dict[str, str]:
-    return {k: v[0] for k, v in parse_qs(urlparse(response.headers["location"]).query).items()}
+    return {
+        k: v[0]
+        for k, v in parse_qs(urlparse(response.headers["location"]).query).items()
+    }
 
 
 def authorize_params(challenge: str, **overrides) -> dict[str, str]:
@@ -36,10 +39,14 @@ def authorize_params(challenge: str, **overrides) -> dict[str, str]:
 
 async def start(client, challenge: str, **overrides):
     """GET /oauth2/authorize — returns the raw response."""
-    return await client.get("/oauth2/authorize", params=authorize_params(challenge, **overrides))
+    return await client.get(
+        "/oauth2/authorize", params=authorize_params(challenge, **overrides)
+    )
 
 
-async def sign_in(client, challenge_id: str, email=ADMIN_EMAIL, password=ADMIN_PASSWORD):
+async def sign_in(
+    client, challenge_id: str, email=ADMIN_EMAIL, password=ADMIN_PASSWORD
+):
     return await client.post(
         "/api/v1/auth/login",
         json={"challengeId": challenge_id, "email": email, "password": password},

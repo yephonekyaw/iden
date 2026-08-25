@@ -31,10 +31,14 @@ async def resolve_scopes(session: AsyncSession, scope_ids: list[UUID]) -> list[S
     return scopes
 
 
-async def list_roles(session: AsyncSession, *, limit: int, offset: int) -> tuple[list[Role], int]:
+async def list_roles(
+    session: AsyncSession, *, limit: int, offset: int
+) -> tuple[list[Role], int]:
     total = await session.scalar(select(func.count(Role.id)))
     roles = list(
-        await session.scalars(select(Role).order_by(Role.name).limit(limit).offset(offset))
+        await session.scalars(
+            select(Role).order_by(Role.name).limit(limit).offset(offset)
+        )
     )
     return roles, total
 
@@ -75,7 +79,9 @@ async def update_role(session: AsyncSession, role_id: UUID, data: RoleUpdate) ->
     return role
 
 
-async def set_role_scopes(session: AsyncSession, role_id: UUID, scope_ids: list[UUID]) -> Role:
+async def set_role_scopes(
+    session: AsyncSession, role_id: UUID, scope_ids: list[UUID]
+) -> Role:
     """Replace the scope set wholesale — a set operation, so it is idempotent."""
     role = await get_role(session, role_id)
     if role.is_system:
@@ -89,10 +95,14 @@ async def set_role_scopes(session: AsyncSession, role_id: UUID, scope_ids: list[
 async def role_in_use(session: AsyncSession, role_id: UUID) -> bool:
     return bool(
         await session.scalar(
-            select(func.count()).select_from(user_roles).where(user_roles.c.role_id == role_id)
+            select(func.count())
+            .select_from(user_roles)
+            .where(user_roles.c.role_id == role_id)
         )
         or await session.scalar(
-            select(func.count()).select_from(group_roles).where(group_roles.c.role_id == role_id)
+            select(func.count())
+            .select_from(group_roles)
+            .where(group_roles.c.role_id == role_id)
         )
     )
 

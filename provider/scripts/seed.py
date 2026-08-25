@@ -69,7 +69,9 @@ async def seed_catalogue(session: AsyncSession) -> dict[str, Scope]:
     return scopes_by_value
 
 
-async def seed_roles(session: AsyncSession, scopes: dict[str, Scope]) -> dict[str, Role]:
+async def seed_roles(
+    session: AsyncSession, scopes: dict[str, Scope]
+) -> dict[str, Role]:
     roles: dict[str, Role] = {}
 
     for spec in system_roles():
@@ -121,7 +123,9 @@ async def seed_client(
     client.is_system = True
     await session.flush()
 
-    wanted = {value: (value in grantable, value in granted) for value in grantable + granted}
+    wanted = {
+        value: (value in grantable, value in granted) for value in grantable + granted
+    }
     # Queried rather than read off client.scopes: the relationship is unloaded on a
     # freshly flushed object, and a lazy load inside async code fails.
     links = await session.scalars(

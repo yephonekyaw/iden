@@ -10,9 +10,12 @@ class TokenResponse(BaseModel):
     access_token: str
     token_type: Literal["Bearer"] = "Bearer"
     expires_in: int = Field(description="Access token lifetime in seconds.")
-    scope: str = Field(description="Space-delimited scopes actually granted, after pruning.")
+    scope: str = Field(
+        description="Space-delimited scopes actually granted, after pruning."
+    )
     refresh_token: str | None = Field(
-        default=None, description="Absent for client_credentials — the client just asks again."
+        default=None,
+        description="Absent for client_credentials — the client just asks again.",
     )
     id_token: str | None = Field(
         default=None, description="Present when `openid` was granted."

@@ -14,8 +14,12 @@ def decode(token: str) -> dict:
 async def refresh(client, token: str, **extra):
     return await client.post(
         "/oauth2/token",
-        data={"grant_type": "refresh_token", "refresh_token": token,
-              "client_id": "dashboard", **extra},
+        data={
+            "grant_type": "refresh_token",
+            "refresh_token": token,
+            "client_id": "dashboard",
+            **extra,
+        },
     )
 
 
@@ -84,11 +88,16 @@ class TestRefreshRotation:
         """RFC 6749 §6 — a refresh must not gain scopes the original lacked."""
         tokens = await get_tokens(client, scope="openid admin:users:read")
 
-        narrowed = (await refresh(client, tokens["refresh_token"], scope="openid")).json()
+        narrowed = (
+            await refresh(client, tokens["refresh_token"], scope="openid")
+        ).json()
         assert set(narrowed["scope"].split()) == {"openid"}
 
-        widened = (await refresh(client, narrowed["refresh_token"],
-                                 scope="openid admin:clients:write")).json()
+        widened = (
+            await refresh(
+                client, narrowed["refresh_token"], scope="openid admin:clients:write"
+            )
+        ).json()
         assert "admin:clients:write" not in widened["scope"]
 
     async def test_unknown_refresh_token_is_rejected(self, client):
@@ -110,19 +119,31 @@ class TestClientCredentials:
         _, secret = kiosk
         response = await client.post(
             "/oauth2/token",
-            data={"grant_type": "client_credentials", "client_id": "kiosk",
-                  "client_secret": secret, "scope": "entity:profile:read"},
+            data={
+                "grant_type": "client_credentials",
+                "client_id": "kiosk",
+                "client_secret": secret,
+                "scope": "entity:profile:read",
+            },
         )
 
         assert response.status_code == 200
         assert response.json()["scope"] == "entity:profile:read"
 
-    async def test_subject_is_the_client_and_there_is_no_authentication_context(self, client, kiosk):
+    async def test_subject_is_the_client_and_there_is_no_authentication_context(
+        self, client, kiosk
+    ):
         _, secret = kiosk
-        body = (await client.post(
-            "/oauth2/token",
-            data={"grant_type": "client_credentials", "client_id": "kiosk", "client_secret": secret},
-        )).json()
+        body = (
+            await client.post(
+                "/oauth2/token",
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
         claims = decode(body["access_token"])
 
         assert claims["sub"] == "kiosk"
@@ -130,21 +151,33 @@ class TestClientCredentials:
 
     async def test_no_refresh_or_id_token_is_issued(self, client, kiosk):
         _, secret = kiosk
-        body = (await client.post(
-            "/oauth2/token",
-            data={"grant_type": "client_credentials", "client_id": "kiosk", "client_secret": secret},
-        )).json()
+        body = (
+            await client.post(
+                "/oauth2/token",
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
 
         assert body.get("refresh_token") is None
         assert body.get("id_token") is None
 
     async def test_only_scopes_the_client_holds_are_granted(self, client, kiosk):
         _, secret = kiosk
-        body = (await client.post(
-            "/oauth2/token",
-            data={"grant_type": "client_credentials", "client_id": "kiosk",
-                  "client_secret": secret, "scope": "admin:users:write entity:profile:read"},
-        )).json()
+        body = (
+            await client.post(
+                "/oauth2/token",
+                data={
+                    "grant_type": "client_credentials",
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                    "scope": "admin:users:write entity:profile:read",
+                },
+            )
+        ).json()
 
         assert body["scope"] == "entity:profile:read"
 
@@ -164,7 +197,11 @@ class TestClientCredentials:
     async def test_wrong_secret_is_rejected(self, client, kiosk):
         response = await client.post(
             "/oauth2/token",
-            data={"grant_type": "client_credentials", "client_id": "kiosk", "client_secret": "no"},
+            data={
+                "grant_type": "client_credentials",
+                "client_id": "kiosk",
+                "client_secret": "no",
+            },
         )
 
         assert response.status_code == 401
@@ -173,7 +210,8 @@ class TestClientCredentials:
     async def test_public_client_cannot_use_this_grant(self, client):
         """A public client has no secret, so it has nothing to prove with."""
         response = await client.post(
-            "/oauth2/token", data={"grant_type": "client_credentials", "client_id": "dashboard"}
+            "/oauth2/token",
+            data={"grant_type": "client_credentials", "client_id": "dashboard"},
         )
 
         assert response.status_code == 401
@@ -182,7 +220,11 @@ class TestClientCredentials:
         _, secret = kiosk
         response = await client.post(
             "/oauth2/token",
-            data={"grant_type": "password", "client_id": "kiosk", "client_secret": secret},
+            data={
+                "grant_type": "password",
+                "client_id": "kiosk",
+                "client_secret": secret,
+            },
         )
 
         assert response.status_code == 401
@@ -191,20 +233,24 @@ class TestClientCredentials:
 class TestUserInfo:
     async def test_returns_claims_for_the_granted_scopes(self, client):
         tokens = await get_tokens(client)
-        body = (await client.get(
-            "/oauth2/userinfo",
-            headers={"Authorization": f"Bearer {tokens['access_token']}"},
-        )).json()
+        body = (
+            await client.get(
+                "/oauth2/userinfo",
+                headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            )
+        ).json()
 
         assert body["email"] == ADMIN_EMAIL
         assert body["preferred_username"] == "admin"
 
     async def test_withholds_claims_whose_scope_was_not_granted(self, client):
         tokens = await get_tokens(client, scope="openid")
-        body = (await client.get(
-            "/oauth2/userinfo",
-            headers={"Authorization": f"Bearer {tokens['access_token']}"},
-        )).json()
+        body = (
+            await client.get(
+                "/oauth2/userinfo",
+                headers={"Authorization": f"Bearer {tokens['access_token']}"},
+            )
+        ).json()
 
         assert "email" not in body and "name" not in body
         assert body["sub"]
@@ -233,17 +279,25 @@ class TestRevocation:
         tokens = await get_tokens(client)
         headers = {"Authorization": f"Bearer {tokens['access_token']}"}
 
-        assert (await client.get("/oauth2/userinfo", headers=headers)).status_code == 200
+        assert (
+            await client.get("/oauth2/userinfo", headers=headers)
+        ).status_code == 200
 
-        await client.post("/oauth2/revoke",
-                          data={"token": tokens["access_token"], "client_id": "dashboard"})
+        await client.post(
+            "/oauth2/revoke",
+            data={"token": tokens["access_token"], "client_id": "dashboard"},
+        )
 
-        assert (await client.get("/oauth2/userinfo", headers=headers)).status_code == 401
+        assert (
+            await client.get("/oauth2/userinfo", headers=headers)
+        ).status_code == 401
 
     async def test_revoking_a_refresh_token_kills_the_family(self, client):
         tokens = await get_tokens(client)
-        await client.post("/oauth2/revoke",
-                          data={"token": tokens["refresh_token"], "client_id": "dashboard"})
+        await client.post(
+            "/oauth2/revoke",
+            data={"token": tokens["refresh_token"], "client_id": "dashboard"},
+        )
 
         assert (await refresh(client, tokens["refresh_token"])).status_code == 400
 
@@ -260,10 +314,16 @@ class TestIntrospection:
         _, secret = kiosk
         tokens = await get_tokens(client)
 
-        body = (await client.post(
-            "/oauth2/introspect",
-            data={"token": tokens["access_token"], "client_id": "kiosk", "client_secret": secret},
-        )).json()
+        body = (
+            await client.post(
+                "/oauth2/introspect",
+                data={
+                    "token": tokens["access_token"],
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
 
         assert body["active"] is True
         assert body["client_id"] == "dashboard"
@@ -271,27 +331,43 @@ class TestIntrospection:
     async def test_reports_a_revoked_token_as_inactive(self, client, kiosk):
         _, secret = kiosk
         tokens = await get_tokens(client)
-        await client.post("/oauth2/revoke",
-                          data={"token": tokens["access_token"], "client_id": "dashboard"})
+        await client.post(
+            "/oauth2/revoke",
+            data={"token": tokens["access_token"], "client_id": "dashboard"},
+        )
 
-        body = (await client.post(
-            "/oauth2/introspect",
-            data={"token": tokens["access_token"], "client_id": "kiosk", "client_secret": secret},
-        )).json()
+        body = (
+            await client.post(
+                "/oauth2/introspect",
+                data={
+                    "token": tokens["access_token"],
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
 
         assert body["active"] is False
 
     async def test_garbage_is_inactive_not_an_error(self, client, kiosk):
         _, secret = kiosk
-        body = (await client.post(
-            "/oauth2/introspect",
-            data={"token": "nonsense", "client_id": "kiosk", "client_secret": secret},
-        )).json()
+        body = (
+            await client.post(
+                "/oauth2/introspect",
+                data={
+                    "token": "nonsense",
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
 
         assert body == {"active": False}
 
     async def test_requires_client_authentication(self, client):
-        response = await client.post("/oauth2/introspect", data={"token": "x", "client_id": "nope"})
+        response = await client.post(
+            "/oauth2/introspect", data={"token": "x", "client_id": "nope"}
+        )
         assert response.status_code == 401
 
 
@@ -313,12 +389,18 @@ class TestLogout:
 
         allowed = await client.get(
             "/oauth2/logout",
-            params={"client_id": "dashboard", "post_logout_redirect_uri": "http://localhost:5173/"},
+            params={
+                "client_id": "dashboard",
+                "post_logout_redirect_uri": "http://localhost:5173/",
+            },
         )
         assert allowed.status_code == 303
 
         blocked = await client.get(
             "/oauth2/logout",
-            params={"client_id": "dashboard", "post_logout_redirect_uri": "http://evil.test/"},
+            params={
+                "client_id": "dashboard",
+                "post_logout_redirect_uri": "http://evil.test/",
+            },
         )
         assert blocked.status_code == 204

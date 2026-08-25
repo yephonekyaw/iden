@@ -42,7 +42,9 @@ class HealthResponse(CamelCaseBaseModel):
     status: Literal["ok", "degraded"] = Field(
         description="`ok` only when every dependency is reachable."
     )
-    database: Literal["ok", "unreachable"] = Field(description="PostgreSQL connectivity.")
+    database: Literal["ok", "unreachable"] = Field(
+        description="PostgreSQL connectivity."
+    )
     redis: Literal["ok", "unreachable"] = Field(description="Redis connectivity.")
 
 

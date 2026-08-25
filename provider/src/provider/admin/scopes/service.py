@@ -19,10 +19,16 @@ async def list_scopes(
 ) -> tuple[list[Scope], int]:
     await get_api(session, api_id)
 
-    total = await session.scalar(select(func.count(Scope.id)).where(Scope.api_id == api_id))
+    total = await session.scalar(
+        select(func.count(Scope.id)).where(Scope.api_id == api_id)
+    )
     scopes = list(
         await session.scalars(
-            select(Scope).where(Scope.api_id == api_id).order_by(Scope.value).limit(limit).offset(offset)
+            select(Scope)
+            .where(Scope.api_id == api_id)
+            .order_by(Scope.value)
+            .limit(limit)
+            .offset(offset)
         )
     )
     return scopes, total
@@ -50,7 +56,9 @@ async def create_scope(session: AsyncSession, api_id: UUID, data: ScopeCreate) -
     return scope
 
 
-async def update_scope(session: AsyncSession, scope_id: UUID, data: ScopeUpdate) -> Scope:
+async def update_scope(
+    session: AsyncSession, scope_id: UUID, data: ScopeUpdate
+) -> Scope:
     scope = await get_scope(session, scope_id)
     if scope.is_system:
         raise SystemScopeImmutable
@@ -65,13 +73,19 @@ async def update_scope(session: AsyncSession, scope_id: UUID, data: ScopeUpdate)
 async def scope_in_use(session: AsyncSession, scope_id: UUID) -> bool:
     return bool(
         await session.scalar(
-            select(func.count()).select_from(role_scopes).where(role_scopes.c.scope_id == scope_id)
+            select(func.count())
+            .select_from(role_scopes)
+            .where(role_scopes.c.scope_id == scope_id)
         )
         or await session.scalar(
-            select(func.count()).select_from(user_scopes).where(user_scopes.c.scope_id == scope_id)
+            select(func.count())
+            .select_from(user_scopes)
+            .where(user_scopes.c.scope_id == scope_id)
         )
         or await session.scalar(
-            select(func.count()).select_from(ClientScope).where(ClientScope.scope_id == scope_id)
+            select(func.count())
+            .select_from(ClientScope)
+            .where(ClientScope.scope_id == scope_id)
         )
     )
 

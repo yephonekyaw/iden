@@ -16,7 +16,15 @@ from provider.admin.users.schemas import UserCreate, UserUpdate
 from provider.authz.services import session_store
 from provider.authz.services.token_service import now
 from provider.core.security import hash_secret
-from provider.shared.models import Group, RefreshToken, Role, Scope, User, user_groups, user_roles
+from provider.shared.models import (
+    Group,
+    RefreshToken,
+    Role,
+    Scope,
+    User,
+    user_groups,
+    user_roles,
+)
 
 
 async def _resolve(session: AsyncSession, model, ids: list[UUID], error):
@@ -46,7 +54,9 @@ async def list_users(
 
     if search:
         pattern = f"%{search.lower()}%"
-        condition = func.lower(User.email).like(pattern) | func.lower(User.username).like(pattern)
+        condition = func.lower(User.email).like(pattern) | func.lower(
+            User.username
+        ).like(pattern)
         query, count = query.where(condition), count.where(condition)
 
     if group_id is not None:
@@ -66,12 +76,15 @@ async def list_users(
         )
 
     if is_active is not None:
-        query, count = query.where(User.is_active == is_active), count.where(
-            User.is_active == is_active
+        query, count = (
+            query.where(User.is_active == is_active),
+            count.where(User.is_active == is_active),
         )
 
     total = await session.scalar(count)
-    users = list(await session.scalars(query.order_by(User.email).limit(limit).offset(offset)))
+    users = list(
+        await session.scalars(query.order_by(User.email).limit(limit).offset(offset))
+    )
     return users, total
 
 
@@ -82,7 +95,9 @@ async def get_user(session: AsyncSession, user_id: UUID) -> User:
     return user
 
 
-async def create_user(session: AsyncSession, data: UserCreate) -> tuple[User, str | None]:
+async def create_user(
+    session: AsyncSession, data: UserCreate
+) -> tuple[User, str | None]:
     """Returns the user and, when one was generated, the cleartext password.
 
     Generated once and never stored — the caller must show it to the operator
@@ -148,7 +163,9 @@ async def set_roles(session: AsyncSession, user_id: UUID, role_ids: list[UUID]) 
     return user
 
 
-async def set_direct_scopes(session: AsyncSession, user_id: UUID, scope_ids: list[UUID]) -> User:
+async def set_direct_scopes(
+    session: AsyncSession, user_id: UUID, scope_ids: list[UUID]
+) -> User:
     user = await get_user(session, user_id)
     user.scopes = await _resolve(session, Scope, scope_ids, UnknownScopes)
     await session.commit()

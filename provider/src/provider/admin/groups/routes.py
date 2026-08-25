@@ -43,8 +43,12 @@ def to_response(group, members: int) -> GroupResponse:
     description="**Required scope:** `admin:groups:read`",
     dependencies=[READ],
 )
-async def list_groups(session: DBSessionDep, page: PaginationDep) -> Page[GroupResponse]:
-    groups, total = await service.list_groups(session, limit=page.limit, offset=page.offset)
+async def list_groups(
+    session: DBSessionDep, page: PaginationDep
+) -> Page[GroupResponse]:
+    groups, total = await service.list_groups(
+        session, limit=page.limit, offset=page.offset
+    )
 
     items = [to_response(g, await service.member_count(session, g.id)) for g in groups]
     return Page[GroupResponse](
@@ -94,7 +98,9 @@ async def read_group(group_id: UUID, session: DBSessionDep) -> GroupResponse:
     },
     dependencies=[WRITE],
 )
-async def update_group(group_id: UUID, body: GroupUpdate, session: DBSessionDep) -> GroupResponse:
+async def update_group(
+    group_id: UUID, body: GroupUpdate, session: DBSessionDep
+) -> GroupResponse:
     group = await service.update_group(session, group_id, body)
     return to_response(group, await service.member_count(session, group_id))
 
@@ -108,7 +114,12 @@ async def update_group(group_id: UUID, body: GroupUpdate, session: DBSessionDep)
         "how one change reaches a whole department.\n\n"
         "**Required scope:** `admin:groups:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such group, or unknown role ids"}},
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "No such group, or unknown role ids",
+        }
+    },
     dependencies=[WRITE],
 )
 async def set_group_roles(
@@ -148,10 +159,17 @@ async def list_members(
         "rejected.\n\n"
         "**Required scope:** `admin:groups:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such group, or unknown user ids"}},
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "No such group, or unknown user ids",
+        }
+    },
     dependencies=[WRITE],
 )
-async def add_members(group_id: UUID, body: MemberAssignment, session: DBSessionDep) -> Response:
+async def add_members(
+    group_id: UUID, body: MemberAssignment, session: DBSessionDep
+) -> Response:
     await service.add_members(session, group_id, body.user_ids)
     return Response(status_code=204)
 
@@ -167,7 +185,9 @@ async def add_members(group_id: UUID, body: MemberAssignment, session: DBSession
     responses={404: {"model": ErrorResponse, "description": "No such group"}},
     dependencies=[WRITE],
 )
-async def remove_member(group_id: UUID, user_id: UUID, session: DBSessionDep) -> Response:
+async def remove_member(
+    group_id: UUID, user_id: UUID, session: DBSessionDep
+) -> Response:
     await service.remove_member(session, group_id, user_id)
     return Response(status_code=204)
 

@@ -1,6 +1,11 @@
 import pytest
 
-from provider.authz.services.auth_methods import derive_acr, meets, normalized_amr, supported
+from provider.authz.services.auth_methods import (
+    derive_acr,
+    meets,
+    normalized_amr,
+    supported,
+)
 from provider.shared.enums import AcrLevel
 
 

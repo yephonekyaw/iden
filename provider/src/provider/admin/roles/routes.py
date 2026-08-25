@@ -28,7 +28,10 @@ def to_response(role) -> RoleResponse:
         is_system=role.is_system,
         scopes=[
             ScopeSummary(
-                id=s.id, value=s.value, description=s.description, audience=s.api.audience
+                id=s.id,
+                value=s.value,
+                description=s.description,
+                audience=s.api.audience,
             )
             for s in sorted(role.scopes, key=lambda s: s.value)
         ],
@@ -44,7 +47,9 @@ def to_response(role) -> RoleResponse:
     dependencies=[READ],
 )
 async def list_roles(session: DBSessionDep, page: PaginationDep) -> Page[RoleResponse]:
-    roles, total = await service.list_roles(session, limit=page.limit, offset=page.offset)
+    roles, total = await service.list_roles(
+        session, limit=page.limit, offset=page.offset
+    )
 
     return Page[RoleResponse](
         items=[to_response(role) for role in roles],
@@ -66,7 +71,10 @@ async def list_roles(session: DBSessionDep, page: PaginationDep) -> Page[RoleRes
         "**Required scope:** `admin:roles:write`"
     ),
     responses={
-        404: {"model": ErrorResponse, "description": "One or more scope ids do not exist"},
+        404: {
+            "model": ErrorResponse,
+            "description": "One or more scope ids do not exist",
+        },
         409: {"model": ErrorResponse, "description": "Name already taken"},
     },
     dependencies=[WRITE],
@@ -97,11 +105,16 @@ async def read_role(role_id: UUID, session: DBSessionDep) -> RoleResponse:
     ),
     responses={
         404: {"model": ErrorResponse, "description": "No such role"},
-        409: {"model": ErrorResponse, "description": "Name taken, or the role is system-defined"},
+        409: {
+            "model": ErrorResponse,
+            "description": "Name taken, or the role is system-defined",
+        },
     },
     dependencies=[WRITE],
 )
-async def update_role(role_id: UUID, body: RoleUpdate, session: DBSessionDep) -> RoleResponse:
+async def update_role(
+    role_id: UUID, body: RoleUpdate, session: DBSessionDep
+) -> RoleResponse:
     return to_response(await service.update_role(session, role_id, body))
 
 
@@ -119,7 +132,10 @@ async def update_role(role_id: UUID, body: RoleUpdate, session: DBSessionDep) ->
         "**Required scope:** `admin:roles:write`"
     ),
     responses={
-        404: {"model": ErrorResponse, "description": "No such role, or unknown scope ids"},
+        404: {
+            "model": ErrorResponse,
+            "description": "No such role, or unknown scope ids",
+        },
         409: {"model": ErrorResponse, "description": "System role"},
     },
     dependencies=[WRITE],
@@ -148,7 +164,9 @@ async def set_role_scopes(
 async def delete_role(
     role_id: UUID,
     session: DBSessionDep,
-    force: bool = Query(False, description="Delete even though the role is still assigned."),
+    force: bool = Query(
+        False, description="Delete even though the role is still assigned."
+    ),
 ) -> Response:
     await service.delete_role(session, role_id, force=force)
     return Response(status_code=204)

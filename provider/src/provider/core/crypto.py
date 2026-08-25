@@ -76,5 +76,7 @@ def jwks() -> dict[str, list[dict[str, Any]]]:
     keys = []
     for kid, key in _keys().items():
         jwk = RSAAlgorithm.to_jwk(key.public_key(), as_dict=True)
-        keys.append({**jwk, "kid": kid, "use": "sig", "alg": settings.iden_signing_algorithm})
+        keys.append(
+            {**jwk, "kid": kid, "use": "sig", "alg": settings.iden_signing_algorithm}
+        )
     return {"keys": keys}

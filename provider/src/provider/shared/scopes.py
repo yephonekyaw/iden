@@ -36,11 +36,17 @@ class RoleSpec:
 
 ADMIN_SCOPES = (
     ScopeSpec("admin:users:read", "View users, their roles, and their direct grants."),
-    ScopeSpec("admin:users:write", "Create, update, and delete users and their grants."),
+    ScopeSpec(
+        "admin:users:write", "Create, update, and delete users and their grants."
+    ),
     ScopeSpec("admin:groups:read", "View groups, their members, and their roles."),
-    ScopeSpec("admin:groups:write", "Create, update, and delete groups and membership."),
+    ScopeSpec(
+        "admin:groups:write", "Create, update, and delete groups and membership."
+    ),
     ScopeSpec("admin:roles:read", "View roles and the scopes they bundle."),
-    ScopeSpec("admin:roles:write", "Create, update, and delete roles and their scopes."),
+    ScopeSpec(
+        "admin:roles:write", "Create, update, and delete roles and their scopes."
+    ),
     ScopeSpec("admin:apis:read", "View registered resource APIs."),
     ScopeSpec("admin:apis:write", "Register, update, and delete resource APIs."),
     ScopeSpec("admin:scopes:read", "View the scopes defined under an API."),
@@ -57,7 +63,9 @@ ENTITY_SCOPES = (
     ScopeSpec("entity:totp:enroll", "Set up or remove your authenticator app."),
     ScopeSpec("entity:sessions:read", "See where you are signed in."),
     ScopeSpec("entity:sessions:revoke", "Sign yourself out of other sessions."),
-    ScopeSpec("entity:permissions:read", "See your own roles, groups, and permissions."),
+    ScopeSpec(
+        "entity:permissions:read", "See your own roles, groups, and permissions."
+    ),
 )
 
 BIOMETRIC_SCOPES = (

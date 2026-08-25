@@ -79,7 +79,9 @@ async def handle_iden_error(request: Request, exc: IdenError) -> JSONResponse:
     noise without adding meaning. Routes still declare their failures in
     `responses={...}` so `/docs` stays accurate.
     """
-    status_code = next((code for cls, code in ERROR_STATUS if isinstance(exc, cls)), 500)
+    status_code = next(
+        (code for cls, code in ERROR_STATUS if isinstance(exc, cls)), 500
+    )
     if status_code >= 500:
         logger.error("Unmapped domain error", code=exc.code, path=request.url.path)
 
@@ -88,7 +90,9 @@ async def handle_iden_error(request: Request, exc: IdenError) -> JSONResponse:
 
 
 @app.exception_handler(RedirectableError)
-async def handle_redirectable_error(request: Request, exc: RedirectableError) -> RedirectResponse:
+async def handle_redirectable_error(
+    request: Request, exc: RedirectableError
+) -> RedirectResponse:
     """Deliver the error to the client's redirect_uri — RFC 6749 §4.1.2.1.
 
     Only reachable after client_id and redirect_uri have been validated.
@@ -103,7 +107,9 @@ async def handle_redirectable_error(request: Request, exc: RedirectableError) ->
 async def handle_oauth_error(request: Request, exc: OAuthError) -> JSONResponse:
     """RFC 6749 §5.2 fixes this shape; a client library will not understand
     the project's own error contract here."""
-    headers = {"WWW-Authenticate": 'Basic realm="iden"'} if exc.status_code == 401 else None
+    headers = (
+        {"WWW-Authenticate": 'Basic realm="iden"'} if exc.status_code == 401 else None
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": exc.error, "error_description": exc.description},
@@ -115,7 +121,10 @@ async def handle_oauth_error(request: Request, exc: OAuthError) -> JSONResponse:
 # cookie must ride along, which requires an explicit origin allow-list.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.iden_auth_ui_base_url, *settings.iden_allowed_admin_origins],
+    allow_origins=[
+        settings.iden_auth_ui_base_url,
+        *settings.iden_allowed_admin_origins,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -35,8 +35,12 @@ def to_response(scope) -> ScopeResponse:
     responses={404: {"model": ErrorResponse, "description": "No such API"}},
     dependencies=[READ],
 )
-async def list_scopes(api_id: UUID, session: DBSessionDep, page: PaginationDep) -> Page[ScopeResponse]:
-    scopes, total = await service.list_scopes(session, api_id, limit=page.limit, offset=page.offset)
+async def list_scopes(
+    api_id: UUID, session: DBSessionDep, page: PaginationDep
+) -> Page[ScopeResponse]:
+    scopes, total = await service.list_scopes(
+        session, api_id, limit=page.limit, offset=page.offset
+    )
 
     return Page[ScopeResponse](
         items=[to_response(scope) for scope in scopes],
@@ -64,7 +68,9 @@ async def list_scopes(api_id: UUID, session: DBSessionDep, page: PaginationDep) 
     },
     dependencies=[WRITE],
 )
-async def create_scope(api_id: UUID, body: ScopeCreate, session: DBSessionDep) -> ScopeResponse:
+async def create_scope(
+    api_id: UUID, body: ScopeCreate, session: DBSessionDep
+) -> ScopeResponse:
     scope = await service.create_scope(session, api_id, body)
     return to_response(scope)
 
@@ -98,7 +104,9 @@ async def read_scope(scope_id: UUID, session: DBSessionDep) -> ScopeResponse:
     },
     dependencies=[WRITE],
 )
-async def update_scope(scope_id: UUID, body: ScopeUpdate, session: DBSessionDep) -> ScopeResponse:
+async def update_scope(
+    scope_id: UUID, body: ScopeUpdate, session: DBSessionDep
+) -> ScopeResponse:
     return to_response(await service.update_scope(session, scope_id, body))
 
 
@@ -121,7 +129,9 @@ async def update_scope(scope_id: UUID, body: ScopeUpdate, session: DBSessionDep)
 async def delete_scope(
     scope_id: UUID,
     session: DBSessionDep,
-    force: bool = Query(False, description="Delete even though the scope is still granted."),
+    force: bool = Query(
+        False, description="Delete even though the scope is still granted."
+    ),
 ) -> Response:
     await service.delete_scope(session, scope_id, force=force)
     return Response(status_code=204)

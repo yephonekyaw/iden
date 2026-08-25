@@ -19,7 +19,9 @@ from provider.shared.models import TotpCredential, User
 _DUMMY_HASH = hash_secret("iden-timing-equalizer")
 
 
-async def authenticate_password(session: AsyncSession, email: str, password: str) -> User:
+async def authenticate_password(
+    session: AsyncSession, email: str, password: str
+) -> User:
     user = await session.scalar(select(User).where(User.email == email))
 
     if user is None:

@@ -50,7 +50,9 @@ router = APIRouter(prefix="/oauth2", tags=["oauth2"])
 
 def _auth_ui(path: str, challenge_id: str, **extra: str) -> RedirectResponse:
     query = urlencode({"challenge": challenge_id, **extra})
-    return RedirectResponse(f"{settings.iden_auth_ui_base_url}{path}?{query}", status_code=303)
+    return RedirectResponse(
+        f"{settings.iden_auth_ui_base_url}{path}?{query}", status_code=303
+    )
 
 
 @router.get(
@@ -69,8 +71,13 @@ def _auth_ui(path: str, challenge_id: str, **extra: str) -> RedirectResponse:
         "**Required scope:** none — this is how tokens are obtained."
     ),
     responses={
-        303: {"description": "Redirect to the Auth UI, or back to the client with a code"},
-        400: {"model": OAuthErrorResponse, "description": "Unknown client or unregistered redirect_uri"},
+        303: {
+            "description": "Redirect to the Auth UI, or back to the client with a code"
+        },
+        400: {
+            "model": OAuthErrorResponse,
+            "description": "Unknown client or unregistered redirect_uri",
+        },
     },
 )
 async def authorize(
@@ -93,7 +100,9 @@ async def authorize(
         raise OAuthError("invalid_client", "Unknown client.")
 
     if not redirect_uri_registered(client, redirect_uri):
-        raise OAuthError("invalid_request", "redirect_uri is not registered for this client.")
+        raise OAuthError(
+            "invalid_request", "redirect_uri is not registered for this client."
+        )
 
     # Past this point the redirect target is trusted, so errors go to the client.
     def fail(error: str, description: str) -> RedirectableError:
@@ -103,10 +112,15 @@ async def authorize(
         raise fail("unsupported_response_type", "Only response_type=code is supported.")
 
     if GrantType.AUTHORIZATION_CODE not in client.allowed_grants:
-        raise fail("unauthorized_client", "This client may not use the authorization code grant.")
+        raise fail(
+            "unauthorized_client",
+            "This client may not use the authorization code grant.",
+        )
 
     if not code_challenge:
-        raise fail("invalid_request", "code_challenge is required — IDEN mandates PKCE.")
+        raise fail(
+            "invalid_request", "code_challenge is required — IDEN mandates PKCE."
+        )
 
     if code_challenge_method != CodeChallengeMethod.S256:
         raise fail("invalid_request", "code_challenge_method must be S256.")
@@ -184,7 +198,10 @@ def _client_auth(request: Request, client_id: str | None, client_secret: str | N
         "**Required scope:** none — client authentication only."
     ),
     responses={
-        400: {"model": OAuthErrorResponse, "description": "invalid_grant or invalid_request"},
+        400: {
+            "model": OAuthErrorResponse,
+            "description": "invalid_grant or invalid_request",
+        },
         401: {"model": OAuthErrorResponse, "description": "invalid_client"},
     },
 )
@@ -217,26 +234,46 @@ async def token(
         case GrantType.CLIENT_CREDENTIALS:
             return await _client_credentials_grant(session, client, scope)
         case _:
-            raise OAuthError("unsupported_grant_type", f"Unsupported grant_type: {grant_type}")
+            raise OAuthError(
+                "unsupported_grant_type", f"Unsupported grant_type: {grant_type}"
+            )
 
 
 async def _authorization_code_grant(
-    session, client: Client, code: str, redirect_uri: str | None, code_verifier: str | None
+    session,
+    client: Client,
+    code: str,
+    redirect_uri: str | None,
+    code_verifier: str | None,
 ) -> TokenResponse:
     record = await consume_code(
-        session, code=code, client=client, redirect_uri=redirect_uri, code_verifier=code_verifier
+        session,
+        code=code,
+        client=client,
+        redirect_uri=redirect_uri,
+        code_verifier=code_verifier,
     )
     user = await session.get(User, record.user_id)
     scopes = parse_scope(record.scope)
 
     access_token, _, expires_in = await tokens.mint_access_token(
-        session, subject=str(user.id), client=client, scopes=scopes, acr=record.acr, amr=record.amr
+        session,
+        subject=str(user.id),
+        client=client,
+        scopes=scopes,
+        acr=record.acr,
+        amr=record.amr,
     )
 
     refresh = None
     if GrantType.REFRESH_TOKEN in client.allowed_grants:
         refresh, _ = await tokens.issue_refresh_token(
-            session, client=client, user=user, scope=record.scope, acr=record.acr, amr=record.amr
+            session,
+            client=client,
+            user=user,
+            scope=record.scope,
+            acr=record.acr,
+            amr=record.amr,
         )
 
     id_token = None
@@ -268,7 +305,9 @@ async def _refresh_token_grant(
         record = await tokens.consume_refresh_token(session, refresh_token)
     except tokens.RefreshTokenReuse as exc:
         await session.commit()
-        raise InvalidGrant("Refresh token reuse detected; the token family has been revoked.") from exc
+        raise InvalidGrant(
+            "Refresh token reuse detected; the token family has been revoked."
+        ) from exc
 
     if record is None:
         raise InvalidGrant("Unknown or expired refresh token.")
@@ -302,7 +341,12 @@ async def _refresh_token_grant(
     record.revoked_at = tokens.now()
 
     access_token, _, expires_in = await tokens.mint_access_token(
-        session, subject=str(user.id), client=client, scopes=granted, acr=record.acr, amr=record.amr
+        session,
+        subject=str(user.id),
+        client=client,
+        scopes=granted,
+        acr=record.acr,
+        amr=record.amr,
     )
 
     id_token = None
@@ -355,7 +399,9 @@ async def _verify_access_token(request: Request, redis) -> dict:
     header = request.headers.get("authorization", "")
     scheme, _, raw = header.partition(" ")
     if scheme.lower() != "bearer" or not raw:
-        raise OAuthError("invalid_token", "A bearer access token is required.", status_code=401)
+        raise OAuthError(
+            "invalid_token", "A bearer access token is required.", status_code=401
+        )
 
     try:
         claims = verify_jwt(raw)
@@ -363,7 +409,9 @@ async def _verify_access_token(request: Request, redis) -> dict:
         raise OAuthError("invalid_token", str(exc), status_code=401) from exc
 
     if await tokens.is_denylisted(redis, claims["jti"]):
-        raise OAuthError("invalid_token", "This token has been revoked.", status_code=401)
+        raise OAuthError(
+            "invalid_token", "This token has been revoked.", status_code=401
+        )
 
     return claims
 
@@ -378,18 +426,29 @@ async def _verify_access_token(request: Request, redis) -> dict:
         "`profile` and `email` claims when those scopes were granted.\n\n"
         "**Required scope:** `openid`"
     ),
-    responses={401: {"model": OAuthErrorResponse, "description": "Missing, invalid, or revoked token"}},
+    responses={
+        401: {
+            "model": OAuthErrorResponse,
+            "description": "Missing, invalid, or revoked token",
+        }
+    },
 )
-async def userinfo(request: Request, session: DBSessionDep, redis: RedisDep) -> UserInfoResponse:
+async def userinfo(
+    request: Request, session: DBSessionDep, redis: RedisDep
+) -> UserInfoResponse:
     claims = await _verify_access_token(request, redis)
     scopes = parse_scope(claims.get("scope"))
 
     if "openid" not in scopes:
-        raise OAuthError("insufficient_scope", "The openid scope is required.", status_code=403)
+        raise OAuthError(
+            "insufficient_scope", "The openid scope is required.", status_code=403
+        )
 
     user = await session.get(User, claims["sub"])
     if user is None:
-        raise OAuthError("invalid_token", "The subject no longer exists.", status_code=401)
+        raise OAuthError(
+            "invalid_token", "The subject no longer exists.", status_code=401
+        )
 
     return UserInfoResponse(sub=str(user.id), **tokens.identity_claims(user, scopes))
 
@@ -521,6 +580,10 @@ async def logout(
         query = f"?{urlencode({'state': state})}" if state else ""
         target = f"{post_logout_redirect_uri}{query}"
 
-    response = RedirectResponse(target, status_code=303) if target else Response(status_code=204)
+    response = (
+        RedirectResponse(target, status_code=303)
+        if target
+        else Response(status_code=204)
+    )
     session_cookie.clear_session(response)
     return response

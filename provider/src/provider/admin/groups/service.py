@@ -25,10 +25,14 @@ async def resolve_roles(session: AsyncSession, role_ids: list[UUID]) -> list[Rol
     return roles
 
 
-async def list_groups(session: AsyncSession, *, limit: int, offset: int) -> tuple[list[Group], int]:
+async def list_groups(
+    session: AsyncSession, *, limit: int, offset: int
+) -> tuple[list[Group], int]:
     total = await session.scalar(select(func.count(Group.id)))
     groups = list(
-        await session.scalars(select(Group).order_by(Group.name).limit(limit).offset(offset))
+        await session.scalars(
+            select(Group).order_by(Group.name).limit(limit).offset(offset)
+        )
     )
     return groups, total
 
@@ -42,7 +46,9 @@ async def get_group(session: AsyncSession, group_id: UUID) -> Group:
 
 async def member_count(session: AsyncSession, group_id: UUID) -> int:
     return await session.scalar(
-        select(func.count()).select_from(user_groups).where(user_groups.c.group_id == group_id)
+        select(func.count())
+        .select_from(user_groups)
+        .where(user_groups.c.group_id == group_id)
     )
 
 
@@ -60,7 +66,9 @@ async def create_group(session: AsyncSession, data: GroupCreate) -> Group:
     return group
 
 
-async def update_group(session: AsyncSession, group_id: UUID, data: GroupUpdate) -> Group:
+async def update_group(
+    session: AsyncSession, group_id: UUID, data: GroupUpdate
+) -> Group:
     group = await get_group(session, group_id)
 
     if data.name is not None and data.name != group.name:
@@ -75,7 +83,9 @@ async def update_group(session: AsyncSession, group_id: UUID, data: GroupUpdate)
     return group
 
 
-async def set_group_roles(session: AsyncSession, group_id: UUID, role_ids: list[UUID]) -> Group:
+async def set_group_roles(
+    session: AsyncSession, group_id: UUID, role_ids: list[UUID]
+) -> Group:
     group = await get_group(session, group_id)
     group.roles = await resolve_roles(session, role_ids)
     await session.commit()
@@ -101,7 +111,9 @@ async def list_members(
     return members, total
 
 
-async def add_members(session: AsyncSession, group_id: UUID, user_ids: list[UUID]) -> None:
+async def add_members(
+    session: AsyncSession, group_id: UUID, user_ids: list[UUID]
+) -> None:
     await get_group(session, group_id)
 
     found = set(await session.scalars(select(User.id).where(User.id.in_(user_ids))))

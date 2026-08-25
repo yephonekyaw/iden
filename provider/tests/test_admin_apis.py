@@ -22,7 +22,9 @@ class TestAuthorization:
 
     async def test_write_scope_is_accepted(self, client, token_for):
         headers = await token_for("admin:apis:write")
-        assert (await client.post("/admin/apis", json=NEW_API, headers=headers)).status_code == 201
+        assert (
+            await client.post("/admin/apis", json=NEW_API, headers=headers)
+        ).status_code == 201
 
 
 class TestListing:
@@ -59,7 +61,9 @@ class TestCreation:
     async def test_duplicate_name_is_rejected(self, client, admin_headers):
         await client.post("/admin/apis", json=NEW_API, headers=admin_headers)
         again = await client.post(
-            "/admin/apis", json=NEW_API | {"audience": "https://other.test"}, headers=admin_headers
+            "/admin/apis",
+            json=NEW_API | {"audience": "https://other.test"},
+            headers=admin_headers,
         )
 
         assert again.status_code == 409
@@ -81,7 +85,9 @@ class TestCreation:
         )
         assert response.status_code == 422
 
-    @pytest.mark.parametrize("name", ["Attendance", "attendance api", "1attendance", ""])
+    @pytest.mark.parametrize(
+        "name", ["Attendance", "attendance api", "1attendance", ""]
+    )
     async def test_name_must_be_lowercase_slug(self, client, admin_headers, name):
         response = await client.post(
             "/admin/apis", json=NEW_API | {"name": name}, headers=admin_headers
@@ -91,11 +97,13 @@ class TestCreation:
     async def test_trailing_slash_is_normalized_away(self, client, admin_headers):
         """Otherwise two audiences differing only by a slash would both exist and
         tokens would validate against only one of them."""
-        body = (await client.post(
-            "/admin/apis",
-            json=NEW_API | {"audience": "https://api.example.org/attendance/"},
-            headers=admin_headers,
-        )).json()
+        body = (
+            await client.post(
+                "/admin/apis",
+                json=NEW_API | {"audience": "https://api.example.org/attendance/"},
+                headers=admin_headers,
+            )
+        ).json()
 
         assert body["audience"] == "https://api.example.org/attendance"
 
@@ -106,7 +114,9 @@ class TestSystemApiProtection:
         admin_api = next(a for a in listing["items"] if a["name"] == "admin")
 
         response = await client.patch(
-            f"/admin/apis/{admin_api['id']}", json={"name": "renamed"}, headers=admin_headers
+            f"/admin/apis/{admin_api['id']}",
+            json={"name": "renamed"},
+            headers=admin_headers,
         )
 
         assert response.status_code == 409
@@ -118,49 +128,79 @@ class TestSystemApiProtection:
         listing = (await client.get("/admin/apis", headers=admin_headers)).json()
         admin_api = next(a for a in listing["items"] if a["name"] == "admin")
 
-        response = await client.delete(f"/admin/apis/{admin_api['id']}", headers=admin_headers)
+        response = await client.delete(
+            f"/admin/apis/{admin_api['id']}", headers=admin_headers
+        )
         assert response.status_code == 409
 
 
 class TestDeletion:
     async def test_deletes_an_unused_api(self, client, admin_headers):
-        created = (await client.post("/admin/apis", json=NEW_API, headers=admin_headers)).json()
+        created = (
+            await client.post("/admin/apis", json=NEW_API, headers=admin_headers)
+        ).json()
 
-        assert (await client.delete(f"/admin/apis/{created['id']}", headers=admin_headers)).status_code == 204
-        assert (await client.get(f"/admin/apis/{created['id']}", headers=admin_headers)).status_code == 404
+        assert (
+            await client.delete(f"/admin/apis/{created['id']}", headers=admin_headers)
+        ).status_code == 204
+        assert (
+            await client.get(f"/admin/apis/{created['id']}", headers=admin_headers)
+        ).status_code == 404
 
     async def test_refuses_while_its_scopes_are_granted(self, client, admin_headers):
-        api = (await client.post("/admin/apis", json=NEW_API, headers=admin_headers)).json()
-        scope = (await client.post(
-            f"/admin/apis/{api['id']}/scopes",
-            json={"value": "attendance:records:read", "description": "Read records."},
-            headers=admin_headers,
-        )).json()
+        api = (
+            await client.post("/admin/apis", json=NEW_API, headers=admin_headers)
+        ).json()
+        scope = (
+            await client.post(
+                f"/admin/apis/{api['id']}/scopes",
+                json={
+                    "value": "attendance:records:read",
+                    "description": "Read records.",
+                },
+                headers=admin_headers,
+            )
+        ).json()
         await client.post(
             "/admin/roles",
             json={"name": "officer", "scopeIds": [scope["id"]]},
             headers=admin_headers,
         )
 
-        response = await client.delete(f"/admin/apis/{api['id']}", headers=admin_headers)
+        response = await client.delete(
+            f"/admin/apis/{api['id']}", headers=admin_headers
+        )
 
         assert response.status_code == 409
         assert response.json()["code"] == "api_in_use"
 
     async def test_force_deletes_anyway(self, client, admin_headers):
-        api = (await client.post("/admin/apis", json=NEW_API, headers=admin_headers)).json()
-        scope = (await client.post(
-            f"/admin/apis/{api['id']}/scopes",
-            json={"value": "attendance:records:read", "description": "Read records."},
-            headers=admin_headers,
-        )).json()
+        api = (
+            await client.post("/admin/apis", json=NEW_API, headers=admin_headers)
+        ).json()
+        scope = (
+            await client.post(
+                f"/admin/apis/{api['id']}/scopes",
+                json={
+                    "value": "attendance:records:read",
+                    "description": "Read records.",
+                },
+                headers=admin_headers,
+            )
+        ).json()
         await client.post(
-            "/admin/roles", json={"name": "officer", "scopeIds": [scope["id"]]}, headers=admin_headers
+            "/admin/roles",
+            json={"name": "officer", "scopeIds": [scope["id"]]},
+            headers=admin_headers,
         )
 
-        response = await client.delete(f"/admin/apis/{api['id']}?force=true", headers=admin_headers)
+        response = await client.delete(
+            f"/admin/apis/{api['id']}?force=true", headers=admin_headers
+        )
         assert response.status_code == 204
 
     async def test_unknown_api_is_404(self, client, admin_headers):
         missing = "00000000-0000-0000-0000-000000000000"
-        assert (await client.get(f"/admin/apis/{missing}", headers=admin_headers)).status_code == 404
+        assert (
+            await client.get(f"/admin/apis/{missing}", headers=admin_headers)
+        ).status_code == 404

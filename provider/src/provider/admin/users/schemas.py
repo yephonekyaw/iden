@@ -29,7 +29,9 @@ class UserCreate(CamelCaseBaseModel):
 
 class UserUpdate(CamelCaseBaseModel):
     email: str | None = Field(default=None, pattern=EMAIL_PATTERN, max_length=320)
-    username: str | None = Field(default=None, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$")
+    username: str | None = Field(
+        default=None, max_length=64, pattern=r"^[a-zA-Z0-9._-]+$"
+    )
     display_name: str | None = None
     is_active: bool | None = Field(
         default=None,
@@ -85,7 +87,8 @@ class PasswordReset(CamelCaseBaseModel):
 
 class PasswordResetResult(CamelCaseBaseModel):
     password: str | None = Field(
-        default=None, description="The generated password, shown once. Null when one was supplied."
+        default=None,
+        description="The generated password, shown once. Null when one was supplied.",
     )
     sessions_revoked: bool = Field(
         description="Always true — a password change invalidates every session and refresh token."

@@ -59,7 +59,9 @@ async def mint_access_token(
         "scope": " ".join(sorted(scopes)),
         "jti": jti,
         "iat": int(issued_at.timestamp()),
-        "exp": int((issued_at + timedelta(seconds=settings.iden_access_token_ttl)).timestamp()),
+        "exp": int(
+            (issued_at + timedelta(seconds=settings.iden_access_token_ttl)).timestamp()
+        ),
     }
     # Absent for client_credentials: no person authenticated, so there is no
     # assurance level to report.
@@ -89,7 +91,9 @@ def mint_id_token(
         "sub": str(user.id),
         "aud": client.client_id,
         "iat": int(issued_at.timestamp()),
-        "exp": int((issued_at + timedelta(seconds=settings.iden_id_token_ttl)).timestamp()),
+        "exp": int(
+            (issued_at + timedelta(seconds=settings.iden_id_token_ttl)).timestamp()
+        ),
         "auth_time": int(authenticated_at.timestamp()),
         "acr": acr,
         "amr": amr,
@@ -148,7 +152,9 @@ class RefreshTokenReuse(Exception):
     """A rotated or revoked token was presented again — assume it was stolen."""
 
 
-async def consume_refresh_token(session: AsyncSession, token: str) -> RefreshToken | None:
+async def consume_refresh_token(
+    session: AsyncSession, token: str
+) -> RefreshToken | None:
     """Validate a refresh token for rotation.
 
     Returns None when the token is unknown or expired. Raises RefreshTokenReuse

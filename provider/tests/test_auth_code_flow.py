@@ -2,7 +2,15 @@ import jwt
 import pytest
 
 from tests.conftest import ADMIN_EMAIL, REDIRECT_URI
-from tests.flows import DEFAULT_SCOPE, get_code, get_tokens, pkce_pair, query_of, sign_in, start
+from tests.flows import (
+    DEFAULT_SCOPE,
+    get_code,
+    get_tokens,
+    pkce_pair,
+    query_of,
+    sign_in,
+    start,
+)
 
 pytestmark = pytest.mark.usefixtures("admin_user", "dashboard")
 
@@ -17,7 +25,11 @@ class TestAuthorizeValidation:
         and redirecting to it would make this an open redirector."""
         response = await client.get(
             "/oauth2/authorize",
-            params={"client_id": "nope", "redirect_uri": REDIRECT_URI, "code_challenge": "x"},
+            params={
+                "client_id": "nope",
+                "redirect_uri": REDIRECT_URI,
+                "code_challenge": "x",
+            },
         )
 
         assert response.status_code == 400
@@ -84,7 +96,9 @@ class TestLogin:
         assert all(s["description"] for s in body["scopes"])
 
     async def test_expired_challenge_is_rejected(self, client):
-        assert (await client.get("/api/v1/auth/challenge/not-a-challenge")).status_code == 404
+        assert (
+            await client.get("/api/v1/auth/challenge/not-a-challenge")
+        ).status_code == 404
 
     async def test_password_login_records_pwd(self, client):
         _, challenge = pkce_pair()
@@ -108,7 +122,9 @@ class TestLogin:
         _, challenge = pkce_pair()
         challenge_id = query_of(await start(client, challenge))["challenge"]
 
-        assert (await sign_in(client, challenge_id, password="wrong")).status_code == 401
+        assert (
+            await sign_in(client, challenge_id, password="wrong")
+        ).status_code == 401
 
     async def test_unknown_email_is_rejected_the_same_way(self, client):
         """Same status and message as a wrong password — otherwise the endpoint
@@ -208,7 +224,9 @@ class TestTokenExchange:
         assert claims["amr"] == ["pwd"]
         assert claims["jti"] and claims["client_id"] == "dashboard"
 
-    async def test_id_token_is_audienced_to_the_client_and_echoes_the_nonce(self, client):
+    async def test_id_token_is_audienced_to_the_client_and_echoes_the_nonce(
+        self, client
+    ):
         claims = decode((await get_tokens(client))["id_token"])
 
         assert claims["aud"] == "dashboard"

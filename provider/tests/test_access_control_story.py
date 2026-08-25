@@ -29,43 +29,65 @@ async def sign_in_as(client, email: str, scope: str) -> dict:
     resumed = await client.get(login.json()["resumeUrl"])
     code = query_of(resumed)["code"]
 
-    return (await client.post(
-        "/oauth2/token",
-        data={"grant_type": "authorization_code", "code": code, "redirect_uri": REDIRECT_URI,
-              "code_verifier": verifier, "client_id": "dashboard"},
-    )).json()
+    return (
+        await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": REDIRECT_URI,
+                "code_verifier": verifier,
+                "client_id": "dashboard",
+            },
+        )
+    ).json()
 
 
 @pytest.fixture
 async def attendance(client, admin_headers):
     """A third-party API, its permission, a role, and a group that holds it."""
-    api = (await client.post(
-        "/admin/apis", json={"name": "attendance", "audience": AUDIENCE}, headers=admin_headers
-    )).json()
+    api = (
+        await client.post(
+            "/admin/apis",
+            json={"name": "attendance", "audience": AUDIENCE},
+            headers=admin_headers,
+        )
+    ).json()
 
-    scope = (await client.post(
-        f"/admin/apis/{api['id']}/scopes",
-        json={"value": SCOPE, "description": "View attendance records."},
-        headers=admin_headers,
-    )).json()
+    scope = (
+        await client.post(
+            f"/admin/apis/{api['id']}/scopes",
+            json={"value": SCOPE, "description": "View attendance records."},
+            headers=admin_headers,
+        )
+    ).json()
 
-    role = (await client.post(
-        "/admin/roles",
-        json={"name": "attendance-officer", "scopeIds": [scope["id"]]},
-        headers=admin_headers,
-    )).json()
+    role = (
+        await client.post(
+            "/admin/roles",
+            json={"name": "attendance-officer", "scopeIds": [scope["id"]]},
+            headers=admin_headers,
+        )
+    ).json()
 
-    group = (await client.post(
-        "/admin/groups", json={"name": "Registrar"}, headers=admin_headers
-    )).json()
+    group = (
+        await client.post(
+            "/admin/groups", json={"name": "Registrar"}, headers=admin_headers
+        )
+    ).json()
     await client.put(
-        f"/admin/groups/{group['id']}/roles", json={"roleIds": [role["id"]]}, headers=admin_headers
+        f"/admin/groups/{group['id']}/roles",
+        json={"roleIds": [role["id"]]},
+        headers=admin_headers,
     )
 
     # The dashboard must also be allowed to *ask* for it — holding a permission
     # and being able to request it are separate decisions.
     dashboard_id = next(
-        c["id"] for c in (await client.get("/admin/clients", headers=admin_headers)).json()["items"]
+        c["id"]
+        for c in (await client.get("/admin/clients", headers=admin_headers)).json()[
+            "items"
+        ]
         if c["clientId"] == "dashboard"
     )
     await client.put(
@@ -79,11 +101,17 @@ async def attendance(client, admin_headers):
 
 @pytest.fixture
 async def officer(client, admin_headers, attendance):
-    user = (await client.post(
-        "/admin/users",
-        json={"email": "officer@test.local", "username": "officer", "password": PASSWORD},
-        headers=admin_headers,
-    )).json()
+    user = (
+        await client.post(
+            "/admin/users",
+            json={
+                "email": "officer@test.local",
+                "username": "officer",
+                "password": PASSWORD,
+            },
+            headers=admin_headers,
+        )
+    ).json()
     await client.post(
         f"/admin/groups/{attendance['group']['id']}/members",
         json={"userIds": [user["id"]]},
@@ -94,14 +122,22 @@ async def officer(client, admin_headers, attendance):
 
 @pytest.fixture
 async def outsider(client, admin_headers):
-    return (await client.post(
-        "/admin/users",
-        json={"email": "outsider@test.local", "username": "outsider", "password": PASSWORD},
-        headers=admin_headers,
-    )).json()
+    return (
+        await client.post(
+            "/admin/users",
+            json={
+                "email": "outsider@test.local",
+                "username": "outsider",
+                "password": PASSWORD,
+            },
+            headers=admin_headers,
+        )
+    ).json()
 
 
-async def test_a_runtime_defined_permission_reaches_a_token(client, admin_headers, officer):
+async def test_a_runtime_defined_permission_reaches_a_token(
+    client, admin_headers, officer
+):
     tokens = await sign_in_as(client, "officer@test.local", f"openid {SCOPE}")
     claims = jwt.decode(tokens["access_token"], options={"verify_signature": False})
 
@@ -110,16 +146,20 @@ async def test_a_runtime_defined_permission_reaches_a_token(client, admin_header
 
 
 async def test_provenance_explains_where_it_came_from(client, admin_headers, officer):
-    body = (await client.get(
-        f"/admin/users/{officer['id']}/effective-scopes", headers=admin_headers
-    )).json()
+    body = (
+        await client.get(
+            f"/admin/users/{officer['id']}/effective-scopes", headers=admin_headers
+        )
+    ).json()
     entry = next(s for s in body["scopes"] if s["value"] == SCOPE)
 
     assert entry["viaGroups"] == ["Registrar → attendance-officer"]
     assert entry["viaRoles"] == [] and entry["viaDirect"] is False
 
 
-async def test_someone_outside_the_group_is_pruned_silently(client, outsider, attendance):
+async def test_someone_outside_the_group_is_pruned_silently(
+    client, outsider, attendance
+):
     """Asking for more than you hold yields a narrower token, not an error."""
     tokens = await sign_in_as(client, "outsider@test.local", f"openid {SCOPE}")
     claims = jwt.decode(tokens["access_token"], options={"verify_signature": False})
@@ -134,17 +174,28 @@ async def test_removing_the_user_from_the_group_revokes_it_at_the_next_token(
     """Permissions are evaluated at issuance — which is why access tokens are
     short-lived rather than long-lived."""
     first = await sign_in_as(client, "officer@test.local", f"openid {SCOPE}")
-    assert SCOPE in jwt.decode(first["access_token"], options={"verify_signature": False})["scope"]
-
-    await client.delete(
-        f"/admin/groups/{attendance['group']['id']}/members/{officer['id']}", headers=admin_headers
+    assert (
+        SCOPE
+        in jwt.decode(first["access_token"], options={"verify_signature": False})[
+            "scope"
+        ]
     )
 
-    refreshed = (await client.post(
-        "/oauth2/token",
-        data={"grant_type": "refresh_token", "refresh_token": first["refresh_token"],
-              "client_id": "dashboard"},
-    )).json()
+    await client.delete(
+        f"/admin/groups/{attendance['group']['id']}/members/{officer['id']}",
+        headers=admin_headers,
+    )
+
+    refreshed = (
+        await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": first["refresh_token"],
+                "client_id": "dashboard",
+            },
+        )
+    ).json()
 
     assert SCOPE not in refreshed["scope"].split()
 
@@ -160,11 +211,16 @@ async def test_taking_the_scope_off_the_role_revokes_it_for_everyone(
         headers=admin_headers,
     )
 
-    refreshed = (await client.post(
-        "/oauth2/token",
-        data={"grant_type": "refresh_token", "refresh_token": first["refresh_token"],
-              "client_id": "dashboard"},
-    )).json()
+    refreshed = (
+        await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": first["refresh_token"],
+                "client_id": "dashboard",
+            },
+        )
+    ).json()
 
     assert SCOPE not in refreshed["scope"].split()
 
@@ -174,7 +230,10 @@ async def test_a_client_not_allowed_to_request_it_cannot_obtain_it(
 ):
     """Holding a permission and being able to request it are separate gates."""
     dashboard_id = next(
-        c["id"] for c in (await client.get("/admin/clients", headers=admin_headers)).json()["items"]
+        c["id"]
+        for c in (await client.get("/admin/clients", headers=admin_headers)).json()[
+            "items"
+        ]
         if c["clientId"] == "dashboard"
     )
     await client.put(

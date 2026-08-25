@@ -35,8 +35,14 @@ def to_response(user) -> UserResponse:
         username=user.username,
         display_name=user.display_name,
         is_active=user.is_active,
-        roles=[Named(id=r.id, name=r.name) for r in sorted(user.roles, key=lambda r: r.name)],
-        groups=[Named(id=g.id, name=g.name) for g in sorted(user.groups, key=lambda g: g.name)],
+        roles=[
+            Named(id=r.id, name=r.name)
+            for r in sorted(user.roles, key=lambda r: r.name)
+        ],
+        groups=[
+            Named(id=g.id, name=g.name)
+            for g in sorted(user.groups, key=lambda g: g.name)
+        ],
         direct_scopes=sorted(s.value for s in user.scopes),
         last_login_at=user.last_login_at,
         created_at=user.created_at,
@@ -180,10 +186,17 @@ async def update_user(
         "— those are managed on the group.\n\n"
         "**Required scope:** `admin:users:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such user, or unknown role ids"}},
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "No such user, or unknown role ids",
+        }
+    },
     dependencies=[WRITE],
 )
-async def set_roles(user_id: UUID, body: RoleAssignment, session: DBSessionDep) -> UserResponse:
+async def set_roles(
+    user_id: UUID, body: RoleAssignment, session: DBSessionDep
+) -> UserResponse:
     return to_response(await service.set_roles(session, user_id, body.role_ids))
 
 
@@ -198,11 +211,20 @@ async def set_roles(user_id: UUID, body: RoleAssignment, session: DBSessionDep) 
         "easy to forget when someone changes jobs.\n\n"
         "**Required scope:** `admin:users:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such user, or unknown scope ids"}},
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "No such user, or unknown scope ids",
+        }
+    },
     dependencies=[WRITE],
 )
-async def set_scopes(user_id: UUID, body: ScopeAssignment, session: DBSessionDep) -> UserResponse:
-    return to_response(await service.set_direct_scopes(session, user_id, body.scope_ids))
+async def set_scopes(
+    user_id: UUID, body: ScopeAssignment, session: DBSessionDep
+) -> UserResponse:
+    return to_response(
+        await service.set_direct_scopes(session, user_id, body.scope_ids)
+    )
 
 
 @router.post(
@@ -238,6 +260,8 @@ async def reset_password(
     responses={404: {"model": ErrorResponse, "description": "No such user"}},
     dependencies=[WRITE],
 )
-async def delete_user(user_id: UUID, session: DBSessionDep, redis: RedisDep) -> Response:
+async def delete_user(
+    user_id: UUID, session: DBSessionDep, redis: RedisDep
+) -> Response:
     await service.delete_user(session, redis, user_id)
     return Response(status_code=204)

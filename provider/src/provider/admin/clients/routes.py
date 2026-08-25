@@ -58,8 +58,12 @@ def to_response(client) -> ClientResponse:
     ),
     dependencies=[READ],
 )
-async def list_clients(session: DBSessionDep, page: PaginationDep) -> Page[ClientResponse]:
-    clients, total = await service.list_clients(session, limit=page.limit, offset=page.offset)
+async def list_clients(
+    session: DBSessionDep, page: PaginationDep
+) -> Page[ClientResponse]:
+    clients, total = await service.list_clients(
+        session, limit=page.limit, offset=page.offset
+    )
 
     return Page[ClientResponse](
         items=[to_response(client) for client in clients],
@@ -85,7 +89,10 @@ async def list_clients(session: DBSessionDep, page: PaginationDep) -> Page[Clien
     responses={
         404: {"model": ErrorResponse, "description": "Unknown scope ids"},
         409: {"model": ErrorResponse, "description": "client_id already taken"},
-        422: {"model": ErrorResponse, "description": "Authorization code grant without a redirect URI"},
+        422: {
+            "model": ErrorResponse,
+            "description": "Authorization code grant without a redirect URI",
+        },
     },
     dependencies=[WRITE],
 )
@@ -117,11 +124,16 @@ async def read_client(client_id: UUID, session: DBSessionDep) -> ClientResponse:
     ),
     responses={
         404: {"model": ErrorResponse, "description": "No such client"},
-        422: {"model": ErrorResponse, "description": "Authorization code grant without a redirect URI"},
+        422: {
+            "model": ErrorResponse,
+            "description": "Authorization code grant without a redirect URI",
+        },
     },
     dependencies=[WRITE],
 )
-async def update_client(client_id: UUID, body: ClientUpdate, session: DBSessionDep) -> ClientResponse:
+async def update_client(
+    client_id: UUID, body: ClientUpdate, session: DBSessionDep
+) -> ClientResponse:
     return to_response(await service.update_client(session, client_id, body))
 
 
@@ -134,7 +146,12 @@ async def update_client(client_id: UUID, body: ClientUpdate, session: DBSessionD
         "client entirely.\n\n"
         "**Required scope:** `admin:clients:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such client, or unknown scope ids"}},
+    responses={
+        404: {
+            "model": ErrorResponse,
+            "description": "No such client, or unknown scope ids",
+        }
+    },
     dependencies=[WRITE],
 )
 async def set_client_scopes(

@@ -6,14 +6,20 @@ from provider.core.schemas import CamelCaseBaseModel
 
 
 class LoginRequest(CamelCaseBaseModel):
-    challenge_id: str = Field(description="From the `challenge` query parameter on the login page.")
+    challenge_id: str = Field(
+        description="From the `challenge` query parameter on the login page."
+    )
     email: str
     password: str
 
 
 class TotpRequest(CamelCaseBaseModel):
     challenge_id: str
-    code: str = Field(min_length=6, max_length=6, description="Six-digit code from the authenticator app.")
+    code: str = Field(
+        min_length=6,
+        max_length=6,
+        description="Six-digit code from the authenticator app.",
+    )
 
 
 class AuthStepResponse(CamelCaseBaseModel):
@@ -25,7 +31,8 @@ class AuthStepResponse(CamelCaseBaseModel):
         )
     )
     resume_url: str | None = Field(
-        default=None, description="Where to send the browser next. Null when a step-up is pending."
+        default=None,
+        description="Where to send the browser next. Null when a step-up is pending.",
     )
     acr: str = Field(description="Assurance level reached so far.")
     amr: list[str] = Field(description="Methods used so far.")
@@ -42,5 +49,9 @@ class ChallengeResponse(CamelCaseBaseModel):
 
     client_name: str
     scopes: list[ChallengeScope] = Field(description="Scopes the client is asking for.")
-    acr_values: str | None = Field(default=None, description="Minimum assurance the client requested.")
-    authenticated: bool = Field(description="Whether a session already exists in this browser.")
+    acr_values: str | None = Field(
+        default=None, description="Minimum assurance the client requested."
+    )
+    authenticated: bool = Field(
+        description="Whether a session already exists in this browser."
+    )
