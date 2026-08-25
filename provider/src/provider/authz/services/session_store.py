@@ -24,6 +24,17 @@ class Session:
     amr: list[str]
     authenticated_at: datetime
 
+    @property
+    def public_id(self) -> str:
+        """The `sid` claim: a hash of the session id, never the id itself.
+
+        `id` is the cookie value — a bearer credential. Publishing it to every
+        client in every ID token would hand each of them, and anyone who read a
+        token in transit, the ability to set that cookie and become the user.
+        The hash names the session without being usable as one.
+        """
+        return hash_token(self.id)
+
 
 def _key(session_id: str) -> str:
     # Hashed like any other credential: a Redis dump must not yield usable

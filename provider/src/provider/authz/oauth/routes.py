@@ -245,7 +245,7 @@ async def authorize(
         scopes=granted,
         acr=acr,
         amr=auth_methods.normalized_amr(login_session.amr),
-        sid=login_session.id,
+        sid=login_session.public_id,
         authenticated_at=login_session.authenticated_at,
     )
     await session.commit()

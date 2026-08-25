@@ -66,10 +66,25 @@ class TestSingleSignOn:
         assert second["iat"] >= second["auth_time"]
 
     async def test_the_session_records_which_clients_it_reached(self, client, redis):
+        await get_tokens(client)
+        cookie = client.cookies["iden_session"]
+
+        assert await session_store.clients_for(redis, cookie) == {"dashboard"}
+
+    async def test_the_sid_claim_is_not_the_session_cookie(self, client):
+        """The cookie is a bearer credential. Publishing it as `sid` would hand
+        every client, and anyone reading a token in transit, the ability to
+        become the user."""
         tokens = await get_tokens(client)
         sid = decode(tokens["id_token"])["sid"]
 
-        assert await session_store.clients_for(redis, sid) == {"dashboard"}
+        assert sid != client.cookies["iden_session"]
+
+        # Present the published sid as though it were the cookie.
+        client.cookies.set("iden_session", sid)
+        response = await authorize(client)
+
+        assert "/auth/login" in response.headers["location"]
 
 
 class TestPromptNone:
