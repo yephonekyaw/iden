@@ -18,6 +18,9 @@ from provider.admin.apis.routes import router as admin_apis_router  # noqa: E402
 from provider.admin.audit.routes import router as admin_audit_router  # noqa: E402
 from provider.admin.clients.routes import router as admin_clients_router  # noqa: E402
 from provider.admin.groups.routes import router as admin_groups_router  # noqa: E402
+from provider.admin.profile_fields.routes import (  # noqa: E402
+    router as admin_profile_fields_router,
+)
 from provider.admin.roles.routes import router as admin_roles_router  # noqa: E402
 from provider.admin.scopes.routes import router as admin_scopes_router  # noqa: E402
 from provider.admin.users.routes import router as admin_users_router  # noqa: E402
@@ -25,6 +28,7 @@ from provider.authz.consent.routes import router as consent_router  # noqa: E402
 from provider.authz.discovery.routes import router as discovery_router  # noqa: E402
 from provider.authz.login.routes import router as login_router  # noqa: E402
 from provider.authz.oauth.routes import router as oauth_router  # noqa: E402
+from provider.entity.profile.routes import router as entity_profile_router  # noqa: E402
 
 router.include_router(discovery_router)
 router.include_router(oauth_router)
@@ -37,7 +41,10 @@ router.include_router(admin_roles_router)
 router.include_router(admin_groups_router)
 router.include_router(admin_users_router)
 router.include_router(admin_clients_router)
+router.include_router(admin_profile_fields_router)
 router.include_router(admin_audit_router)
+
+router.include_router(entity_profile_router)
 
 
 class HealthResponse(CamelCaseBaseModel):

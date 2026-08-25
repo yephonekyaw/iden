@@ -13,6 +13,8 @@ from provider.admin.users.schemas import (
     ScopeSource,
     UserCreate,
     UserCreated,
+    UserProfileResponse,
+    UserProfileUpdate,
     UserResponse,
     UserUpdate,
 )
@@ -21,6 +23,7 @@ from provider.core.auth import require_scope
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.schemas import ErrorResponse, Page, PageMeta, PaginationDep
+from provider.entity.profile import service as profile_service
 
 router = APIRouter(prefix="/admin/users", tags=["admin: users"])
 
@@ -265,3 +268,57 @@ async def delete_user(
 ) -> Response:
     await service.delete_user(session, redis, user_id)
     return Response(status_code=204)
+
+
+@router.get(
+    "/{user_id}/profile",
+    response_model=UserProfileResponse,
+    summary="Read a user's profile values",
+    description=(
+        "Every organization-defined field that applies to this person, "
+        "including the ones they cannot see themselves.\n\n"
+        "**Required scope:** `admin:users:read`"
+    ),
+    responses={404: {"model": ErrorResponse, "description": "No such user"}},
+    dependencies=[READ],
+)
+async def read_user_profile(
+    user_id: UUID, session: DBSessionDep
+) -> UserProfileResponse:
+    user = await service.get_user(session, user_id)
+    return UserProfileResponse(
+        fields=await profile_service.read_profile(session, user, readable_only=False)
+    )
+
+
+@router.patch(
+    "/{user_id}/profile",
+    response_model=UserProfileResponse,
+    summary="Set a user's profile values",
+    description=(
+        "The other half of `userWritable`. A registrar sets `student_id` here; "
+        "the student cannot set it through `/entity/profile`. An administrator "
+        "is not held to the writability flag — being able to write what its "
+        "owner cannot is exactly what the flag means.\n\n"
+        "**Required scope:** `admin:users:write`"
+    ),
+    responses={
+        404: {"model": ErrorResponse, "description": "No such user, or no such field"},
+        409: {"model": ErrorResponse, "description": "A unique field's value is taken"},
+        422: {
+            "model": ErrorResponse,
+            "description": "The value does not fit the field",
+        },
+    },
+    dependencies=[WRITE],
+)
+async def update_user_profile(
+    user_id: UUID, body: UserProfileUpdate, session: DBSessionDep
+) -> UserProfileResponse:
+    user = await service.get_user(session, user_id)
+    await profile_service.write_values(
+        session, user, body.fields, enforce_writable=False
+    )
+    return UserProfileResponse(
+        fields=await profile_service.read_profile(session, user, readable_only=False)
+    )

@@ -56,6 +56,11 @@ ADMIN_SCOPES = (
     # Read-only by design: the audit log is written by the requests it records
     # and has no write endpoint to grant.
     ScopeSpec("admin:audit:read", "Read the audit log."),
+    ScopeSpec("admin:profile-fields:read", "View the organization's profile schema."),
+    ScopeSpec(
+        "admin:profile-fields:write",
+        "Define the fields this organization collects about people.",
+    ),
 )
 
 ENTITY_SCOPES = (
@@ -69,6 +74,8 @@ ENTITY_SCOPES = (
     ScopeSpec(
         "entity:permissions:read", "See your own roles, groups, and permissions."
     ),
+    ScopeSpec("entity:connections:read", "See which applications have access."),
+    ScopeSpec("entity:connections:revoke", "Withdraw an application's access."),
 )
 
 BIOMETRIC_SCOPES = (

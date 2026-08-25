@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 from uuid import UUID
 
 from pydantic import Field
@@ -107,3 +108,15 @@ class ScopeSource(CamelCaseBaseModel):
 class EffectiveScopes(CamelCaseBaseModel):
     user_id: UUID
     scopes: list[ScopeSource]
+
+
+class UserProfileResponse(CamelCaseBaseModel):
+    fields: dict[str, Any] = Field(
+        description="Organization-defined values, keyed by field key."
+    )
+
+
+class UserProfileUpdate(CamelCaseBaseModel):
+    fields: dict[str, Any] = Field(
+        default_factory=dict, description="Values to set, keyed by field key."
+    )

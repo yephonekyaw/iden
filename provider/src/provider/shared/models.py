@@ -19,12 +19,13 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from provider.core.db import Base
-from provider.shared.enums import ClientType
+from provider.shared.enums import ClientType, FieldType
 
 
 def _pk() -> Mapped[uuid.UUID]:
@@ -377,3 +378,90 @@ class AuditEvent(Base):
     ip: Mapped[str | None] = mapped_column(String(45))
     user_agent: Mapped[str | None] = mapped_column(String(512))
     detail: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+
+class ProfileField(Base, TimestampMixin):
+    """A profile field the organization defined at runtime.
+
+    IDEN ships none of these. A university needs `student_id` and `department`;
+    a company needs `employee_id` and `cost_centre`. Shipping either would make
+    the other one's deployment wrong, so administrators define them the same
+    way they define scopes.
+    """
+
+    __tablename__ = "profile_fields"
+
+    id: Mapped[uuid.UUID] = _pk()
+    key: Mapped[str] = mapped_column(String(64), unique=True)
+    label: Mapped[str] = mapped_column(String(128))
+    description: Mapped[str | None] = mapped_column(Text)
+    data_type: Mapped[FieldType] = mapped_column(String(16), default=FieldType.STRING)
+    # Allowed values when data_type is `enum`; empty otherwise.
+    options: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    required: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Enforced by a partial unique index on the values table, not by a check in
+    # the service layer — a check-then-write races under load, and `student_id`
+    # colliding is exactly the case that must not happen.
+    unique: Mapped[bool] = mapped_column(Boolean, default=False)
+    # pattern / min / max / min_length / max_length, applied at the boundary.
+    validators: Mapped[dict] = mapped_column(JSONB, default=dict)
+
+    # The pair that defines what self-service *means*. `student_id` is written
+    # by the registrar and read-only to the student; `preferred_name` is theirs.
+    # Same table, same endpoint, opposite permissions.
+    user_readable: Mapped[bool] = mapped_column(Boolean, default=True)
+    user_writable: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    # Bound to a group, the field applies only to its members — which is how
+    # students and staff get different fields without a second grouping concept.
+    group_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("groups.id", ondelete="CASCADE")
+    )
+
+    # Opt-in token release. A field is invisible to clients until both are set,
+    # and then only to a client granted `claim_scope` — data minimization by
+    # default, reusing the scope system rather than inventing a second one.
+    claim_name: Mapped[str | None] = mapped_column(String(64))
+    claim_scope: Mapped[str | None] = mapped_column(String(128))
+
+    display_order: Mapped[int] = mapped_column(default=0)
+    is_system: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    group: Mapped[Group | None] = relationship(lazy="selectin")
+
+
+class UserProfileValue(Base, TimestampMixin):
+    """One person's answer to one field.
+
+    A row per value rather than a JSONB column on `users`: uniqueness has to be
+    a database constraint, filtering by field has to be an indexed query, and
+    renaming a field should rewrite one row instead of every profile.
+    """
+
+    __tablename__ = "user_profile_values"
+    __table_args__ = (
+        UniqueConstraint("user_id", "field_id"),
+        # Only for fields marked unique. Partial, because two people leaving an
+        # optional field blank is not a collision.
+        Index(
+            "ix_user_profile_values_unique",
+            "field_id",
+            "value",
+            unique=True,
+            postgresql_where=text("is_unique"),
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE")
+    )
+    field_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("profile_fields.id", ondelete="CASCADE")
+    )
+    value: Mapped[str] = mapped_column(Text)
+    # Copied from the field so the partial index can use it: an index predicate
+    # cannot reach into another table.
+    is_unique: Mapped[bool] = mapped_column(Boolean, default=False)
+
+    field: Mapped[ProfileField] = relationship(lazy="selectin")

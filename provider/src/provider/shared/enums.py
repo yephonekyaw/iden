@@ -45,3 +45,20 @@ class AcrLevel(StrEnum):
     LOA1 = "iden:loa:1"
     LOA2 = "iden:loa:2"
     LOA3 = "iden:loa:3"
+
+
+class FieldType(StrEnum):
+    """The data types an organization can give a profile field.
+
+    Values are stored as text and cast at the boundary — see `ProfileField` for
+    why the table is shaped that way rather than as a JSONB column.
+    """
+
+    STRING = "string"
+    INTEGER = "integer"
+    BOOLEAN = "boolean"
+    DATE = "date"
+    ENUM = "enum"
+    EMAIL = "email"
+    PHONE = "phone"
+    URL = "url"
