@@ -96,6 +96,26 @@ what runs here. Strict is not a useful bar for a pytest suite — fixtures arriv
 parameters, and each unknown type cascades through every use of it, which produces about two thousand
 findings that say nothing about the tests.
 
+**Run them automatically.** The first three are wired to a git hook, once per clone:
+
+```bash
+uv run --project provider pre-commit install    # from the repository root
+```
+
+After that every `git commit` reformats, lints, and type-checks the staged Python before the commit
+is written, along with a few file hygiene checks (merge-conflict markers, TOML/YAML syntax, trailing
+whitespace, oversized files). Unstaged work is stashed first, so what is checked is exactly what is
+being committed. A hook that rewrites a file fails the commit — `git add` the result and commit
+again.
+
+`uv run pytest` is deliberately **not** in the hook. It needs PostgreSQL and Redis running and takes
+about thirteen seconds; a gate that fails because Docker is down teaches people to reach for
+`--no-verify`, and a hook everyone bypasses is worse than no hook. Run the suite yourself, or add it
+as a pre-push hook: `pre-commit install --hook-type pre-push`.
+
+The hook is scoped to `provider/` — the only package with lint and type configuration so far. Widen
+`files:` in `.pre-commit-config.yaml` when `kiosk/server` grows past a skeleton.
+
 **After changing a model:**
 
 ```bash

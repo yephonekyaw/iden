@@ -1,0 +1,51 @@
+# Commit-time gate for the provider. Install once, per clone:
+#
+#     uv run --project provider pre-commit install
+#
+# The suite is deliberately absent. `uv run pytest` needs PostgreSQL and Redis
+# up and takes ~13s; a gate that fails because Docker is not running teaches
+# people to pass --no-verify, and a hook everyone bypasses is worse than none.
+# Tests belong to CI, or to `pre-commit install --hook-type pre-push`.
+#
+# Scoped to provider/ because it is the only package with a lint and type
+# configuration. kiosk/server is still a skeleton; extend `files:` when it is not.
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: ruff format
+        entry: uv run --project provider ruff format --force-exclude
+        language: system
+        types_or: [python, pyi]
+        files: ^provider/
+        require_serial: true
+
+      - id: ruff-check
+        name: ruff check
+        entry: uv run --project provider ruff check --force-exclude --fix
+        language: system
+        types_or: [python, pyi]
+        files: ^provider/
+        require_serial: true
+
+      # No filenames: pyright reads its include list from provider/pyproject.toml,
+      # and a type error is rarely in the file that introduced it.
+      - id: pyright
+        name: pyright
+        entry: bash -c 'cd provider && uv run pyright'
+        language: system
+        types_or: [python, pyi]
+        files: ^provider/
+        pass_filenames: false
+        require_serial: true
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+      - id: check-added-large-files
+        args: [--maxkb=1024]
