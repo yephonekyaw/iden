@@ -131,8 +131,13 @@ async def consume_code(
     code_verifier: str | None,
 ) -> AuthorizationCode:
     """Validate and burn an authorization code — RFC 6749 §4.1.3, RFC 7636 §4.6."""
+    # Locked for the duration of the transaction: the check on `used_at` below
+    # and the write that burns it must not interleave with another redemption,
+    # or a stolen code could be spent twice (RFC 6749 §4.1.2).
     record = await session.scalar(
-        select(AuthorizationCode).where(AuthorizationCode.code_hash == hash_token(code))
+        select(AuthorizationCode)
+        .where(AuthorizationCode.code_hash == hash_token(code))
+        .with_for_update()
     )
     if record is None:
         raise InvalidGrant("Unknown authorization code.")

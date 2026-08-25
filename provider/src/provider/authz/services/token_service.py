@@ -162,8 +162,13 @@ async def consume_refresh_token(
     revoked the whole family first: with rotation, a second use means two
     parties hold the same token, and only one of them is legitimate.
     """
+    # Locked for the same reason as an authorization code: without it two
+    # concurrent refreshes both see an unrotated token, both succeed, and reuse
+    # detection never fires.
     record = await session.scalar(
-        select(RefreshToken).where(RefreshToken.token_hash == hash_token(token))
+        select(RefreshToken)
+        .where(RefreshToken.token_hash == hash_token(token))
+        .with_for_update()
     )
     if record is None:
         return None
