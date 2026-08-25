@@ -1,11 +1,5 @@
 name: Documentation
 
-# Publishes from `dev`, which is where work lands — the site tracks the code
-# rather than the last release. Pull requests build without publishing, so a
-# broken link is caught before it is merged rather than after it is live.
-#
-# The path lists are duplicated because GitHub Actions does not support YAML
-# anchors — keep the two in step.
 on:
   push:
     branches: [dev]
@@ -27,8 +21,6 @@ on:
 permissions:
   contents: read
 
-# One deployment at a time. A queued run is cancelled rather than racing the one
-# in front of it — the newest commit is the one worth publishing.
 concurrency:
   group: pages
   cancel-in-progress: true
@@ -37,18 +29,16 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: astral-sh/setup-uv@v6
+      - uses: astral-sh/setup-uv@v9
         with:
           enable-cache: true
 
-      # --strict turns a broken internal link into a failed build. That is the
-      # point of running this in CI at all.
       - name: Build
         run: uv run --project provider mkdocs build --strict
 
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v5
         with:
           path: site
 
@@ -64,4 +54,4 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
