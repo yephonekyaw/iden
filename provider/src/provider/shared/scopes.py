@@ -53,6 +53,9 @@ ADMIN_SCOPES = (
     ScopeSpec("admin:scopes:write", "Define, update, and delete scopes under an API."),
     ScopeSpec("admin:clients:read", "View registered OAuth clients."),
     ScopeSpec("admin:clients:write", "Register clients and rotate their secrets."),
+    # Read-only by design: the audit log is written by the requests it records
+    # and has no write endpoint to grant.
+    ScopeSpec("admin:audit:read", "Read the audit log."),
 )
 
 ENTITY_SCOPES = (

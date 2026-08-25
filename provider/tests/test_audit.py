@@ -133,6 +133,39 @@ class TestHistorySurvivesDeletion:
         assert "DELETE /admin/users/{user_id}" in actions
 
 
+class TestReadEndpoint:
+    async def test_requires_its_own_scope(self, client, token_for):
+        headers = await token_for("admin:users:read")
+        assert (await client.get("/admin/audit", headers=headers)).status_code == 403
+
+    async def test_lists_newest_first(self, client, admin_headers):
+        for name in ("one", "two"):
+            await client.post(
+                "/admin/groups", json={"name": name}, headers=admin_headers
+            )
+
+        body = (await client.get("/admin/audit", headers=admin_headers)).json()
+
+        assert body["meta"]["total"] == 2
+        assert body["items"][0]["detail"]["name"] == "two"
+        assert body["items"][0]["actorLabel"] == "admin@test.local"
+
+    async def test_filters_by_action(self, client, admin_headers):
+        await client.post("/admin/groups", json={"name": "one"}, headers=admin_headers)
+        await client.post(
+            "/admin/roles", json={"name": "auditor"}, headers=admin_headers
+        )
+
+        body = (
+            await client.get(
+                "/admin/audit", params={"action": "/admin/roles"}, headers=admin_headers
+            )
+        ).json()
+
+        assert body["meta"]["total"] == 1
+        assert body["items"][0]["action"] == "POST /admin/roles"
+
+
 class TestTokenLifecycle:
     async def test_revocation_is_recorded_without_the_token(self, client, db):
         tokens = await get_tokens(client)

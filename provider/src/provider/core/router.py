@@ -15,6 +15,7 @@ router = APIRouter()
 # Imported here rather than in app.py so the app module stays about wiring the
 # application, not about knowing which modules exist.
 from provider.admin.apis.routes import router as admin_apis_router  # noqa: E402
+from provider.admin.audit.routes import router as admin_audit_router  # noqa: E402
 from provider.admin.clients.routes import router as admin_clients_router  # noqa: E402
 from provider.admin.groups.routes import router as admin_groups_router  # noqa: E402
 from provider.admin.roles.routes import router as admin_roles_router  # noqa: E402
@@ -36,6 +37,7 @@ router.include_router(admin_roles_router)
 router.include_router(admin_groups_router)
 router.include_router(admin_users_router)
 router.include_router(admin_clients_router)
+router.include_router(admin_audit_router)
 
 
 class HealthResponse(CamelCaseBaseModel):

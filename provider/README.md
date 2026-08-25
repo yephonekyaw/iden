@@ -28,6 +28,7 @@ same guarantee by validating against the published JWKS.
 - [Package Layout](#package-layout)
 - [Data Model](#data-model)
 - [Access Control in Practice](#access-control-in-practice)
+- [The Audit Log](#the-audit-log)
 - [Endpoint Reference](#endpoint-reference)
 - [Tokens & Claims](#tokens--claims)
 - [Request Lifecycle](#request-lifecycle)
@@ -182,6 +183,7 @@ provider/
     │   ├── router.py           # root APIRouter
     │   ├── db.py               # async engine/session, DBSessionDep
     │   ├── redis.py            # redis client, RedisDep
+    │   ├── audit.py            # AuditMiddleware, set_actor()
     │   ├── security.py         # argon2 hashing, secure random tokens
     │   ├── crypto.py           # signing keys, JWKS, JWT sign/verify
     │   ├── auth.py             # require_scope(), CurrentTokenDep
@@ -196,7 +198,7 @@ provider/
     │   └── services/           # scope_resolver · token_service · session_store
     │                           # challenge_store · auth_methods · pkce
     ├── admin/
-    │   └── users/ groups/ roles/ apis/ scopes/ clients/
+    │   └── users/ groups/ roles/ apis/ scopes/ clients/ audit/
     ├── entity/
     │   └── profile/ credentials/ totp/ sessions/ permissions/
     └── biometric/              # feature-flagged
@@ -242,6 +244,7 @@ erDiagram
   USER ||--o{ USER_SCOPE : "direct grant"
   SCOPE ||--o{ USER_SCOPE : ""
   RESOURCE_API ||--o{ SCOPE : "defines"
+  USER ||--o{ AUDIT_EVENT : "acted (nulled on delete)"
   CLIENT ||--o{ CLIENT_SCOPE : "may request / holds"
   SCOPE ||--o{ CLIENT_SCOPE : ""
   USER ||--o{ USER_PROFILE_VALUE : "has"
@@ -323,6 +326,18 @@ erDiagram
     uuid rotated_to_id
     datetime revoked_at
   }
+  AUDIT_EVENT {
+    uuid id PK
+    datetime occurred_at
+    string action
+    int status_code
+    string target
+    uuid actor_user_id FK
+    string actor_label
+    string actor_client
+    string ip
+    jsonb detail
+  }
 ```
 
 ### Invariants worth knowing
@@ -339,6 +354,7 @@ erDiagram
 | Scope values are globally unique | A token carries scopes as bare strings and the audience is resolved from the value, so two APIs sharing a value would blend their audiences into one token. Namespace by API: `attendance:records:read`. |
 | Groups do not nest | Recursive resolution is hard to explain, hard to audit, and hard to make fast. Flat membership covers the real cases. |
 | No `tenant_id` on any table | IDEN is single-organization by design — see the [root README](../README.md#single-organization-by-design). |
+| `AuditEvent.actor_user_id` is `ON DELETE SET NULL` | Deleting a user must not erase the record of what they did. `actor_label` keeps their email as it was, so the row still names someone after the account is gone. |
 
 ---
 
@@ -387,6 +403,7 @@ Seeded by `scripts/seed.py` from `shared/scopes.py`, all flagged `is_system`.
 | `admin:apis:read` / `admin:apis:write` | View / manage registered resource APIs |
 | `admin:scopes:read` / `admin:scopes:write` | View / manage scopes under an API |
 | `admin:clients:read` / `admin:clients:write` | View / manage OAuth clients and their secrets |
+| `admin:audit:read` | Read the audit log. No write scope exists — see below |
 | `admin:profile-fields:read` / `admin:profile-fields:write` | View / define the organization's profile fields |
 
 **API `entity`** — audience `{IDEN_ISSUER}/entity`
@@ -424,6 +441,51 @@ The flow the whole design exists to support — no code changes, no redeploy:
 The next token minted for anyone in that group carries the scope, with `aud` set to the API's
 audience. Your resource server validates it against `/.well-known/jwks.json` and needs to know
 nothing else about IDEN.
+
+---
+
+## The Audit Log
+
+Every state-changing request writes one row to `audit_events`. There is no way to turn it off and no
+endpoint that writes to it — the request being recorded is the only author.
+
+**What counts as state-changing:** any non-`GET` request to `/admin/*`, `/entity/*`,
+`/api/v1/auth/*`, or `/oauth2/revoke`, plus `GET /oauth2/logout` — RP-initiated logout is a `GET` by
+specification and still destroys a session. Reads are not recorded: an audit log nobody can read
+through is one nobody reads, and `GET` volume would bury the writes.
+
+`POST /oauth2/token` is deliberately excluded. A refresh happens every few minutes for every active
+session, and the login that authorised it is already in the log.
+
+**What a row holds:**
+
+| Column | Notes |
+|---|---|
+| `action` | Method plus **route template** — `POST /admin/users/{user_id}/roles`. The template groups; the resolved path would not. |
+| `target` | The last path parameter, which is the object being acted on: in `/admin/apis/{api_id}/scopes/{scope_id}` that is the scope. |
+| `status_code` | Refused attempts are recorded too. A wall of `403`s from one actor is the signal you want. |
+| `actor_user_id` / `actor_label` / `actor_client` | Who, by id, by email-at-the-time, and through which OAuth client. |
+| `ip` | The socket peer. `X-Forwarded-For`, if present, goes in `detail` — a header the client sets is a claim, not an observation. |
+| `detail` | The request body with secrets redacted, plus the path parameters. |
+
+**Secrets never land in it.** Keys named `password`, `clientSecret`, `token`, `code`, `codeVerifier`
+and friends are replaced with `[redacted]` before the row is built, compared with punctuation
+stripped so `client_secret` and `clientSecret` are the same key. Only JSON bodies under 4 KB are
+captured at all.
+
+**Where it is written.** `core/audit.py`, as pure ASGI middleware rather than a
+`@app.middleware("http")` function — reading the request body inside a `BaseHTTPMiddleware` consumes
+the stream the endpoint is about to read. The actor comes from `set_actor()`, called by
+`require_scope` for token-authenticated routes and by the login and consent steps, which know who the
+person is before any token exists.
+
+**One limitation to know about.** The row is written after the response, from a session of its own,
+so it is not atomic with the change it describes: if the database becomes unreachable in between, the
+change stands and the record is lost. The failure is logged at `error` level rather than swallowed.
+Tracked as KI-17 in [PLAN.md](PLAN.md#known-issues).
+
+Read it with `GET /admin/audit`, newest first, filtered by `actorUserId`, `action` (substring),
+`since`, and `until`.
 
 ---
 
@@ -487,6 +549,7 @@ reaches it again by following `resumeUrl`.
 | `GET` `PATCH` `DELETE` | `/admin/clients/{id}` | `admin:clients:read` / `:write` | 2 |
 | `POST` | `/admin/clients/{id}/rotate-secret` | `admin:clients:write` | 2 |
 | `PUT` | `/admin/clients/{id}/scopes` | `admin:clients:write` | 2 |
+| `GET` | `/admin/audit` | `admin:audit:read` | 2 |
 | `GET` `POST` | `/admin/profile-fields` | `admin:profile-fields:read` / `:write` | 3 |
 | `GET` `PATCH` `DELETE` | `/admin/profile-fields/{id}` | `admin:profile-fields:read` / `:write` | 3 |
 

@@ -588,7 +588,7 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 | **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Done |
 | **Phase 3** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Next |
 | **Phase 4** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
-| **Phase 5** | Hardening — rate limiting, audit log, tests, Docker Compose | Planned |
+| **Phase 5** | Hardening — rate limiting, tests, Docker Compose (migrations and the audit log landed early) | Planned |
 | **Phase 6** | Frontends — auth-ui and dashboard SPAs | Planned |
 | **Phase 7** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |
 
@@ -598,7 +598,7 @@ phase that introduces the code — `uv run pytest` from `provider/` runs the sui
 Issues found in review are tracked in
 [provider/PLAN.md § Known issues](provider/PLAN.md#known-issues); six are fixed, the rest are
 scheduled. **IDEN is not yet ready for a deployment reachable by anyone but its developers** — there
-is no rate limiting yet (KI-13) and no audit log (KI-12).
+is no rate limiting yet (KI-13).
 
 ---
 

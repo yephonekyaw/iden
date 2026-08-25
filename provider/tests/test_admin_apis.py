@@ -35,11 +35,15 @@ class TestListing:
         assert body["meta"]["total"] == 2
 
     async def test_reports_scope_counts(self, client, admin_headers):
+        """Counted against the catalogue rather than a literal, so adding a
+        scope does not require editing this test."""
+        from provider.shared.scopes import ADMIN_SCOPES, ENTITY_SCOPES
+
         body = (await client.get("/admin/apis", headers=admin_headers)).json()
         by_name = {api["name"]: api for api in body["items"]}
 
-        assert by_name["admin"]["scopeCount"] == 12
-        assert by_name["entity"]["scopeCount"] == 8
+        assert by_name["admin"]["scopeCount"] == len(ADMIN_SCOPES)
+        assert by_name["entity"]["scopeCount"] == len(ENTITY_SCOPES)
 
     async def test_pagination_limits_and_reports_total(self, client, admin_headers):
         body = (await client.get("/admin/apis?limit=1", headers=admin_headers)).json()

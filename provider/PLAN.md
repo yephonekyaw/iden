@@ -575,8 +575,10 @@ system-row protection, and the guarded deletes.
 **Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
 schema that makes IDEN usable by a university and a company without either one forking it.
 
-**Before starting:** ~~KI-1~~, ~~KI-15~~ (Alembic) and KI-12 (audit log) — all three were more
-expensive with every phase that passed, so they were taken first. See [Known issues](#known-issues).
+**Before starting:** ~~KI-1~~, ~~KI-15~~ (Alembic) and ~~KI-12~~ (audit log) — all three grew more
+expensive with every phase that passed, so all three were taken first. Phase 3's new tables arrive as
+migrations, and its write endpoints are audited by the middleware without touching them. See
+[Known issues](#known-issues).
 
 **The governing rule:** *a user may change anything about themselves that does not change what they
 are allowed to do.* Authority is admin territory; everything else is theirs. Roles, groups, and
@@ -743,9 +745,8 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 - **Rate limiting.** Redis fixed-window limiter as middleware, with tighter per-route limits on
   `/api/v1/auth/login`, `/totp`, `/oauth2/token`, and `/biometric/*`. Brute-force protection on
   password and TOTP verification specifically.
-- **Audit log.** Append-only records for every state change: who (sub or client_id), what, when, from
-  where. All `/admin/*` writes, all authentication attempts, all token revocations. This is the
-  compliance story and it should not be retrofitted later.
+- ~~**Audit log.**~~ Done ahead of Phase 3 — see [KI-12](#resolved). It should not have been here:
+  history not written is lost, so every phase this waited for was history nobody could recover.
 - **Security headers & CORS.** HSTS, `X-Content-Type-Options`, `Referrer-Policy`, frame-ancestors;
   CORS restricted to `iden_allowed_admin_origins`.
 - **Error contract.** One documented JSON error shape everywhere except the OAuth endpoints, which
@@ -783,6 +784,7 @@ ones with a failing test first — see ground rule 9.
 | **KI-4** | Consent recorded requested scopes, not granted ones | The consent route resolves the request first and stores what was actually granted, so a scope pruned for lack of permission is not silently pre-consented. | `test_consent.py::test_consent_records_what_was_granted_not_what_was_asked` |
 | **KI-5** | `IndexError` on a client with no grants | The management endpoints no longer touch `allowed_grants` at all — they are not a grant. | `::test_client_with_no_grants_does_not_crash` |
 | **KI-6** | `GET /admin/groups` was N+1 | One grouped `member_counts` query for the whole page. | `test_admin_users_groups.py::TestGroupListingCost` — asserts query count does not grow with row count |
+| **KI-12** | No audit log | `audit_events`, written by pure-ASGI middleware in `core/audit.py` for every state-changing request — `/admin/*`, `/entity/*`, `/api/v1/auth/*`, `/oauth2/revoke` and `GET /oauth2/logout`. Records actor, route template, target, status, IP, and the request body with secrets redacted. `actor_user_id` is `ON DELETE SET NULL` with the actor's email kept alongside, so deleting a user cannot erase what they did. Readable at `GET /admin/audit` under the new `admin:audit:read` scope; there is no write endpoint. | `tests/test_audit.py` — 14 tests, including that reads are not recorded, that refused attempts are, that a password never reaches the row, and that history survives the actor's deletion |
 | **KI-15** | No migrations; `create_all` was the only way to build the schema | Alembic, with the initial revision generated from the settled Phase 2 models. `scripts/seed.py` no longer creates anything structural, and the test database is built by running the migrations — the same path a deployment takes, so there is only one way to produce a schema. | `tests/test_migrations.py` — autogenerate must find nothing left to do; confirmed to fail when a column is added to a model without a revision |
 
 A correction to the earlier writeup of **KI-2**: the old test was *under-specified*, not wrong. It
@@ -799,6 +801,14 @@ behaviour the BCP asks for, and it is also a real way to sign users out at rando
 *Options:* a short grace window in which the immediately-previous token is still accepted and returns
 the same rotation result, or a per-family mutex so the second caller waits and receives the new
 token. Decide before real traffic; it is a UX bug, not a security one.
+
+**KI-17 · An audit row is not atomic with the change it describes.** The entry is written after the
+response, from a session of its own, because by then the request's own transaction has already
+committed. If the database becomes unreachable in between, the change stands and the record is lost.
+The failure is logged at `error` rather than swallowed, so the gap is visible, but it is a gap.
+*Options:* write the row inside the request's transaction — which means plumbing the actor through
+every service and giving up the single middleware — or accept the window and monitor the error.
+Low likelihood, high consequence: worth deciding before an audit actually matters.
 
 ### Design calls to ratify or overturn
 
@@ -828,11 +838,6 @@ rotation "a config change"; it is a config change *and* a restart.
 
 ### Operational gaps
 
-**KI-12 · No audit log.** Nothing records who granted which scope to whom, or when. For an
-access-control system this is the largest structural gap, and it is the one that cannot be
-backfilled — history not written is simply lost. Pull at least write-path auditing forward into
-Phase 3 rather than leaving it in Phase 5.
-
 **KI-13 · No rate limiting.** `/api/v1/auth/login` and `/oauth2/token` accept unlimited attempts.
 Argon2 makes each attempt expensive for the server, not the attacker. Phase 5 owns it, but the
 endpoints are live now. **With KI-1 fixed this is the largest remaining exposure.**
@@ -844,7 +849,7 @@ without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
 ### Suggested order
 
 1. ~~KI-1~~ ✅ — with KI-2 through KI-6.
-2. ~~KI-15~~ ✅ — Alembic, ahead of Phase 3. **KI-12** next.
+2. ~~KI-15~~ ✅ Alembic, ~~KI-12~~ ✅ audit log — both taken ahead of Phase 3.
 3. **KI-13** before any deployment reachable by others; it is now the largest exposure.
 4. **KI-16** before real traffic — decide the grace window or the mutex.
 5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
