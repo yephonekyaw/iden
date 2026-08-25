@@ -1,13 +1,14 @@
 name: Documentation
 
-# Pull requests build but do not publish, so a broken link is caught before it
-# is merged rather than after it is live.
+# Publishes from `dev`, which is where work lands — the site tracks the code
+# rather than the last release. Pull requests build without publishing, so a
+# broken link is caught before it is merged rather than after it is live.
 #
 # The path lists are duplicated because GitHub Actions does not support YAML
 # anchors — keep the two in step.
 on:
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - docs/**
       - mkdocs.yml

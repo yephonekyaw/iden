@@ -1,3 +1,10 @@
+# yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
+#
+# The `!!python/name:` tag below is resolved by MkDocs' own YAML loader, not by a
+# plain parser. An editor will report it as an unresolved tag unless it is told
+# otherwise — the schema line above does that, and .vscode/settings.json lists
+# the tags explicitly for the VS Code YAML extension.
+
 site_name: Project IDEN
 site_description: >-
   A self-hosted identity and access control provider. One organization, one
@@ -5,7 +12,7 @@ site_description: >-
 site_url: https://yephonekyaw.github.io/iden/
 repo_url: https://github.com/yephonekyaw/iden
 repo_name: yephonekyaw/iden
-edit_uri: edit/main/docs/
+edit_uri: edit/dev/docs/
 
 # The site covers the whole repository, not just the provider: the kiosk, the
 # engine and the front ends get their own sections as they are built.
