@@ -81,6 +81,11 @@ The `catalogue` fixture seeds through the **real** functions in `scripts/seed.py
 the seed and the tests surfaces as a failure rather than as a surprise in production. The schema is
 built by running the migrations, for the same reason: it is the path a deployment takes.
 
+Two tests guard things that otherwise rot quietly. `test_migrations.py` fails when the models and
+the migrations disagree. `test_docs.py` fails when these three documents stop describing what was
+built — it reads the live route table, scope catalogue, settings and ORM metadata rather than a copy.
+Neither can tell whether the prose is still true; both guarantee nothing is missing outright.
+
 ---
 
 ## Target package layout
