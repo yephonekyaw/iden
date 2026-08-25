@@ -301,6 +301,40 @@ class TestRevocation:
 
         assert (await refresh(client, tokens["refresh_token"])).status_code == 400
 
+    async def test_public_client_may_revoke_its_own_token(self, client):
+        """KI-1. Permitted by RFC 7009 §2.1 — the caller already holds the token,
+        so there is nothing to learn, and nothing is disclosed either way."""
+        tokens = await get_tokens(client)
+
+        response = await client.post(
+            "/oauth2/revoke",
+            data={"token": tokens["refresh_token"], "client_id": "dashboard"},
+        )
+
+        assert response.status_code == 200
+        assert (await refresh(client, tokens["refresh_token"])).status_code == 400
+
+    async def test_one_client_cannot_revoke_another_clients_token(self, client, kiosk):
+        _, secret = kiosk
+        tokens = await get_tokens(client)
+
+        await client.post(
+            "/oauth2/revoke",
+            data={
+                "token": tokens["refresh_token"],
+                "client_id": "kiosk",
+                "client_secret": secret,
+            },
+        )
+
+        assert (await refresh(client, tokens["refresh_token"])).status_code == 200
+
+    async def test_unknown_client_cannot_revoke(self, client):
+        response = await client.post(
+            "/oauth2/revoke", data={"token": "x", "client_id": "does-not-exist"}
+        )
+        assert response.status_code == 401
+
     async def test_unknown_token_still_returns_200(self, client):
         """RFC 7009 §2.2 — otherwise this endpoint reports which tokens exist."""
         response = await client.post(
@@ -369,6 +403,48 @@ class TestIntrospection:
             "/oauth2/introspect", data={"token": "x", "client_id": "nope"}
         )
         assert response.status_code == 401
+
+    async def test_public_client_cannot_introspect(self, client):
+        """KI-1. The response describes someone else's token, and a client_id is
+        public by definition — so it is not a credential (RFC 7662 §2.1)."""
+        tokens = await get_tokens(client)
+
+        response = await client.post(
+            "/oauth2/introspect",
+            data={"token": tokens["access_token"], "client_id": "dashboard"},
+        )
+
+        assert response.status_code == 401
+        assert response.json()["error"] == "invalid_client"
+
+    async def test_confidential_client_without_its_secret_cannot_introspect(
+        self, client, kiosk
+    ):
+        tokens = await get_tokens(client)
+
+        response = await client.post(
+            "/oauth2/introspect",
+            data={"token": tokens["access_token"], "client_id": "kiosk"},
+        )
+        assert response.status_code == 401
+
+    async def test_client_with_no_grants_does_not_crash(self, client, kiosk, db):
+        """KI-5. The endpoint used to index allowed_grants[0] and 500."""
+        from sqlalchemy import select
+
+        from provider.shared.models import Client
+
+        record = await db.scalar(select(Client).where(Client.client_id == "kiosk"))
+        record.allowed_grants = []
+        db.add(record)
+        await db.commit()
+
+        _, secret = kiosk
+        response = await client.post(
+            "/oauth2/introspect",
+            data={"token": "x", "client_id": "kiosk", "client_secret": secret},
+        )
+        assert response.status_code == 200
 
 
 class TestLogout:

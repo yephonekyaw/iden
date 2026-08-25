@@ -24,6 +24,7 @@ from provider.authz.oauth.schemas import (
 )
 from provider.authz.oauth.service import (
     authenticate_client,
+    authenticate_endpoint_client,
     consume_code,
     get_client,
     issue_code,
@@ -462,6 +463,8 @@ async def userinfo(
         "added to the `jti` denylist until it would have expired anyway.\n\n"
         "Always returns `200`, even for an unknown token — RFC 7009 §2.2 requires "
         "it, so that this endpoint cannot be used to probe which tokens exist.\n\n"
+        "Public clients may revoke their **own** tokens (RFC 7009 §2.1); the "
+        "caller must already hold the token, so there is nothing to learn.\n\n"
         "**Required scope:** none — client authentication only."
     ),
     responses={401: {"model": OAuthErrorResponse, "description": "invalid_client"}},
@@ -476,11 +479,9 @@ async def revoke(
     client_secret: Annotated[str | None, Form()] = None,
 ) -> Response:
     name, secret = _client_auth(request, client_id, client_secret)
-    client = await get_client(session, name)
-    if client is None:
-        raise InvalidClient("Unknown client.")
-    if client.client_type == ClientType.CONFIDENTIAL:
-        await authenticate_client(session, name, secret, client.allowed_grants[0])
+    client = await authenticate_endpoint_client(
+        session, name, secret, require_confidential=False
+    )
 
     record = await session.scalar(
         select(RefreshToken).where(RefreshToken.token_hash == hash_token(token))
@@ -510,6 +511,9 @@ async def revoke(
         "RFC 7662. Present mainly for consumers that cannot validate a JWT "
         "locally — IDEN's own modules and any resource server with JWKS access "
         "should validate offline instead of calling this on every request.\n\n"
+        "**Requires a confidential client.** The response describes someone "
+        "else's token, so a `client_id` alone is not enough — it is public by "
+        "definition (RFC 7662 §2.1).\n\n"
         "**Required scope:** none — client authentication only."
     ),
     responses={401: {"model": OAuthErrorResponse, "description": "invalid_client"}},
@@ -524,11 +528,7 @@ async def introspect(
     client_secret: Annotated[str | None, Form()] = None,
 ) -> IntrospectionResponse:
     name, secret = _client_auth(request, client_id, client_secret)
-    client = await get_client(session, name)
-    if client is None:
-        raise InvalidClient("Unknown client.")
-    if client.client_type == ClientType.CONFIDENTIAL:
-        await authenticate_client(session, name, secret, client.allowed_grants[0])
+    await authenticate_endpoint_client(session, name, secret, require_confidential=True)
 
     try:
         claims = verify_jwt(token)
