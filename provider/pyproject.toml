@@ -38,6 +38,7 @@ dev = [
     "pyright>=1.1.411",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.4",
 ]
 
@@ -72,3 +73,16 @@ asyncio_mode = "auto"
 # that use it share one event loop; asyncpg connections cannot cross loops.
 asyncio_default_fixture_loop_scope = "session"
 asyncio_default_test_loop_scope = "session"
+
+[tool.coverage.run]
+source = ["src/provider"]
+# Not measured, and deliberately so: `migrations/` is generated and run by
+# Alembic, and `tests/` measuring itself says nothing.
+omit = ["*/migrations/*", "*/tests/*"]
+
+[tool.coverage.report]
+# Coverage is a gap-finding tool here, not a gate. A threshold that fails the
+# build teaches people to write tests that touch lines rather than tests that
+# check behaviour.
+show_missing = true
+exclude_also = ["if TYPE_CHECKING:", "raise NotImplementedError"]
