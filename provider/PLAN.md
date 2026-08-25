@@ -573,6 +573,18 @@ system-row protection, and the guarded deletes.
 
 ## Phase 3 — SSO: session control and single sign-out
 
+**Status: done.** 3.1 through 3.5 shipped; `tests/test_sso.py` and `tests/test_logout.py` pin them.
+Two things came out differently from the plan below and are worth reading:
+
+- **`sid` is a hash of the session id, not the id.** The plan said publishing the session id was safe
+  because Redis keys on a hash of it. That was wrong: the id *is* the `iden_session` cookie, so every
+  ID token would have handed its client — and anyone reading a token in transit — the ability to set
+  that cookie and become the user. Caught while building 3.3, fixed in the commit after 3.1.
+- **`auth_time` was wrong before this phase.** It came from the authorization code's `created_at`, so
+  on the second application of an SSO session it reported when the code was minted rather than when
+  the person authenticated, making every session look freshly authenticated to a client checking
+  `max_age`. Codes and refresh tokens now carry the session's `authenticated_at`.
+
 **Goal:** finish the single sign-on that Phase 1 half-built.
 
 **Start by reading this, because the phase is easy to misread.** IDEN already does SSO. The
@@ -670,7 +682,8 @@ attempt any of this without them. `admin/clients/` accepts and returns the two n
   the redirect URI and creates nothing in Redis.
 - `max_age=0` forces a password prompt on an otherwise valid session.
 - Signing out of one application delivers a logout token to every other application the session
-  touched, and none to applications it did not.
+  touched, and none to applications it did not — and revokes the refresh tokens that session
+  produced, without touching another session's.
 - A logout token has `events`, has no `nonce`, and is rejected by IDEN's own `verify_jwt` when
   presented as an ID token.
 - The audit log shows the fan-out, one entry per relying party, including the failures.

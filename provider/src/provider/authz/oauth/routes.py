@@ -11,6 +11,7 @@ from sqlalchemy import select
 from provider.authz import session_cookie
 from provider.authz.consent.service import consent_required
 from provider.authz.deps import LoginSessionDep
+from provider.authz.logout import service as logout_service
 from provider.authz.oauth.errors import (
     InvalidClient,
     InvalidGrant,
@@ -44,13 +45,11 @@ from provider.core.crypto import verify_jwt
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.security import hash_token
-from provider.shared.enums import ClientType, CodeChallengeMethod, GrantType
+from provider.shared.enums import ClientType, CodeChallengeMethod, GrantType, Prompt
 from provider.shared.models import Client, RefreshToken, User
 
 router = APIRouter(prefix="/oauth2", tags=["oauth2"])
 
-
-PROMPT_VALUES = frozenset({"none", "login", "consent", "select_account"})
 
 # What `prompt=none` returns in place of each interaction it refused to start.
 SILENT_ERRORS = {
@@ -70,22 +69,50 @@ def _stale(login_session: session_store.Session, max_age: int | None) -> bool:
     return age.total_seconds() > max_age
 
 
+def _id_token_claims(hint: str) -> dict | None:
+    """The claims of an `id_token_hint`, or None if it is not one of ours.
+
+    Expiry is allowed: ID tokens live ten minutes, so a hint about a past login
+    is expected to be stale. A **logout token** is refused outright — it is
+    signed by IDEN and carries `sub`, so without this check a client could
+    replay the token that told it to sign out as evidence that someone is
+    signed in. The `events` claim is exactly what distinguishes the two.
+    """
+    try:
+        claims = verify_jwt(hint, allow_expired=True)
+    except jwt.PyJWTError:
+        return None
+    return None if "events" in claims else claims
+
+
 def _hint_mismatch(
     id_token_hint: str | None, login_session: session_store.Session
 ) -> bool:
     """Whether an `id_token_hint` names someone other than the session's owner.
 
-    The hint is only read for its subject, and an unverifiable one is treated as
-    a mismatch rather than ignored — a client that asked about a specific person
-    should not silently receive a code for a different one.
+    An unverifiable hint counts as a mismatch rather than as no hint at all: a
+    client that asked about a specific person should not silently receive a
+    code for a different one.
     """
     if not id_token_hint:
         return False
-    try:
-        claims = verify_jwt(id_token_hint, allow_expired=True)
-    except jwt.PyJWTError:
-        return True
-    return claims.get("sub") != str(login_session.user_id)
+    claims = _id_token_claims(id_token_hint)
+    return claims is None or claims.get("sub") != str(login_session.user_id)
+
+
+def _hinted_client(id_token_hint: str | None) -> str | None:
+    """The client an `id_token_hint` was issued to, from its `aud`.
+
+    Only used to decide whether `post_logout_redirect_uri` is registered, so a
+    hint IDEN did not sign is worth nothing and is discarded.
+    """
+    if not id_token_hint:
+        return None
+    claims = _id_token_claims(id_token_hint)
+    if claims is None:
+        return None
+    audience = claims.get("aud")
+    return audience if isinstance(audience, str) else None
 
 
 def _auth_ui(path: str, challenge_id: str, **extra: str) -> RedirectResponse:
@@ -177,16 +204,16 @@ async def authorize(
         raise fail("invalid_request", "code_challenge_method must be S256.")
 
     prompts = set(prompt.split()) if prompt else set()
-    if unknown := prompts - PROMPT_VALUES:
+    if unknown := prompts - set(Prompt):
         raise fail(
             "invalid_request", f"Unsupported prompt: {' '.join(sorted(unknown))}"
         )
-    if "none" in prompts and len(prompts) > 1:
+    if Prompt.NONE in prompts and len(prompts) > 1:
         raise fail(
             "invalid_request", "prompt=none cannot be combined with other values."
         )
 
-    silent = "none" in prompts
+    silent = Prompt.NONE in prompts
     params = dict(request.query_params)
 
     async def interact(path: str, user_id: uuid.UUID | None = None, **extra: str):
@@ -217,7 +244,7 @@ async def authorize(
     # `prompt=login` and `select_account` force a fresh authentication. IDEN has
     # one account per session, so account selection is re-authentication; it is
     # accepted rather than refused so a conforming client is not broken by it.
-    if prompts & {"login", "select_account"}:
+    if prompts & {Prompt.LOGIN, Prompt.SELECT_ACCOUNT}:
         return await interact("/auth/login", step_up="1")
 
     if _stale(login_session, max_age):
@@ -234,7 +261,9 @@ async def authorize(
     requested = parse_scope(scope)
     granted = resolve_for_user(requested, client, user)
 
-    if "consent" in prompts or await consent_required(session, user, client, granted):
+    if Prompt.CONSENT in prompts or await consent_required(
+        session, user, client, granted
+    ):
         return await interact("/auth/consent", user.id)
 
     code = await issue_code(
@@ -657,12 +686,19 @@ async def introspect(
 
 @router.get(
     "/logout",
-    summary="End the session",
+    summary="End the session everywhere",
     description=(
-        "Clears the browser session and its cookie, then returns to "
-        "`post_logout_redirect_uri` when that URI is registered for the client.\n\n"
-        "This ends the IDEN session only. Access tokens already issued remain "
-        "valid until they expire — revoke them explicitly if that matters.\n\n"
+        "Single sign-out. Clears the browser session and its cookie, revokes the "
+        "refresh tokens the session produced, and delivers a **logout token** to "
+        "every client that registered a `backchannelLogoutUri` and was signed "
+        "into during this session (OIDC Back-Channel Logout 1.0).\n\n"
+        "Access tokens already issued stay valid until they expire — they are "
+        "self-contained by design, and their ten-minute lifetime is the trade "
+        "that buys offline validation. Refresh tokens do not, so nothing can be "
+        "renewed after this.\n\n"
+        "`idTokenHint` identifies the client for redirect validation. A request "
+        "without a session cookie ends nothing: the hint says who was signed in, "
+        "it is not a credential for ending someone else's session.\n\n"
         "**Required scope:** none."
     ),
     responses={303: {"description": "Redirect to post_logout_redirect_uri"}},
@@ -672,13 +708,24 @@ async def logout(
     session: DBSessionDep,
     redis: RedisDep,
     client_id: Annotated[str | None, Query()] = None,
+    id_token_hint: Annotated[str | None, Query()] = None,
     post_logout_redirect_uri: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
 ) -> Response:
     if login_session is not None:
+        sid = login_session.public_id
+        # Read before the delete: the record of which clients this session
+        # reached lives with the session and goes when it does.
+        client_ids = await session_store.clients_for(redis, login_session.id)
+
+        await logout_service.revoke_session_tokens(session, sid)
+        await logout_service.notify(
+            session, client_ids=client_ids, subject=login_session.user_id, sid=sid
+        )
+        await session.commit()
         await session_store.delete(redis, login_session.id)
 
-    client = await get_client(session, client_id)
+    client = await get_client(session, client_id or _hinted_client(id_token_hint))
     target = None
     if client and post_logout_redirect_uri in client.post_logout_redirect_uris:
         query = f"?{urlencode({'state': state})}" if state else ""

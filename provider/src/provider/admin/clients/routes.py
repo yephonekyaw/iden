@@ -31,6 +31,8 @@ def to_response(client) -> ClientResponse:
         allowed_grants=client.allowed_grants,
         redirect_uris=client.redirect_uris,
         post_logout_redirect_uris=client.post_logout_redirect_uris,
+        backchannel_logout_uri=client.backchannel_logout_uri,
+        backchannel_logout_session_required=client.backchannel_logout_session_required,
         skip_consent=client.skip_consent,
         is_system=client.is_system,
         grantable_scopes=[

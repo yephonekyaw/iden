@@ -16,6 +16,20 @@ class CodeChallengeMethod(StrEnum):
     S256 = "S256"
 
 
+class Prompt(StrEnum):
+    """`prompt` values on /authorize — OIDC Core §3.1.2.1.
+
+    `SELECT_ACCOUNT` is accepted and treated as re-authentication: IDEN holds
+    one account per session, so there is nothing to select between, and
+    refusing a value a conforming client may send would break it for no gain.
+    """
+
+    NONE = "none"
+    LOGIN = "login"
+    CONSENT = "consent"
+    SELECT_ACCOUNT = "select_account"
+
+
 class AmrMethod(StrEnum):
     """RFC 8176 authentication method references IDEN emits."""
 

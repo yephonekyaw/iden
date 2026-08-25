@@ -348,7 +348,7 @@ sequenceDiagram
     P->>B: code → tokens (no prompt)
 ```
 
-Two things make this more than a shared cookie, and both are **Phase 3** work:
+Two things make this more than a shared cookie, and both landed in **Phase 3**:
 
 - **Control.** `prompt=none` lets a browser application ask "is this person still signed in?" without
   a visible redirect — the mechanism behind silent token renewal. `max_age` lets a client insist on a
@@ -356,9 +356,9 @@ Two things make this more than a shared cookie, and both are **Phase 3** work:
   in seconds instead of methods.
 - **Single sign-*out*.** Ending the IDEN session has to end the applications' sessions too, or
   "sign out" means "sign out of one tab". IDEN records which clients a session issued codes to and,
-  on logout, delivers a signed **logout token** to each one's registered back-channel URI
-  (OIDC Back-Channel Logout 1.0). Sign-out is the half of SSO that is easy to skip and the half users
-  notice.
+  on logout, revokes that session's refresh tokens and delivers a signed **logout token** to each
+  client's registered back-channel URI (OIDC Back-Channel Logout 1.0). Sign-out is the half of SSO
+  that is easy to skip and the half users notice.
 
 Federation — *sign in with Google, or with the campus IdP* — is a different feature: it would make
 IDEN a relying party to someone else's provider rather than the provider itself. It is not planned;
@@ -638,8 +638,8 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 | **Phase 0** | Provider foundation — config, database, models, security, seed | Done |
 | **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Done |
 | **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Done |
-| **Phase 3** | Provider SSO — `prompt`, `max_age`, `sid`, back-channel logout (single sign-*out*) | Next |
-| **Phase 4** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Planned |
+| **Phase 3** | Provider SSO — `prompt`, `max_age`, `sid`, back-channel logout (single sign-*out*) | Done |
+| **Phase 4** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Next |
 | **Phase 5** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
 | **Phase 6** | Hardening — rate limiting, tests, Docker Compose (migrations and the audit log landed early) | Planned |
 | **Phase 7** | Frontends — auth-ui and dashboard SPAs | Planned |

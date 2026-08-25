@@ -29,6 +29,7 @@ same guarantee by validating against the published JWKS.
 - [Data Model](#data-model)
 - [Access Control in Practice](#access-control-in-practice)
 - [The Audit Log](#the-audit-log)
+- [Single Sign-On and Sign-Out](#single-sign-on-and-sign-out)
 - [Endpoint Reference](#endpoint-reference)
 - [Tokens & Claims](#tokens--claims)
 - [Request Lifecycle](#request-lifecycle)
@@ -396,6 +397,8 @@ erDiagram
 | Scope values are globally unique | A token carries scopes as bare strings and the audience is resolved from the value, so two APIs sharing a value would blend their audiences into one token. Namespace by API: `attendance:records:read`. |
 | Groups do not nest | Recursive resolution is hard to explain, hard to audit, and hard to make fast. Flat membership covers the real cases. |
 | No `tenant_id` on any table | IDEN is single-organization by design — see the [root README](../README.md#single-organization-by-design). |
+| `sid` is a hash of the session id | The id itself is the `iden_session` cookie. Publishing it in every ID token would let any client, or anyone reading a token in transit, set that cookie and become the user. |
+| `AuthorizationCode.authenticated_at` is the session's, not the code's | `auth_time` is what a client's `max_age` is measured against. Taking it from the code would make every SSO session look freshly authenticated. |
 | `AuditEvent.actor_user_id` is `ON DELETE SET NULL` | Deleting a user must not erase the record of what they did. `actor_label` keeps their email as it was, so the row still names someone after the account is gone. |
 
 ---
@@ -531,6 +534,75 @@ Read it with `GET /admin/audit`, newest first, filtered by `actorUserId`, `actio
 
 ---
 
+## Single Sign-On and Sign-Out
+
+The `iden_session` cookie is the single sign-on. A second application redirecting to `/authorize`
+finds the session, checks `acr_values` and `max_age` against it, skips consent if it is already on
+file, and returns a code — no prompt. Nothing in the applications coordinates that.
+
+### What a client can ask for
+
+| Parameter | Effect |
+|---|---|
+| `prompt=none` | Never show UI. Returns `login_required`, `consent_required`, or `account_selection_required` to `redirect_uri` instead. This is how a browser app checks silently whether someone is still signed in. |
+| `prompt=login` | Re-authenticate even with a live session. The session id survives it — see below. |
+| `prompt=consent` | Ask again even where a grant exists. `skipConsent` is the client's default, not a veto over the request. |
+| `prompt=select_account` | Treated as `login`. IDEN holds one account per session, so there is nothing to select between; the value is accepted rather than refused so a conforming client is not broken. |
+| `max_age` | Seconds. An older login is stepped up, exactly as an unmet `acr_values` is. `max_age=0` means *authenticate now*. |
+| `login_hint` | Reaches the Auth UI through the challenge, to prefill the form. A hint, never an assertion — the password still decides. |
+| `id_token_hint` | Who the client believes is signed in. A hint naming someone else is treated as no session. Expiry is fine: ID tokens live ten minutes, so a hint about a past login is expected to be stale. |
+
+Two rules are worth knowing because they are easy to get wrong:
+
+- **`prompt=none` creates nothing.** The refusal happens before a challenge is written to Redis. A
+  challenge is the pending half of an interaction; one left behind for an interaction that will never
+  happen is both a leak and a lie about what took place.
+- **Re-authentication keeps the session id.** Minting a new one on `prompt=login` would strand the old
+  session in Redis with no cookie pointing at it, and every client holding the old `sid` could never
+  be signed out.
+
+### `sid`, and why it is not the cookie
+
+The `sid` claim is `sha256(session id)` — never the session id itself, which is the value of the
+`iden_session` cookie and therefore a bearer credential. Publishing that to every client in every ID
+token would hand each of them, and anyone who read a token in transit, the ability to set the cookie
+and become the user. The hash names the session without being usable as one, and Redis already keys
+sessions by that same hash.
+
+### Signing out
+
+`GET /oauth2/logout` does three things, in this order:
+
+1. **Revokes the refresh tokens the session produced** (`refresh_tokens.sid`). Without this a
+   signed-out client keeps minting access tokens indefinitely from a token it already holds.
+2. **Delivers a logout token** to every client that registered `backchannelLogoutUri` *and* was
+   signed into during this session — OIDC Back-Channel Logout 1.0. Which clients those were is
+   recorded in Redis as the session goes, because nothing else remembers: a code lives 60 seconds and
+   a refresh token may never have been issued.
+3. **Clears the session and the cookie**, then redirects to `postLogoutRedirectUri` if it is
+   registered for the client named by `clientId` or `idTokenHint`.
+
+A logout token is a signed JWT carrying `sub`, `sid`, and an `events` claim, and **no `nonce`** —
+both rules come from the spec, and both exist so it cannot be replayed as proof that someone just
+authenticated. IDEN enforces the other direction too: a token carrying `events` is refused as an
+`id_token_hint`, so the token that told a client to sign out cannot be turned around as evidence that
+someone is signed in.
+
+Delivery is concurrent, best effort, and capped at five seconds. It is **not** retried into a queue —
+a relying party that was unreachable re-validates at its next token exchange, and a durable job queue
+is a dependency this project does not otherwise need. What is not optional is the record: every
+attempt is audited with its outcome, so a sign-out that did not arrive somewhere is visible
+afterwards.
+
+Access tokens already issued stay valid until they expire. They are self-contained by design, and
+that ten-minute lifetime is the trade that buys offline validation — the `jti` denylist is there for
+when it matters sooner.
+
+**A request without a session cookie ends nothing.** `idTokenHint` says who *was* signed in; it is
+not a credential for ending someone else's session.
+
+---
+
 ## Endpoint Reference
 
 `Auth` column: **public** = no credentials; **client** = client authentication; **bearer** = access
@@ -542,12 +614,12 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 |---|---|---|---|---|
 | `GET` | `/.well-known/openid-configuration` | public | Provider metadata; `scopes_supported` is read live from the database | 1 |
 | `GET` | `/.well-known/jwks.json` | public | Public signing keys, one JWK per `kid` | 1 |
-| `GET` | `/oauth2/authorize` | session | Start authorization code + PKCE; redirects to `auth-ui` when login or consent is needed. Gains `prompt`, `max_age`, `login_hint`, `id_token_hint` | 1, 3 |
+| `GET` | `/oauth2/authorize` | session | Start authorization code + PKCE; redirects to `auth-ui` when login or consent is needed. Accepts `prompt`, `max_age`, `login_hint`, `id_token_hint` | 1, 3 |
 | `POST` | `/oauth2/token` | client | `authorization_code`, `refresh_token`, `client_credentials` | 1 |
 | `GET` | `/oauth2/userinfo` | bearer `openid` | Claims filtered by granted scopes | 1 |
 | `POST` | `/oauth2/revoke` | client | RFC 7009 — revoke a refresh family or denylist a `jti`. Public clients may revoke their own tokens | 1 |
 | `POST` | `/oauth2/introspect` | client | RFC 7662 — **confidential clients only**: the response describes someone else's token, and a `client_id` is public by definition | 1 |
-| `GET` | `/oauth2/logout` | session | End session, honour `post_logout_redirect_uri`. Gains `id_token_hint` and the back-channel fan-out | 1, 3 |
+| `GET` | `/oauth2/logout` | session | Single sign-out: ends the session, revokes its refresh tokens, delivers a logout token to every client it reached | 1, 3 |
 
 ### AuthZ — login & consent (consumed by `auth-ui`)
 

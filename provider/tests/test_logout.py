@@ -1,0 +1,257 @@
+"""Phase 3.3 and 3.4 — single sign-out.
+
+Ending IDEN's session is one Redis delete. What makes "sign out" mean anything
+is telling the applications the session reached, because each keeps its own.
+"""
+
+from types import SimpleNamespace
+
+import httpx
+import jwt
+import pytest
+from sqlalchemy import select
+
+from provider.authz.logout import service as logout_service
+from provider.core.crypto import verify_jwt
+from provider.shared.models import AuditEvent, Client
+from tests.flows import get_tokens
+
+POST_LOGOUT_URI = "http://localhost:5173/"
+
+pytestmark = pytest.mark.usefixtures("admin_user", "dashboard")
+
+
+@pytest.fixture
+def deliveries(monkeypatch):
+    """Capture the logout tokens IDEN posts, without a listening server.
+
+    The service's own `httpx` name is rebound, not httpx itself: patching the
+    module would also replace the transport the test client rides on.
+    """
+    received: list[tuple[str, str]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        body = request.content.decode()
+        token = body.removeprefix("logout_token=")
+        received.append((str(request.url), token))
+        return httpx.Response(200)
+
+    def factory(**kwargs):
+        return httpx.AsyncClient(transport=httpx.MockTransport(handler), **kwargs)
+
+    monkeypatch.setattr(
+        logout_service,
+        "httpx",
+        SimpleNamespace(
+            AsyncClient=factory,
+            MockTransport=httpx.MockTransport,
+            HTTPError=httpx.HTTPError,
+            Request=httpx.Request,
+            Response=httpx.Response,
+        ),
+    )
+    return received
+
+
+@pytest.fixture
+async def listening(db, dashboard) -> Client:
+    """The dashboard, registered for back-channel logout."""
+    dashboard.backchannel_logout_uri = "https://dashboard.example.org/logout"
+    db.add(dashboard)
+    await db.commit()
+    return dashboard
+
+
+def claims_of(token: str) -> dict:
+    return jwt.decode(token, options={"verify_signature": False})
+
+
+class TestFanOut:
+    async def test_a_registered_client_is_told(self, client, listening, deliveries):
+        await get_tokens(client)
+
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        assert len(deliveries) == 1
+        url, token = deliveries[0]
+        assert url == "https://dashboard.example.org/logout"
+        assert claims_of(token)["aud"] == "dashboard"
+
+    async def test_a_client_without_a_uri_is_not(self, client, deliveries):
+        """The dashboard has no backchannel URI in this test — nothing to tell."""
+        await get_tokens(client)
+
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        assert deliveries == []
+
+    async def test_only_clients_this_session_reached(
+        self, client, listening, db, kiosk, deliveries
+    ):
+        """A client that was never signed into during this session has no
+        session to end, and telling it would leak that the person exists."""
+        registered, _ = kiosk
+        registered.backchannel_logout_uri = "https://kiosk.example.org/logout"
+        db.add(registered)
+        await db.commit()
+
+        await get_tokens(client)  # dashboard only
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        assert [url for url, _ in deliveries] == [
+            "https://dashboard.example.org/logout"
+        ]
+
+    async def test_a_failed_delivery_does_not_fail_the_sign_out(
+        self, client, listening, monkeypatch
+    ):
+        def explode(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("unreachable")
+
+        def factory(**kwargs):
+            return httpx.AsyncClient(transport=httpx.MockTransport(explode), **kwargs)
+
+        monkeypatch.setattr(
+            logout_service,
+            "httpx",
+            SimpleNamespace(AsyncClient=factory, HTTPError=httpx.HTTPError),
+        )
+        await get_tokens(client)
+
+        response = await client.get("/oauth2/logout", follow_redirects=False)
+
+        assert response.status_code in (204, 303)
+
+
+class TestLogoutToken:
+    async def test_is_signed_by_iden_and_names_the_session(
+        self, client, listening, deliveries
+    ):
+        tokens = await get_tokens(client)
+        sid = claims_of(tokens["id_token"])["sid"]
+
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        _, token = deliveries[0]
+        claims = verify_jwt(token, audience="dashboard")
+        assert claims["sid"] == sid
+        assert logout_service.BACKCHANNEL_LOGOUT_EVENT in claims["events"]
+
+    async def test_carries_no_nonce(self, client, listening, deliveries):
+        """OIDC Back-Channel Logout §2.4 forbids it: with a nonce, a stolen
+        logout token could be replayed as proof of a fresh authentication."""
+        await get_tokens(client)
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        assert "nonce" not in claims_of(deliveries[0][1])
+
+    async def test_is_refused_as_an_id_token_hint(self, client, listening, deliveries):
+        """It is signed by IDEN and carries `sub`, so without the `events` check
+        a client could replay the token that told it to sign out as evidence
+        that someone is signed in.
+
+        Measured against a real ID token doing the same job: the hint is what
+        resolves the client, and only a resolved client's post-logout URI is
+        honoured. One redirects, the other cannot.
+        """
+        real = await get_tokens(client)
+        await client.get("/oauth2/logout", follow_redirects=False)
+        _, logout_token = deliveries[0]
+
+        accepted = await client.get(
+            "/oauth2/logout",
+            params={
+                "id_token_hint": real["id_token"],
+                "post_logout_redirect_uri": POST_LOGOUT_URI,
+            },
+            follow_redirects=False,
+        )
+        refused = await client.get(
+            "/oauth2/logout",
+            params={
+                "id_token_hint": logout_token,
+                "post_logout_redirect_uri": POST_LOGOUT_URI,
+            },
+            follow_redirects=False,
+        )
+
+        assert accepted.status_code == 303
+        assert refused.status_code == 204
+
+
+class TestTokenRevocation:
+    async def test_refresh_tokens_from_the_session_are_revoked(self, client, db):
+        """Otherwise a signed-out client keeps minting access tokens for as long
+        as it likes, which is not what anyone means by signing out."""
+        tokens = await get_tokens(client)
+
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        refreshed = await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": tokens["refresh_token"],
+                "client_id": "dashboard",
+            },
+        )
+        assert refreshed.status_code == 400
+
+    async def test_another_sessions_tokens_survive(self, client, db):
+        """Signing out of one browser must not sign out the others — the point
+        of revoking by `sid` rather than by user."""
+        first = await get_tokens(client)
+        client.cookies.clear()
+        await get_tokens(client)  # a second browser session
+
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        refreshed = await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": first["refresh_token"],
+                "client_id": "dashboard",
+            },
+        )
+        assert refreshed.status_code == 200
+
+
+class TestAudit:
+    async def test_every_delivery_is_recorded(self, client, listening, deliveries, db):
+        await get_tokens(client)
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        rows = list(
+            await db.scalars(
+                select(AuditEvent).where(AuditEvent.action == "POST backchannel_logout")
+            )
+        )
+        assert len(rows) == 1
+        assert rows[0].status_code == 200
+        assert rows[0].target == "dashboard"
+
+    async def test_a_failure_is_recorded_too(self, client, listening, monkeypatch, db):
+        """A sign-out that did not arrive somewhere has to be visible afterwards."""
+
+        def explode(request: httpx.Request) -> httpx.Response:
+            raise httpx.ConnectError("unreachable")
+
+        monkeypatch.setattr(
+            logout_service,
+            "httpx",
+            SimpleNamespace(
+                AsyncClient=lambda **kw: httpx.AsyncClient(
+                    transport=httpx.MockTransport(explode), **kw
+                ),
+                HTTPError=httpx.HTTPError,
+            ),
+        )
+        await get_tokens(client)
+        await client.get("/oauth2/logout", follow_redirects=False)
+
+        row = await db.scalar(
+            select(AuditEvent).where(AuditEvent.action == "POST backchannel_logout")
+        )
+        assert row is not None
+        assert row.status_code == 0

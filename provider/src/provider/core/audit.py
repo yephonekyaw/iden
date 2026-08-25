@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from fastapi import Request
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from provider.core.db import session_factory
@@ -112,6 +113,35 @@ def _is_audited(scope: Scope) -> bool:
         return True
     return scope["method"] not in READ_METHODS and scope["path"].startswith(
         AUDITED_PREFIXES
+    )
+
+
+async def record(
+    session: AsyncSession,
+    *,
+    action: str,
+    status_code: int,
+    target: str | None = None,
+    actor_user_id: uuid.UUID | None = None,
+    detail: dict | None = None,
+) -> None:
+    """Write an audit entry for something that is not an inbound request.
+
+    The middleware covers everything that arrives at IDEN. This covers what
+    IDEN does on its own initiative — delivering a logout token, so far — which
+    is equally part of the record and has no request to hang off.
+
+    Added to the caller's session rather than a fresh one: this describes work
+    inside a transaction, and it should live or die with it.
+    """
+    session.add(
+        AuditEvent(
+            action=action,
+            status_code=status_code,
+            target=target,
+            actor_user_id=actor_user_id,
+            detail=detail or {},
+        )
     )
 
 

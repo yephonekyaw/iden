@@ -90,6 +90,8 @@ async def create_client(
         allowed_grants=data.allowed_grants,
         redirect_uris=data.redirect_uris,
         post_logout_redirect_uris=data.post_logout_redirect_uris,
+        backchannel_logout_uri=data.backchannel_logout_uri,
+        backchannel_logout_session_required=data.backchannel_logout_session_required,
         skip_consent=data.skip_consent,
     )
     session.add(client)
@@ -113,6 +115,8 @@ async def update_client(
         "allowed_grants",
         "redirect_uris",
         "post_logout_redirect_uris",
+        "backchannel_logout_uri",
+        "backchannel_logout_session_required",
         "skip_consent",
     ):
         value = getattr(data, field)

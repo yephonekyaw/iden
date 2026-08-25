@@ -51,3 +51,19 @@ async def test_jwks_never_leaks_private_material(client):
     body = (await client.get("/.well-known/jwks.json")).json()
     for key in body["keys"]:
         assert not {"d", "p", "q", "dp", "dq", "qi"} & set(key)
+
+
+async def test_metadata_advertises_the_session_controls(client, catalogue):
+    """A conforming client will not attempt any of this without being told."""
+    body = (await client.get("/.well-known/openid-configuration")).json()
+
+    assert set(body["prompt_values_supported"]) == {
+        "none",
+        "login",
+        "consent",
+        "select_account",
+    }
+    assert body["backchannel_logout_supported"] is True
+    assert body["backchannel_logout_session_supported"] is True
+    assert body["end_session_endpoint"].endswith("/oauth2/logout")
+    assert "sid" in body["claims_supported"]

@@ -29,6 +29,13 @@ class OpenIDConfiguration(BaseModel):
     )
     acr_values_supported: list[str]
     amr_values_supported: list[str]
+    prompt_values_supported: list[str] = Field(
+        description="`none` is how a browser application checks silently for a session."
+    )
+    backchannel_logout_supported: bool
+    backchannel_logout_session_supported: bool = Field(
+        description="Logout tokens carry `sid`, so a client can end one session of several."
+    )
     claims_supported: list[str]
 
 

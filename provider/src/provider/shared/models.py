@@ -209,6 +209,15 @@ class Client(Base, TimestampMixin):
     post_logout_redirect_uris: Mapped[list[str]] = mapped_column(
         ARRAY(String), default=list
     )
+    # Where to POST a logout token when a session this client was part of ends.
+    # Null means the client is not told: it keeps its own session until whatever
+    # it does next fails, which is the behaviour of every client today.
+    backchannel_logout_uri: Mapped[str | None] = mapped_column(String(2048))
+    # Whether that token must name the session. A client with one session per
+    # user does not need it; one that can hold several does.
+    backchannel_logout_session_required: Mapped[bool] = mapped_column(
+        Boolean, default=False
+    )
     skip_consent: Mapped[bool] = mapped_column(Boolean, default=False)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
 

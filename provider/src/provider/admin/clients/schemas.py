@@ -30,6 +30,21 @@ class ClientCreate(CamelCaseBaseModel):
         default_factory=list, description="Matched exactly at /authorize. No wildcards."
     )
     post_logout_redirect_uris: list[str] = Field(default_factory=list)
+    backchannel_logout_uri: str | None = Field(
+        default=None,
+        description=(
+            "Where IDEN POSTs a logout token when a session this client was part "
+            "of ends. Leave null and the client is never told: it keeps serving "
+            "its own session until something else fails."
+        ),
+    )
+    backchannel_logout_session_required: bool = Field(
+        default=False,
+        description=(
+            "Whether that token must name the session with `sid`. Needed only by "
+            "a client that can hold several sessions for one person."
+        ),
+    )
     skip_consent: bool = Field(
         default=False,
         description=(
@@ -60,6 +75,8 @@ class ClientUpdate(CamelCaseBaseModel):
     allowed_grants: list[str] | None = None
     redirect_uris: list[str] | None = None
     post_logout_redirect_uris: list[str] | None = None
+    backchannel_logout_uri: str | None = None
+    backchannel_logout_session_required: bool | None = None
     skip_consent: bool | None = None
 
 
@@ -81,6 +98,8 @@ class ClientResponse(CamelCaseBaseModel):
     allowed_grants: list[str]
     redirect_uris: list[str]
     post_logout_redirect_uris: list[str]
+    backchannel_logout_uri: str | None
+    backchannel_logout_session_required: bool
     skip_consent: bool
     is_system: bool
     grantable_scopes: list[ScopeSummary]
