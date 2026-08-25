@@ -1,4 +1,4 @@
-# Project IDEN
+# IDEN
 
 IDEN is a **self-hosted identity and access control provider**. One organization deploys it, owns
 every row in its database, and uses it to answer two questions for every application it runs:

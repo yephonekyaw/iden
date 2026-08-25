@@ -5,7 +5,7 @@
 # otherwise — the schema line above does that, and .vscode/settings.json lists
 # the tags explicitly for the VS Code YAML extension.
 
-site_name: Project IDEN
+site_name: IDEN
 site_description: >-
   A self-hosted identity and access control provider. One organization, one
   deployment, one source of truth for who people are and what they may do.
