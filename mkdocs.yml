@@ -78,10 +78,14 @@ nav:
   - Guides:
       - guides/index.md
       - Run it locally: guides/quickstart.md
-      - Add a web application: guides/web-application.md
-      - Add a machine client: guides/machine-client.md
-      - Validate tokens in your API: guides/protect-an-api.md
-      - Handle single sign-out: guides/single-sign-out.md
+      - Integrating an application:
+          - Register your application: guides/register-a-client.md
+          - Using a standard OIDC library: guides/oidc-libraries.md
+          - Add a web application: guides/web-application.md
+          - Add a machine client: guides/machine-client.md
+          - Validate tokens in your API: guides/protect-an-api.md
+          - Handle single sign-out: guides/single-sign-out.md
+          - Troubleshooting: guides/troubleshooting.md
       - Define your profile schema: guides/profile-schema.md
   - Reference:
       - reference/index.md

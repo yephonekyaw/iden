@@ -34,8 +34,9 @@ The trade is that IDEN cannot host two organizations. If you need that, run two 
 
 - :material-rocket-launch-outline: **[Guides](guides/index.md)**
 
-    Task-shaped: run it locally, connect a web app, protect your own API,
-    handle sign-out.
+    Task-shaped. Integrating something you built? Start at
+    [Register your application](guides/register-a-client.md), then
+    [Using a standard OIDC library](guides/oidc-libraries.md).
 
 - :material-book-open-variant: **[Reference](reference/index.md)**
 
