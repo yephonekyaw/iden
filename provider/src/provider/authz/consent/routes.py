@@ -8,7 +8,7 @@ from provider.authz.consent.service import record_consent
 from provider.authz.deps import LoginSessionDep
 from provider.authz.login.errors import ChallengeNotFound, NoSession
 from provider.authz.services import challenge_store
-from provider.authz.services.scope_resolver import parse_scope
+from provider.authz.services.scope_resolver import parse_scope, resolve_for_user
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.schemas import ErrorResponse
@@ -63,9 +63,14 @@ async def consent(
         select(Client).where(Client.client_id == challenge.params["client_id"])
     )
 
-    await record_consent(
-        session, user, client, parse_scope(challenge.params.get("scope"))
-    )
+    # The resolved set, not the requested one. A user shown a consent screen
+    # agrees to what they are actually granting; recording the raw request would
+    # also bank consent for scopes that were pruned because they did not hold
+    # them — so a role granted later would be used without ever asking again.
+    requested = parse_scope(challenge.params.get("scope"))
+    granted = resolve_for_user(requested, client, user)
+
+    await record_consent(session, user, client, granted)
     await session.commit()
 
     return ConsentResponse(redirect_url=challenge_store.resume_url(challenge))
