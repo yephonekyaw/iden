@@ -55,7 +55,7 @@ async def _apply_scopes(
 async def list_clients(
     session: AsyncSession, *, limit: int, offset: int
 ) -> tuple[list[Client], int]:
-    total = await session.scalar(select(func.count(Client.id)))
+    total = await session.scalar(select(func.count(Client.id))) or 0
     clients = list(
         await session.scalars(
             select(Client).order_by(Client.client_id).limit(limit).offset(offset)

@@ -59,9 +59,14 @@ async def consent(
         )
 
     user = await session.get(User, login_session.user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail=NoSession.message)
+
     client = await session.scalar(
         select(Client).where(Client.client_id == challenge.params["client_id"])
     )
+    if client is None:
+        raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
 
     # The resolved set, not the requested one. A user shown a consent screen
     # agrees to what they are actually granting; recording the raw request would

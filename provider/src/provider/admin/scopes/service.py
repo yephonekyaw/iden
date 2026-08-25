@@ -19,8 +19,9 @@ async def list_scopes(
 ) -> tuple[list[Scope], int]:
     await get_api(session, api_id)
 
-    total = await session.scalar(
-        select(func.count(Scope.id)).where(Scope.api_id == api_id)
+    total = (
+        await session.scalar(select(func.count(Scope.id)).where(Scope.api_id == api_id))
+        or 0
     )
     scopes = list(
         await session.scalars(

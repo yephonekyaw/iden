@@ -28,13 +28,13 @@ async def _scope_counts(session: AsyncSession, api_ids: list[UUID]) -> dict[UUID
         .where(Scope.api_id.in_(api_ids))
         .group_by(Scope.api_id)
     )
-    return dict(rows.all())
+    return {api_id: count for api_id, count in rows}
 
 
 async def list_apis(
     session: AsyncSession, *, limit: int, offset: int
 ) -> tuple[list[ResourceApi], dict[UUID, int], int]:
-    total = await session.scalar(select(func.count(ResourceApi.id)))
+    total = await session.scalar(select(func.count(ResourceApi.id))) or 0
     apis = list(
         await session.scalars(
             select(ResourceApi).order_by(ResourceApi.name).limit(limit).offset(offset)

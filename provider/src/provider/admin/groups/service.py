@@ -28,7 +28,7 @@ async def resolve_roles(session: AsyncSession, role_ids: list[UUID]) -> list[Rol
 async def list_groups(
     session: AsyncSession, *, limit: int, offset: int
 ) -> tuple[list[Group], int]:
-    total = await session.scalar(select(func.count(Group.id)))
+    total = await session.scalar(select(func.count(Group.id))) or 0
     groups = list(
         await session.scalars(
             select(Group).order_by(Group.name).limit(limit).offset(offset)
@@ -45,11 +45,12 @@ async def get_group(session: AsyncSession, group_id: UUID) -> Group:
 
 
 async def member_count(session: AsyncSession, group_id: UUID) -> int:
-    return await session.scalar(
+    count = await session.scalar(
         select(func.count())
         .select_from(user_groups)
         .where(user_groups.c.group_id == group_id)
     )
+    return count or 0
 
 
 async def member_counts(

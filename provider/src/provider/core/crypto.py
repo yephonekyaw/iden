@@ -58,7 +58,7 @@ def verify_jwt(token: str, audience: str | None = None) -> dict[str, Any]:
     Raises the underlying `jwt.PyJWTError` on failure; callers decide the HTTP shape.
     """
     kid = jwt.get_unverified_header(token).get("kid")
-    key = _keys().get(kid)
+    key = _keys().get(kid) if isinstance(kid, str) else None
     if key is None:
         raise jwt.InvalidKeyError(f"Unknown kid: {kid}")
 

@@ -2,7 +2,7 @@ import hashlib
 import secrets
 
 from argon2 import PasswordHasher
-from argon2.exceptions import VerifyMismatchError, VerificationError
+from argon2.exceptions import VerificationError, VerifyMismatchError
 
 # OWASP-recommended argon2id parameters.
 _hasher = PasswordHasher(time_cost=1, memory_cost=64 * 1024, parallelism=4)
@@ -13,7 +13,11 @@ def hash_secret(secret: str) -> str:
     return _hasher.hash(secret)
 
 
-def verify_secret(hashed: str, secret: str) -> bool:
+def verify_secret(hashed: str | None, secret: str) -> bool:
+    # `None` is a public client's absent `client_secret_hash`: nothing to verify
+    # against, so nothing can match.
+    if hashed is None:
+        return False
     try:
         return _hasher.verify(hashed, secret)
     except VerifyMismatchError, VerificationError:

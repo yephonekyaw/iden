@@ -2,6 +2,7 @@
 
 import uuid
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from redis.asyncio import Redis
 from sqlalchemy import select, update
@@ -106,10 +107,10 @@ def mint_id_token(
     return sign_jwt(claims)
 
 
-def identity_claims(user: User, scopes: set[str]) -> dict[str, object]:
+def identity_claims(user: User, scopes: set[str]) -> dict[str, Any]:
     """Claims released by scope — OIDC Core §5.4. Shared with /userinfo so the
     two can never disagree."""
-    claims: dict[str, object] = {}
+    claims: dict[str, Any] = {}
 
     if "profile" in scopes:
         claims["name"] = user.display_name

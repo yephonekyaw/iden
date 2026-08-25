@@ -173,6 +173,8 @@ async def totp(
         raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
 
     user = await session.get(User, login_session.user_id)
+    if user is None:
+        raise HTTPException(status_code=401, detail=NoSession.message)
 
     try:
         await verify_totp(session, user, body.code)

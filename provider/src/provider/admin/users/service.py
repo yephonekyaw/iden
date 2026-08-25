@@ -81,7 +81,7 @@ async def list_users(
             count.where(User.is_active == is_active),
         )
 
-    total = await session.scalar(count)
+    total = await session.scalar(count) or 0
     users = list(
         await session.scalars(query.order_by(User.email).limit(limit).offset(offset))
     )
@@ -108,13 +108,14 @@ async def create_user(
     if await session.scalar(select(User).where(User.username == data.username)):
         raise UsernameTaken
 
-    generated = None if data.password else secrets.token_urlsafe(18)
+    password = data.password or secrets.token_urlsafe(18)
+    generated = None if data.password else password
 
     user = User(
         email=data.email,
         username=data.username,
         display_name=data.display_name,
-        password_hash=hash_secret(data.password or generated),
+        password_hash=hash_secret(password),
     )
     user.roles = await _resolve(session, Role, data.role_ids, UnknownRoles)
     user.groups = await _resolve(session, Group, data.group_ids, UnknownRoles)
@@ -187,8 +188,9 @@ async def reset_password(
 ) -> str | None:
     user = await get_user(session, user_id)
 
-    generated = None if password else secrets.token_urlsafe(18)
-    user.password_hash = hash_secret(password or generated)
+    new_password = password or secrets.token_urlsafe(18)
+    generated = None if password else new_password
+    user.password_hash = hash_secret(new_password)
 
     await revoke_everything(session, redis, user_id)
     await session.commit()

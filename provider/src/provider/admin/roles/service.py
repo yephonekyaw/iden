@@ -34,7 +34,7 @@ async def resolve_scopes(session: AsyncSession, scope_ids: list[UUID]) -> list[S
 async def list_roles(
     session: AsyncSession, *, limit: int, offset: int
 ) -> tuple[list[Role], int]:
-    total = await session.scalar(select(func.count(Role.id)))
+    total = await session.scalar(select(func.count(Role.id))) or 0
     roles = list(
         await session.scalars(
             select(Role).order_by(Role.name).limit(limit).offset(offset)
