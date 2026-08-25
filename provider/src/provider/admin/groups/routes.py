@@ -50,9 +50,11 @@ async def list_groups(
         session, limit=page.limit, offset=page.offset
     )
 
-    items = [to_response(g, await service.member_count(session, g.id)) for g in groups]
+    counts = await service.member_counts(session, [group.id for group in groups])
+
     return Page[GroupResponse](
-        items=items, meta=PageMeta(total=total, limit=page.limit, offset=page.offset)
+        items=[to_response(group, counts.get(group.id, 0)) for group in groups],
+        meta=PageMeta(total=total, limit=page.limit, offset=page.offset),
     )
 
 

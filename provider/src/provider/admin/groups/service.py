@@ -52,6 +52,21 @@ async def member_count(session: AsyncSession, group_id: UUID) -> int:
     )
 
 
+async def member_counts(
+    session: AsyncSession, group_ids: list[UUID]
+) -> dict[UUID, int]:
+    """Counts for a page of groups in one query, rather than one query each."""
+    if not group_ids:
+        return {}
+
+    rows = await session.execute(
+        select(user_groups.c.group_id, func.count())
+        .where(user_groups.c.group_id.in_(group_ids))
+        .group_by(user_groups.c.group_id)
+    )
+    return {group_id: count for group_id, count in rows}
+
+
 async def create_group(session: AsyncSession, data: GroupCreate) -> Group:
     if await session.scalar(select(Group).where(Group.name == data.name)):
         raise GroupNameTaken

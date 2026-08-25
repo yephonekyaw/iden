@@ -247,6 +247,43 @@ class TestGroups:
         ).status_code == 200
 
 
+class TestGroupListingCost:
+    async def test_query_count_does_not_grow_with_the_number_of_groups(
+        self, client, admin_headers
+    ):
+        """KI-6. member_count used to run once per group, so a page of 50 groups
+        cost 50 extra round trips."""
+        import sqlalchemy
+        from sqlalchemy import event
+
+        counter = {"n": 0}
+
+        @event.listens_for(sqlalchemy.engine.Engine, "before_cursor_execute")
+        def _count(conn, cursor, statement, params, context, executemany):
+            counter["n"] += 1
+
+        try:
+            for i in range(3):
+                await client.post(
+                    "/admin/groups", json={"name": f"a{i}"}, headers=admin_headers
+                )
+            counter["n"] = 0
+            await client.get("/admin/groups", headers=admin_headers)
+            small = counter["n"]
+
+            for i in range(6):
+                await client.post(
+                    "/admin/groups", json={"name": f"b{i}"}, headers=admin_headers
+                )
+            counter["n"] = 0
+            await client.get("/admin/groups", headers=admin_headers)
+            large = counter["n"]
+        finally:
+            event.remove(sqlalchemy.engine.Engine, "before_cursor_execute", _count)
+
+        assert small == large, f"{small} queries for 3 groups, {large} for 9"
+
+
 class TestEffectiveScopes:
     async def test_reports_a_directly_assigned_role(
         self, client, admin_headers, user, catalogue
