@@ -268,3 +268,14 @@ async def third_party(db, catalogue, unheld_scope) -> Client:
         db.add(ClientScope(client_id=client.id, scope_id=scope.id, grantable=True))
     await db.commit()
     return client
+
+
+@pytest.fixture
+def no_grace(monkeypatch):
+    """Turn off the refresh replay window.
+
+    A test that re-presents a spent token straight away is, by default, a
+    retry — which is the point of KI-16's fix. Tests about *theft* need the
+    window closed, and waiting thirty seconds for it is not an option.
+    """
+    monkeypatch.setattr(settings, "iden_refresh_grace_period", 0)

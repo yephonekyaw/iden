@@ -905,6 +905,7 @@ ones with a failing test first — see ground rule 9.
 | **KI-5** | `IndexError` on a client with no grants | The management endpoints no longer touch `allowed_grants` at all — they are not a grant. | `::test_client_with_no_grants_does_not_crash` |
 | **KI-6** | `GET /admin/groups` was N+1 | One grouped `member_counts` query for the whole page. | `test_admin_users_groups.py::TestGroupListingCost` — asserts query count does not grow with row count |
 | **KI-12** | No audit log | `audit_events`, written by pure-ASGI middleware in `core/audit.py` for every state-changing request — `/admin/*`, `/entity/*`, `/api/v1/auth/*`, `/oauth2/revoke` and `GET /oauth2/logout`. Records actor, route template, target, status, IP, and the request body with secrets redacted. `actor_user_id` is `ON DELETE SET NULL` with the actor's email kept alongside, so deleting a user cannot erase what they did. Readable at `GET /admin/audit` under the new `admin:audit:read` scope; there is no write endpoint. | `tests/test_audit.py` — 14 tests, including that reads are not recorded, that refused attempts are, that a password never reaches the row, and that history survives the actor's deletion |
+| **KI-16** | Two honest simultaneous refreshes revoked the family | Both options from the writeup turned out to be needed, not either. A **replay window** (`IDEN_REFRESH_GRACE_PERIOD`, 30s) returns what a spent token was already exchanged for, to the same client only, with `expires_in` recomputed. A **Redis lock on the token** wraps the exchange, because the window alone only helps a caller arriving after the first finished — two requests in the same instant both find no replay and both rotate. Detection is delayed by one rotation, never removed: both parties end up holding the same next token, which collides outside the window. | `test_token_grants.py::TestConcurrentRefresh` — six tests; four fail without the window, and the `asyncio.gather` one fails without the lock (reliably under full-suite load, which is how the gap was found) |
 | **KI-15** | No migrations; `create_all` was the only way to build the schema | Alembic, with the initial revision generated from the settled Phase 2 models. `scripts/seed.py` no longer creates anything structural, and the test database is built by running the migrations — the same path a deployment takes, so there is only one way to produce a schema. | `tests/test_migrations.py` — autogenerate must find nothing left to do; confirmed to fail when a column is added to a model without a revision |
 
 A correction to the earlier writeup of **KI-2**: the old test was *under-specified*, not wrong. It
@@ -913,14 +914,6 @@ checked whether the original scope could be recovered. It has been split into tw
 cover both.
 
 ### Open — correctness and security
-
-**KI-16 · Concurrent legitimate refreshes revoke the family · verified by design · medium**
-Now that KI-3 makes reuse detection actually fire, two honest simultaneous refreshes — two browser
-tabs, a retried request — look exactly like theft, and the whole family is revoked. This is the
-behaviour the BCP asks for, and it is also a real way to sign users out at random.
-*Options:* a short grace window in which the immediately-previous token is still accepted and returns
-the same rotation result, or a per-family mutex so the second caller waits and receives the new
-token. Decide before real traffic; it is a UX bug, not a security one.
 
 **KI-17 · An audit row is not atomic with the change it describes.** The entry is written after the
 response, from a session of its own, because by then the request's own transaction has already
@@ -971,7 +964,7 @@ without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
 1. ~~KI-1~~ ✅ — with KI-2 through KI-6.
 2. ~~KI-15~~ ✅ Alembic, ~~KI-12~~ ✅ audit log — both taken ahead of Phase 3.
 3. **KI-13** before any deployment reachable by others; it is now the largest exposure.
-4. **KI-16** before real traffic — decide the grace window or the mutex.
+4. ~~KI-16~~ ✅ — the replay window and the lock, together.
 5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
 6. **KI-9, KI-10, KI-11, KI-14** with Phase 6 hardening.
 

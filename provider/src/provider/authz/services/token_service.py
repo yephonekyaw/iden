@@ -1,5 +1,6 @@
 """Minting and lifecycle for every token IDEN issues."""
 
+import json
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
@@ -157,6 +158,86 @@ async def issue_refresh_token(
     session.add(record)
     await session.flush()
     return token, record
+
+
+def _replay_key(token: str) -> str:
+    return f"refresh_replay:{hash_token(token)}"
+
+
+def rotation_lock(redis: Redis, token: str):
+    """Serialise exchanges of one refresh token across every worker.
+
+    The replay window alone only helps a caller that arrives after the first
+    exchange finished. Two tabs firing at the same instant both find no replay
+    yet, both go on to rotate, and the loser is treated as theft — which is the
+    bug, not a narrower version of it.
+
+    Held around the replay check *and* the rotation, so the loser waits and
+    then finds the answer the winner produced. Keyed by the token rather than
+    the family: two different tokens of one family arriving together is the
+    case detection is for.
+    """
+    return redis.lock(
+        f"refresh_lock:{hash_token(token)}",
+        # Ceilings, not expected durations: the lock is released in a finally.
+        # They only matter if a worker dies mid-exchange, and then the next
+        # caller should get on with it rather than inherit the outage.
+        timeout=10,
+        blocking_timeout=5,
+    )
+
+
+async def remember_rotation(
+    redis: Redis, token: str, *, client_id: str, response: dict, expires_at: datetime
+) -> None:
+    """Remember what a refresh token was exchanged for, briefly.
+
+    A refresh token is single use and rotation is what makes theft detectable.
+    But two browser tabs refreshing in the same instant, or one request that
+    timed out and got retried, present the same token twice for entirely honest
+    reasons — and look exactly like theft. Replaying the original answer serves
+    both callers without a second rotation.
+
+    Only the presenting client can collect the replay, and only for a few
+    seconds. Beyond that window the second use is treated as theft again, which
+    is the behaviour that matters.
+    """
+    if settings.iden_refresh_grace_period <= 0:
+        return
+
+    payload = json.dumps(
+        {
+            "client_id": client_id,
+            "expires_at": expires_at.timestamp(),
+            "response": response,
+        }
+    )
+    await redis.set(_replay_key(token), payload, ex=settings.iden_refresh_grace_period)
+
+
+async def replayed_rotation(redis: Redis, token: str, *, client_id: str) -> dict | None:
+    """The answer this token already received, if it is still within the window.
+
+    Returns None for a token that has not been spent, so this is safe to ask
+    before doing any work.
+    """
+    raw = await redis.get(_replay_key(token))
+    if raw is None:
+        return None
+
+    remembered = json.loads(raw)
+    # A different client holding the same token is not a retry — it is the case
+    # rotation exists to catch, so it falls through to reuse detection.
+    if remembered["client_id"] != client_id:
+        return None
+
+    response = remembered["response"]
+    # The access token is the one that was minted, so it expires when it always
+    # would have. Repeating the original `expires_in` would overstate its life
+    # by however long the replay window has been running.
+    remaining = remembered["expires_at"] - now().timestamp()
+    response["expires_in"] = max(1, int(remaining))
+    return response
 
 
 class RefreshTokenReuse(Exception):

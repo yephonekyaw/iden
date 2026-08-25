@@ -33,6 +33,12 @@ class Settings(BaseSettings):
     iden_auth_code_ttl: int = 60
     iden_session_ttl: int = 86_400
     iden_challenge_ttl: int = 600
+    # How long a spent refresh token keeps returning the tokens it was already
+    # exchanged for. Two browser tabs refreshing at once, or one request that
+    # timed out and was retried, are indistinguishable from theft without it.
+    # Long enough to cover a stalled request; short enough that a stolen token
+    # is unlikely to be spent inside it.
+    iden_refresh_grace_period: int = 30
 
     # Bootstrap
     iden_bootstrap_admin_email: str = "admin@localhost"

@@ -1,5 +1,6 @@
 import base64
 import uuid
+from datetime import timedelta
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -327,6 +328,7 @@ def _client_auth(request: Request, client_id: str | None, client_secret: str | N
 async def token(
     request: Request,
     session: DBSessionDep,
+    redis: RedisDep,
     grant_type: Annotated[str, Form()],
     code: Annotated[str | None, Form()] = None,
     redirect_uri: Annotated[str | None, Form()] = None,
@@ -349,7 +351,9 @@ async def token(
         case GrantType.REFRESH_TOKEN:
             if not refresh_token:
                 raise OAuthError("invalid_request", "refresh_token is required.")
-            return await _refresh_token_grant(session, client, refresh_token, scope)
+            return await _refresh_token_grant(
+                session, redis, client, refresh_token, scope
+            )
         case GrantType.CLIENT_CREDENTIALS:
             return await _client_credentials_grant(session, client, scope)
         case _:
@@ -421,8 +425,33 @@ async def _authorization_code_grant(
 
 
 async def _refresh_token_grant(
-    session, client: Client, refresh_token: str, requested_scope: str | None
+    session,
+    redis,
+    client: Client,
+    refresh_token: str,
+    requested_scope: str | None,
 ) -> TokenResponse:
+    async with tokens.rotation_lock(redis, refresh_token):
+        return await _rotate(session, redis, client, refresh_token, requested_scope)
+
+
+async def _rotate(
+    session,
+    redis,
+    client: Client,
+    refresh_token: str,
+    requested_scope: str | None,
+) -> TokenResponse:
+    # Asked before anything is spent: an entry exists only for a token that was
+    # already exchanged, and only for a few seconds afterwards. Two tabs
+    # refreshing at once, or one request retried after a timeout, both land
+    # here and get the answer the first exchange produced.
+    replay = await tokens.replayed_rotation(
+        redis, refresh_token, client_id=client.client_id
+    )
+    if replay is not None:
+        return TokenResponse(**replay)
+
     try:
         record = await tokens.consume_refresh_token(session, refresh_token)
     except tokens.RefreshTokenReuse as exc:
@@ -481,6 +510,7 @@ async def _refresh_token_grant(
         acr=record.acr,
         amr=record.amr,
     )
+    access_expires_at = tokens.now() + timedelta(seconds=expires_in)
 
     id_token = None
     if "openid" in granted:
@@ -495,13 +525,22 @@ async def _refresh_token_grant(
         )
 
     await session.commit()
-    return TokenResponse(
+
+    response = TokenResponse(
         access_token=access_token,
         expires_in=expires_in,
         scope=format_scope(granted),
         refresh_token=new_token,
         id_token=id_token,
     )
+    await tokens.remember_rotation(
+        redis,
+        refresh_token,
+        client_id=client.client_id,
+        response=response.model_dump(),
+        expires_at=access_expires_at,
+    )
+    return response
 
 
 async def _client_credentials_grant(

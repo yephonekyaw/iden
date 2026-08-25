@@ -1,3 +1,5 @@
+import asyncio
+
 import jwt
 import pytest
 
@@ -31,7 +33,7 @@ class TestRefreshRotation:
         assert rotated["refresh_token"] != tokens["refresh_token"]
         assert rotated["access_token"] != tokens["access_token"]
 
-    async def test_reuse_of_a_rotated_token_is_detected(self, client):
+    async def test_reuse_of_a_rotated_token_is_detected(self, client, no_grace):
         tokens = await get_tokens(client)
         await refresh(client, tokens["refresh_token"])
 
@@ -40,7 +42,7 @@ class TestRefreshRotation:
         assert replay.status_code == 400
         assert "reuse" in replay.json()["error_description"].lower()
 
-    async def test_reuse_revokes_the_whole_family(self, client):
+    async def test_reuse_revokes_the_whole_family(self, client, no_grace):
         """Two parties holding one token means only one of them is legitimate,
         so the safe move is to invalidate the lineage rather than guess."""
         tokens = await get_tokens(client)
@@ -492,3 +494,77 @@ class TestLogout:
             },
         )
         assert blocked.status_code == 204
+
+
+class TestConcurrentRefresh:
+    """KI-16. Rotation makes theft detectable, but two browser tabs refreshing
+    in the same instant — or one request that timed out and was retried —
+    present the same token twice for entirely honest reasons."""
+
+    async def test_a_retry_gets_the_same_answer(self, client):
+        tokens = await get_tokens(client)
+
+        first = (await refresh(client, tokens["refresh_token"])).json()
+        retry = (await refresh(client, tokens["refresh_token"])).json()
+
+        assert retry["refresh_token"] == first["refresh_token"]
+        assert retry["access_token"] == first["access_token"]
+
+    async def test_a_retry_does_not_sign_the_user_out(self, client):
+        """The failure this fixes: an honest double refresh used to look like
+        theft, and revoking the family logged the person out of everything."""
+        tokens = await get_tokens(client)
+        first = (await refresh(client, tokens["refresh_token"])).json()
+
+        await refresh(client, tokens["refresh_token"])
+
+        assert (await refresh(client, first["refresh_token"])).status_code == 200
+
+    async def test_simultaneous_refreshes_both_succeed(self, client):
+        tokens = await get_tokens(client)
+
+        both = await asyncio.gather(
+            refresh(client, tokens["refresh_token"]),
+            refresh(client, tokens["refresh_token"]),
+        )
+
+        assert [response.status_code for response in both] == [200, 200]
+        assert both[0].json()["refresh_token"] == both[1].json()["refresh_token"]
+
+    async def test_the_replayed_access_token_expires_when_it_always_would(self, client):
+        """Repeating the original `expires_in` would overstate the token's life
+        by however long the window has been running, and a client trusting that
+        would use it past its expiry."""
+        tokens = await get_tokens(client)
+        first = (await refresh(client, tokens["refresh_token"])).json()
+
+        retry = (await refresh(client, tokens["refresh_token"])).json()
+
+        assert retry["expires_in"] <= first["expires_in"]
+
+    async def test_another_client_gets_no_replay(self, client, third_party):
+        """A different client holding the same token is not a retry — it is the
+        case rotation exists to catch, so it falls through to detection."""
+        tokens = await get_tokens(client)
+        await refresh(client, tokens["refresh_token"])
+
+        response = await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "refresh_token",
+                "refresh_token": tokens["refresh_token"],
+                "client_id": "library",
+            },
+        )
+
+        assert response.status_code == 400
+        assert "reuse" in response.json()["error_description"].lower()
+
+    async def test_theft_is_still_caught_once_the_window_passes(self, client, no_grace):
+        tokens = await get_tokens(client)
+        await refresh(client, tokens["refresh_token"])
+
+        stolen = await refresh(client, tokens["refresh_token"])
+
+        assert stolen.status_code == 400
+        assert "reuse" in stolen.json()["error_description"].lower()

@@ -29,6 +29,7 @@ same guarantee by validating against the published JWKS.
 - [Data Model](#data-model)
 - [Access Control in Practice](#access-control-in-practice)
 - [The Audit Log](#the-audit-log)
+- [Refresh Rotation and the Grace Window](#refresh-rotation-and-the-grace-window)
 - [Single Sign-On and Sign-Out](#single-sign-on-and-sign-out)
 - [Endpoint Reference](#endpoint-reference)
 - [Tokens & Claims](#tokens--claims)
@@ -197,6 +198,7 @@ All settings are environment variables prefixed `IDEN_`, loaded by `core/config.
 | `IDEN_AUTH_CODE_TTL` | `60` | Single use. |
 | `IDEN_SESSION_TTL` | `86400` (24 h) | Sliding browser session. |
 | `IDEN_CHALLENGE_TTL` | `600` | Login/consent challenges. |
+| `IDEN_REFRESH_GRACE_PERIOD` | `30` | How long a spent refresh token keeps returning what it was already exchanged for. Set to `0` to make every second use theft — see below. |
 
 ### Bootstrap & extensions
 
@@ -531,6 +533,35 @@ Tracked as KI-17 in [PLAN.md](PLAN.md#known-issues).
 
 Read it with `GET /admin/audit`, newest first, filtered by `actorUserId`, `action` (substring),
 `since`, and `until`.
+
+---
+
+## Refresh Rotation and the Grace Window
+
+Every refresh is single use: presenting one returns a new one and burns the old. A token presented
+twice means two parties hold it, and only one of them can be legitimate, so IDEN revokes the whole
+lineage — the family — rather than guessing which.
+
+That is the right instinct and, taken literally, it signs honest people out at random. Two browser
+tabs refreshing in the same second, or one request that timed out and was retried, present the same
+token twice for entirely innocent reasons and look exactly like theft.
+
+Two mechanisms make the honest cases work without weakening the dishonest one:
+
+- **A replay window.** After a successful exchange, IDEN remembers what that token was exchanged for
+  (`IDEN_REFRESH_GRACE_PERIOD`, 30s). Presenting it again inside the window returns the *same* tokens
+  rather than rotating again. Only the client the token was issued to can collect the replay, and the
+  access token's `expires_in` is recomputed so it still expires when it always would have.
+- **A lock on the token.** The window alone only helps a caller that arrives *after* the first
+  exchange finished. Two requests firing at the same instant both find no replay yet, both rotate,
+  and the loser is treated as theft. The exchange therefore runs under a short Redis lock keyed on
+  the token, so the second caller waits and then finds the first one's answer.
+
+**What this costs.** Inside the window a stolen token buys the thief the same tokens the victim just
+received, rather than tripping detection. In exchange, both parties then hold the same next token —
+so the following exchange collides outside the window and the family is revoked after all. Detection
+is delayed by one rotation, not removed. Setting the period to `0` restores strict single use, at the
+price of signing people out over a double-click.
 
 ---
 
