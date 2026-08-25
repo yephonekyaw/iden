@@ -46,6 +46,7 @@ from provider.core.crypto import verify_jwt
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.security import hash_token
+from provider.entity.profile import service as profile_service
 from provider.shared.enums import ClientType, CodeChallengeMethod, GrantType, Prompt
 from provider.shared.models import Client, RefreshToken, User
 
@@ -413,6 +414,7 @@ async def _authorization_code_grant(
             authenticated_at=record.authenticated_at,
             sid=record.sid,
             nonce=record.nonce,
+            extra_claims=await profile_service.claims_for(session, user, scopes),
         )
 
     await session.commit()
@@ -524,6 +526,7 @@ async def _rotate(
             amr=record.amr,
             authenticated_at=record.authenticated_at,
             sid=record.sid,
+            extra_claims=await profile_service.claims_for(session, user, granted),
         )
 
     await session.commit()
@@ -625,7 +628,11 @@ async def userinfo(
             "invalid_token", "The subject no longer exists.", status_code=401
         )
 
-    return UserInfoResponse(sub=str(user.id), **tokens.identity_claims(user, scopes))
+    return UserInfoResponse(
+        sub=str(user.id),
+        **tokens.identity_claims(user, scopes),
+        **await profile_service.claims_for(session, user, scopes),
+    )
 
 
 @router.post(

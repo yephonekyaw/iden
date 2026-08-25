@@ -296,6 +296,10 @@ async def member(db, catalogue) -> User:
     user.roles = [catalogue["roles"]["member"]]
     db.add(user)
     await db.commit()
+    # Relationships are unloaded on a freshly created object, and reading one
+    # later triggers a lazy load that fails in async code. Routes never hit
+    # this because they load the user with a query; a fixture has to say so.
+    await db.refresh(user, ["groups", "roles", "scopes"])
     return user
 
 

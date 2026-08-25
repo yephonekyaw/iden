@@ -98,3 +98,24 @@ async def write_values(
     except IntegrityError as exc:
         await session.rollback()
         raise ValueTaken from exc
+
+
+async def claims_for(session: AsyncSession, user: User, scopes: set[str]) -> dict:
+    """Organization-defined fields released as token claims.
+
+    A field is invisible to clients until an administrator sets both
+    `claim_name` and `claim_scope`, and then only reaches a client that was
+    granted that scope. Data minimization by default, and it reuses the scope
+    system rather than inventing a second release mechanism beside it.
+    """
+    stored = await values_for(session, user)
+    released = {}
+
+    for field in await fields_for(session, user):
+        if not field.claim_name or field.claim_scope not in scopes:
+            continue
+        row = stored.get(field.key)
+        if row is not None:
+            released[field.claim_name] = values.render(field, row.value)
+
+    return released

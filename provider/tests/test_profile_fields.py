@@ -231,10 +231,6 @@ class TestGroupBoundFields:
         before = await client.get("/entity/profile/schema", headers=entity_headers)
         assert [f["key"] for f in before.json()["fields"]] == []
 
-        # Refreshed first: `groups` was never loaded on this instance, and
-        # assigning to an unloaded collection triggers a lazy load in async
-        # code. See provider/README.md § Loading relationships on new objects.
-        await db.refresh(member, ["groups"])
         member.groups = [students]
         await db.commit()
 
@@ -257,3 +253,84 @@ class TestSchemaEndpoint:
         assert by_key["student_id"]["writable"] is False
         assert by_key["preferred_name"]["writable"] is True
         assert by_key["student_id"]["validators"] == {"pattern": "^[0-9]{8}$"}
+
+
+class TestClaimRelease:
+    async def test_a_field_reaches_a_token_only_under_its_scope(
+        self, client, admin_headers, member, db
+    ):
+        """Data minimization by default: a field is invisible to clients until
+        someone maps it, and then only to clients holding that scope."""
+        await define(
+            client,
+            admin_headers,
+            {
+                "key": "department",
+                "label": "Department",
+                "claimName": "department",
+                "claimScope": "entity:profile:read",
+            },
+        )
+        await client.patch(
+            f"/admin/users/{member.id}/profile",
+            json={"fields": {"department": "Computer Science"}},
+            headers=admin_headers,
+        )
+
+        from provider.entity.profile import service as profile_service
+
+        released = await profile_service.claims_for(
+            db, member, {"openid", "entity:profile:read"}
+        )
+        withheld = await profile_service.claims_for(db, member, {"openid"})
+
+        assert released == {"department": "Computer Science"}
+        assert withheld == {}
+
+    async def test_it_appears_in_userinfo_when_granted(
+        self, client, admin_headers, token_for, member
+    ):
+        await define(
+            client,
+            admin_headers,
+            {
+                "key": "department",
+                "label": "Department",
+                "claimName": "department",
+                "claimScope": "entity:profile:read",
+            },
+        )
+        await client.patch(
+            f"/admin/users/{member.id}/profile",
+            json={"fields": {"department": "History"}},
+            headers=admin_headers,
+        )
+
+        headers = await token_for("openid", "entity:profile:read", user=member)
+        body = (await client.get("/oauth2/userinfo", headers=headers)).json()
+
+        assert body["department"] == "History"
+
+    async def test_it_is_absent_from_userinfo_without_the_scope(
+        self, client, admin_headers, token_for, member
+    ):
+        await define(
+            client,
+            admin_headers,
+            {
+                "key": "department",
+                "label": "Department",
+                "claimName": "department",
+                "claimScope": "entity:profile:read",
+            },
+        )
+        await client.patch(
+            f"/admin/users/{member.id}/profile",
+            json={"fields": {"department": "History"}},
+            headers=admin_headers,
+        )
+
+        headers = await token_for("openid", user=member)
+        body = (await client.get("/oauth2/userinfo", headers=headers)).json()
+
+        assert "department" not in body

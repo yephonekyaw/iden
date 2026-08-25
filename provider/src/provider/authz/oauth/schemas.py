@@ -1,6 +1,6 @@
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TokenResponse(BaseModel):
@@ -23,7 +23,13 @@ class TokenResponse(BaseModel):
 
 
 class UserInfoResponse(BaseModel):
-    """Claims released by granted scope — OIDC Core §5.3."""
+    """Claims released by granted scope — OIDC Core §5.3.
+
+    Extra keys are allowed through: an organization defines its own fields at
+    runtime, so the claim set is not knowable when this class is written.
+    """
+
+    model_config = ConfigDict(extra="allow")
 
     sub: str
     name: str | None = None

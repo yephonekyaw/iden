@@ -91,6 +91,7 @@ def mint_id_token(
     authenticated_at: datetime,
     sid: str | None = None,
     nonce: str | None = None,
+    extra_claims: dict[str, Any] | None = None,
 ) -> str:
     """The ID token describes the authentication event to the client that asked
     for it — hence `aud` is the client, not an API (OIDC Core §2)."""
@@ -112,6 +113,11 @@ def mint_id_token(
     # were recorded.
     if sid:
         claims["sid"] = sid
+    # Organization-defined fields, already filtered to the scopes this client
+    # holds. Safe to merge wholesale: the OIDC reserved names are refused when
+    # a field is defined, so nothing here can shadow `sub` or `iss`.
+    claims |= extra_claims or {}
+
     # Binds the token to the client's authorization request, defeating replay.
     if nonce:
         claims["nonce"] = nonce
