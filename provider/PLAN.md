@@ -54,6 +54,10 @@ collected here so a phase can be executed without flipping between files.
    tests (no database, no fixtures); every endpoint gets at least a success case, an authorization
    failure, and its most interesting failure mode. `uv run pytest` must be green before a phase is
    called done.
+9. **A regression test must be shown to fail without the fix.** Revert the change, watch it go red,
+   restore it. Two of the concurrency tests written for KI-3 passed *without* the lock — they
+   depended on timing that happened to favour them, and would have certified a bug as fixed. A test
+   that cannot fail is worse than no test, because it stops anyone looking again.
 
 ### Testing
 
@@ -414,6 +418,31 @@ reuse detection, client credentials, revocation, introspection, logout, and `req
 
 ---
 
+### Revisited: wrapping Authlib
+
+Reopened after Phase 2 and closed again, so it does not get relitigated a third time:
+
+- **Authlib is not OpenID-certified.** Certification is a paid conformance process; there are
+  long-standing open requests ([#220](https://github.com/lepture/authlib/issues/220),
+  [#250](https://github.com/lepture/authlib/issues/250)) and no Python server library appears on the
+  [certified list](https://openid.net/certification/certified-openid-connect-implementations/).
+  Certification attaches to deployments, not libraries.
+- **Its provider core is sync-only.** Zero `async def` across all 13 modules of
+  `authlib.oauth2.rfc6749`. `create_authorization_response`, `create_token_response`, and every hook
+  you must implement — `query_client`, `save_token`, `query_authorization_code`,
+  `save_authorization_code`, `authenticate_user` — are synchronous and every one of them needs the
+  database. Wrapping it means a second synchronous engine plus a thread-pool bridge, and transactions
+  that cannot span the boundary.
+- **It would not supply the IDEN-specific parts anyway** — scope resolution, `acr`/`amr` derivation,
+  audience computation, the consent and challenge flow. Those stay ours; they would just move into
+  Authlib's hooks.
+- **Still worth borrowing, if the hand-rolled error shapes ever prove wrong:**
+  `authlib.oauth2.rfc6749.errors` and `authlib.oauth2.rfc7636` are pure, sync-safe, and need no
+  adapter. (Its `create_s256_code_challenge` produces the same output as ours on the RFC 7636 vector.)
+  Note `authlib.jose` is deprecated in favour of `joserfc`.
+
+**Decision: stay hand-rolled**, and spend the effort on the known issues instead.
+
 ### Built differently than planned
 
 Recorded so the code and this plan do not drift apart:
@@ -737,52 +766,38 @@ checks — rate limits engaged, no secrets in logs, headers present — all hold
 
 ## Known issues
 
-Found in a review after Phase 2. Recorded here so they are scheduled rather than remembered.
+Found in a review after Phase 2, and reanalysed after the fix pass. Recorded here so they are
+scheduled rather than remembered.
 
-**Status** is either *verified* (reproduced against the running app) or *suspected* (reasoned from
-the code, not yet demonstrated). Fix the verified ones on evidence; demonstrate the suspected ones
-with a failing test before changing anything.
+**Status** is *verified* (reproduced against the running app), *suspected* (reasoned from the code,
+not yet demonstrated), or *resolved*. Fix the verified ones on evidence; demonstrate the suspected
+ones with a failing test first — see ground rule 9.
 
-### Correctness and security
+### Resolved
 
-**KI-1 · Introspection leaks token contents to unauthenticated callers · verified · high**
-`authz/oauth/routes.py` authenticates only *confidential* clients on `/oauth2/introspect` and
-`/oauth2/revoke`. Naming the public `dashboard` client with no secret returns the full token
-contents — `sub`, `scope`, `aud`, `exp`, `jti`. RFC 7662 §2.1 requires the endpoint be protected.
-Anyone who can reach IDEN and holds a token can learn whose it is and what it can do.
-*Cause: "public clients have no secret" was treated as "public clients skip authentication."*
-*Fix:* require a confidential client for both endpoints, or admit a public client only for tokens it
-issued itself, with rate limiting. Fix before any deployment reachable by anyone but you.
+| | Issue | What changed | Pinned by |
+|---|---|---|---|
+| **KI-1** | Introspection leaked token contents to unauthenticated callers | `/oauth2/introspect` now requires a **confidential** client via `authenticate_endpoint_client(..., require_confidential=True)`. `/oauth2/revoke` still admits public clients — RFC 7009 §2.1 allows it, the caller must already hold the token, and the existing owner check stops one client revoking another's. | `test_token_grants.py::TestIntrospection::test_public_client_cannot_introspect`, `::test_one_client_cannot_revoke_another_clients_token` |
+| **KI-2** | Narrowing a refresh token's scope was permanent | `RefreshToken.scope` now always holds the **original grant**; a `scope` parameter narrows that one response without shrinking the grant. Re-resolution against current permissions is unchanged. | `::test_scope_narrowing_applies_to_one_response_only` |
+| **KI-3** | Single-use enforcement was check-then-write | `consume_code` and `consume_refresh_token` take a row lock (`.with_for_update()`), so a second caller blocks until the first commits and then sees the burnt row. | `tests/test_concurrency.py` — both tests hold the first transaction open and assert the second blocks; both were confirmed to fail without the lock |
+| **KI-4** | Consent recorded requested scopes, not granted ones | The consent route resolves the request first and stores what was actually granted, so a scope pruned for lack of permission is not silently pre-consented. | `test_consent.py::test_consent_records_what_was_granted_not_what_was_asked` |
+| **KI-5** | `IndexError` on a client with no grants | The management endpoints no longer touch `allowed_grants` at all — they are not a grant. | `::test_client_with_no_grants_does_not_crash` |
+| **KI-6** | `GET /admin/groups` was N+1 | One grouped `member_counts` query for the whole page. | `test_admin_users_groups.py::TestGroupListingCost` — asserts query count does not grow with row count |
 
-**KI-2 · Narrowing a refresh token's scope is permanent · verified · medium**
-`_refresh_token_grant` stores the narrowed set on the rotated token, so a client that once asked for
-less can never get the original grant back. RFC 6749 §6 treats the refresh token as representing the
-original grant, with per-request narrowing as a view of it, not a mutation.
-Note that `tests/test_token_grants.py::test_scope_can_be_narrowed_but_not_widened` currently asserts
-the buggy behaviour — the test agrees with the bug and must change with the code.
-*Fix:* keep the original grant on the token family and intersect per request.
+A correction to the earlier writeup of **KI-2**: the old test was *under-specified*, not wrong. It
+checked that narrowing narrowed and that widening beyond the grant was refused — it simply never
+checked whether the original scope could be recovered. It has been split into two tests that now
+cover both.
 
-**KI-3 · Single-use enforcement is check-then-write · suspected · medium**
-`oauth/service.consume_code` selects the row, tests `used_at`, then sets it. Under READ COMMITTED two
-concurrent requests can both pass the check and both mint tokens, defeating the single-use property
-that makes a stolen code survivable. `token_service.consume_refresh_token` has the same shape, where
-it also defeats reuse *detection*.
-*Fix:* `SELECT … FOR UPDATE`, or a conditional `UPDATE … WHERE used_at IS NULL` checking `rowcount`.
-Demonstrate with a test that fires both requests concurrently.
+### Open — correctness and security
 
-**KI-4 · Consent records requested scopes, not granted ones · suspected · medium**
-`consent/routes.py` persists `challenge.params["scope"]`. A user consents to a scope that was pruned
-at issuance because they did not hold it; later they gain the role, and the client uses it without
-ever asking again. The stored grant should be what was actually granted — that is what the user saw
-and agreed to.
-
-**KI-5 · `IndexError` on a client with no grants · verified as latent · low**
-`revoke`/`introspect` read `client.allowed_grants[0]`. Not reachable through the admin API today;
-reachable by a direct database edit, and it yields a 500.
-
-**KI-6 · `GET /admin/groups` is N+1 · verified · low**
-`member_count` runs once per group in the route — 8 queries for 5 groups. One `GROUP BY` away from
-fixed.
+**KI-16 · Concurrent legitimate refreshes revoke the family · verified by design · medium**
+Now that KI-3 makes reuse detection actually fire, two honest simultaneous refreshes — two browser
+tabs, a retried request — look exactly like theft, and the whole family is revoked. This is the
+behaviour the BCP asks for, and it is also a real way to sign users out at random.
+*Options:* a short grace window in which the immediately-previous token is still accepted and returns
+the same rotation result, or a per-family mutex so the second caller waits and receives the new
+token. Decide before real traffic; it is a UX bug, not a security one.
 
 ### Design calls to ratify or overturn
 
@@ -804,7 +819,8 @@ RFC 8707 (`resource`) is the tighter design if that matters.
 **KI-10 · `require_scope` derives the audience from the scope prefix.** `core/auth._audience_for`
 is correct for `admin:`/`entity:`/`biometric:` and silently wrong for anything else — an IDEN route
 guarded by a custom scope would compute a nonexistent audience and 401 every request. Needs a guard
-rail or an explicit audience argument.
+rail or an explicit audience argument. **Phase 3 will add `admin:profile-fields:*`, which keeps the
+prefix convention — but it is one custom scope away from biting.**
 
 **KI-11 · Key rotation needs a restart.** `core/crypto._keys` is `@cache`d at import. The docs call
 rotation "a config change"; it is a config change *and* a restart.
@@ -818,7 +834,7 @@ Phase 3 rather than leaving it in Phase 5.
 
 **KI-13 · No rate limiting.** `/api/v1/auth/login` and `/oauth2/token` accept unlimited attempts.
 Argon2 makes each attempt expensive for the server, not the attacker. Phase 5 owns it, but the
-endpoints are live now.
+endpoints are live now. **With KI-1 fixed this is the largest remaining exposure.**
 
 **KI-14 · Expired authorization codes and refresh tokens are never deleted.** Both tables grow
 without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
@@ -829,11 +845,12 @@ Phase 3, before there is data worth keeping.
 
 ### Suggested order
 
-1. **KI-1** now — it is a live information leak and a small change.
+1. ~~KI-1~~ ✅ — with KI-2 through KI-6.
 2. **KI-15**, then **KI-12**, at the start of Phase 3 — both get more expensive with every phase.
-3. **KI-2, KI-3, KI-4** during Phase 3, each with a failing test first.
-4. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
-5. The rest with Phase 5 hardening.
+3. **KI-13** before any deployment reachable by others; it is now the largest exposure.
+4. **KI-16** before real traffic — decide the grace window or the mutex.
+5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
+6. **KI-9, KI-10, KI-11, KI-14** with Phase 5 hardening.
 
 ---
 

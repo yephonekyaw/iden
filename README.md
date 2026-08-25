@@ -595,9 +595,10 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 Phases 0–5 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md). Tests ship with the
 phase that introduces the code — `uv run pytest` from `provider/` runs the suite.
 
-Issues found in review but not yet fixed are tracked in
-[provider/PLAN.md § Known issues](provider/PLAN.md#known-issues). **IDEN is not yet ready for a
-deployment reachable by anyone but its developers** — see KI-1 and KI-13 in particular.
+Issues found in review are tracked in
+[provider/PLAN.md § Known issues](provider/PLAN.md#known-issues); six are fixed, the rest are
+scheduled. **IDEN is not yet ready for a deployment reachable by anyone but its developers** — there
+is no rate limiting yet (KI-13) and no audit log (KI-12).
 
 ---
 

@@ -419,8 +419,8 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 | `GET` | `/oauth2/authorize` | session | Start authorization code + PKCE; redirects to `auth-ui` when login or consent is needed | 1 |
 | `POST` | `/oauth2/token` | client | `authorization_code`, `refresh_token`, `client_credentials` | 1 |
 | `GET` | `/oauth2/userinfo` | bearer `openid` | Claims filtered by granted scopes | 1 |
-| `POST` | `/oauth2/revoke` | client | RFC 7009 — revoke a refresh family or denylist a `jti` | 1 |
-| `POST` | `/oauth2/introspect` | client | RFC 7662 | 1 |
+| `POST` | `/oauth2/revoke` | client | RFC 7009 — revoke a refresh family or denylist a `jti`. Public clients may revoke their own tokens | 1 |
+| `POST` | `/oauth2/introspect` | client | RFC 7662 — **confidential clients only**: the response describes someone else's token, and a `client_id` is public by definition | 1 |
 | `GET` | `/oauth2/logout` | session | End session, honour `post_logout_redirect_uri` | 1 |
 
 ### AuthZ — login & consent (consumed by `auth-ui`)
@@ -509,7 +509,7 @@ token would otherwise take over the account outright. They must pass a login the
 |---|---|---|---|
 | Access | Signed JWT (`RS256`) | 10 min | Stateless; early revocation via a Redis `jti` denylist |
 | ID | Signed JWT (`RS256`) | 10 min | Stateless; identity claims only, never sent to an API |
-| Refresh | Opaque random string | 30 days, sliding | Hashed in Postgres, rotated on every use, reuse revokes the family |
+| Refresh | Opaque random string | 30 days, sliding | Hashed in Postgres, rotated on every use, reuse revokes the family. Its stored `scope` is the **original grant**; a `scope` parameter narrows one response without shrinking it |
 | Authorization code | Opaque random string | 60 s, single use | Hashed in Postgres, bound to `client_id` + `code_challenge` |
 
 ### Access token claims
