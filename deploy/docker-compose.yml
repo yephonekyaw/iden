@@ -1,5 +1,11 @@
-# Development infrastructure for the IDEN provider.
-# The full stack (provider image, nginx, minio, engine) arrives in Phase 5.
+# The IDEN provider and the two stores it needs.
+#
+# `docker compose -f deploy/docker-compose.yml up --build` brings up a working
+# deployment: migrations run to completion, then the provider starts.
+#
+# Not here: TLS and a reverse proxy. Certificates are site-specific and the
+# proxy is where flood protection belongs, so both are the operator's — see
+# docs/operations/deployment.md. MinIO arrives with the biometric module.
 
 name: iden-dev
 
@@ -31,6 +37,40 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # Runs to completion and exits. A separate service rather than an entrypoint
+  # step so that scaling the provider to two replicas does not run the
+  # migrations twice, concurrently, against the same database.
+  migrate:
+    build:
+      context: ../provider
+    command: ["alembic", "upgrade", "head"]
+    environment: &provider-env
+      IDEN_ENV: dev
+      IDEN_DATABASE_URL: postgresql+asyncpg://iden:iden@postgres:5432/iden
+      IDEN_REDIS_URL: redis://redis:6379/0
+      IDEN_ISSUER: http://localhost:8000
+      IDEN_SIGNING_KEY_DIR: /keys
+    volumes: &provider-volumes
+      # Generated on the host with `uv run python -m scripts.gen_keys`, and
+      # read-only inside: the provider signs with these and never writes them.
+      - ../provider/keys:/keys:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  provider:
+    build:
+      context: ../provider
+    environment: *provider-env
+    volumes: *provider-volumes
+    ports:
+      - "8000:8000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
 
 volumes:
   postgres-data:
