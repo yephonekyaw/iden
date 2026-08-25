@@ -1,7 +1,7 @@
 # Roadmap
 
 The full build plan and every open issue live in
-[`provider/PLAN.md`](https://github.com/yephonekyaw/project-iden/blob/main/provider/PLAN.md). This is
+[`provider/PLAN.md`](https://github.com/yephonekyaw/iden/blob/main/provider/PLAN.md). This is
 the summary.
 
 ## Phases

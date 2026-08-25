@@ -2,9 +2,10 @@ site_name: Project IDEN
 site_description: >-
   A self-hosted identity and access control provider. One organization, one
   deployment, one source of truth for who people are and what they may do.
-site_url: https://example.org/iden/
-repo_url: https://github.com/yephonekyaw/project-iden
-edit_uri: ""
+site_url: https://yephonekyaw.github.io/iden/
+repo_url: https://github.com/yephonekyaw/iden
+repo_name: yephonekyaw/iden
+edit_uri: edit/main/docs/
 
 # The site covers the whole repository, not just the provider: the kiosk, the
 # engine and the front ends get their own sections as they are built.
@@ -29,6 +30,7 @@ theme:
         icon: material/weather-sunny
         name: Switch to light mode
   features:
+    - content.action.edit
     - navigation.sections
     - navigation.top
     - navigation.tracking

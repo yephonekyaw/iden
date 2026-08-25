@@ -70,3 +70,12 @@ uv run --project provider mkdocs build --strict
 ```
 
 `--strict` turns broken internal links into failures, which is what you want before pushing.
+
+## How the site is published
+
+`.github/workflows/docs.yml` builds on every pull request that touches `docs/` and publishes to
+[GitHub Pages](https://yephonekyaw.github.io/iden/) when those changes reach `main`.
+
+Pull requests build but do not publish, so a broken link fails the check before it is merged rather
+than after it is live. Nothing is committed to a `gh-pages` branch — the built site is uploaded as an
+artifact and deployed from it, so the repository history stays free of generated files.
