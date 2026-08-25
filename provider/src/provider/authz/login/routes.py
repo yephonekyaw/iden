@@ -96,6 +96,7 @@ async def read_challenge(
         ],
         acr_values=challenge.params.get("acr_values"),
         authenticated=challenge.user_id is not None,
+        login_hint=challenge.params.get("login_hint"),
     )
 
 
@@ -120,6 +121,7 @@ async def login(
     body: LoginRequest,
     request: Request,
     response: Response,
+    login_session: LoginSessionDep,
     session: DBSessionDep,
     redis: RedisDep,
 ) -> AuthStepResponse:
@@ -139,7 +141,21 @@ async def login(
     # in the entry's detail, and it is a claim, not an identity.
     set_actor(request, user_id=user.id)
 
-    login_session = await session_store.create(redis, user.id, AmrMethod.PWD)
+    if login_session is not None and login_session.user_id == user.id:
+        # Re-authenticating an existing session — `prompt=login`, or a `max_age`
+        # it had outgrown. The id is kept: minting a new one would strand the
+        # old session in Redis with no cookie pointing at it, and every client
+        # already holding the old `sid` would never be signed out.
+        login_session = await session_store.reauthenticate(
+            redis, login_session, AmrMethod.PWD
+        )
+    else:
+        # A different person on the same browser. The previous session ends
+        # here rather than lingering until its TTL.
+        if login_session is not None:
+            await session_store.delete(redis, login_session.id)
+        login_session = await session_store.create(redis, user.id, AmrMethod.PWD)
+
     session_cookie.set_session(response, login_session.id)
 
     challenge.user_id = user.id

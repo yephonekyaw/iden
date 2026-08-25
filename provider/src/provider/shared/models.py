@@ -263,13 +263,27 @@ class AuthorizationCode(Base, TimestampMixin):
     nonce: Mapped[str | None] = mapped_column(String(255))
     acr: Mapped[str] = mapped_column(String(32))
     amr: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    # The browser session this code came from. Carried through to the `sid`
+    # claim so a relying party can be told which session to end, and so
+    # sign-out can find the tokens the session produced.
+    sid: Mapped[str] = mapped_column(String(64))
+    # When the *person* authenticated, which is not when the code was issued:
+    # on the second application of an SSO session those differ by however long
+    # the session has been alive, and `auth_time` is what a client's `max_age`
+    # is measured against.
+    authenticated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class RefreshToken(Base, TimestampMixin):
     __tablename__ = "refresh_tokens"
-    __table_args__ = (Index("ix_refresh_tokens_family_id", "family_id"),)
+    __table_args__ = (
+        Index("ix_refresh_tokens_family_id", "family_id"),
+        # Sign-out revokes every token a session produced, and that lookup runs
+        # on the logout path where the user is waiting.
+        Index("ix_refresh_tokens_sid", "sid"),
+    )
 
     id: Mapped[uuid.UUID] = _pk()
     token_hash: Mapped[str] = mapped_column(String(64), unique=True)
@@ -284,6 +298,10 @@ class RefreshToken(Base, TimestampMixin):
     # derived from amr, and the original login is not repeated on refresh.
     acr: Mapped[str] = mapped_column(String(32))
     amr: Mapped[list[str]] = mapped_column(ARRAY(String), default=list)
+    # Null only for tokens issued before sessions were recorded — a real
+    # unknown, not an absent value.
+    sid: Mapped[str | None] = mapped_column(String(64))
+    authenticated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Rotation with reuse detection: presenting an already-rotated token revokes
     # the whole family, on the assumption it was stolen.
     family_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))

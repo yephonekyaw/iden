@@ -51,6 +51,8 @@ async def test_a_second_redemption_blocks_until_the_first_commits(
             code_challenge_method="S256",
             acr="iden:loa:1",
             amr=["pwd"],
+            sid="session-under-test",
+            authenticated_at=tokens.now(),
             expires_at=tokens.now() + timedelta(minutes=1),
         )
     )
@@ -91,6 +93,7 @@ async def test_a_second_refresh_blocks_until_the_first_commits(
         scope="openid",
         acr="iden:loa:1",
         amr=["pwd"],
+        authenticated_at=tokens.now(),
     )
     await db.commit()
 

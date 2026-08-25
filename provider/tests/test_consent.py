@@ -3,48 +3,11 @@
 import pytest
 from sqlalchemy import select
 
-from provider.shared.enums import ClientType, GrantType
-from provider.shared.models import Client, ClientScope, ConsentGrant, ResourceApi, Scope
+from provider.shared.models import ConsentGrant
+from tests.conftest import THIRD_PARTY_REDIRECT
 from tests.flows import pkce_pair, query_of, sign_in, start
 
 pytestmark = pytest.mark.usefixtures("admin_user")
-
-THIRD_PARTY_REDIRECT = "https://library.example.org/callback"
-
-
-@pytest.fixture
-async def unheld_scope(db, catalogue) -> Scope:
-    """A scope nobody holds — so it is always pruned at issuance."""
-    api = ResourceApi(name="library", audience="https://api.example.org/library")
-    db.add(api)
-    await db.flush()
-
-    scope = Scope(
-        api_id=api.id, value="library:loans:read", description="View your loans."
-    )
-    db.add(scope)
-    await db.commit()
-    return scope
-
-
-@pytest.fixture
-async def third_party(db, catalogue, unheld_scope) -> Client:
-    """A client that must ask, unlike the first-party dashboard."""
-    client = Client(
-        client_id="library",
-        name="Library",
-        client_type=ClientType.PUBLIC,
-        allowed_grants=[GrantType.AUTHORIZATION_CODE, GrantType.REFRESH_TOKEN],
-        redirect_uris=[THIRD_PARTY_REDIRECT],
-        skip_consent=False,
-    )
-    db.add(client)
-    await db.flush()
-
-    for scope in (catalogue["scopes"]["entity:profile:read"], unheld_scope):
-        db.add(ClientScope(client_id=client.id, scope_id=scope.id, grantable=True))
-    await db.commit()
-    return client
 
 
 async def reach_consent(client, scope: str) -> str:

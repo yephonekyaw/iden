@@ -1,4 +1,5 @@
 import base64
+import uuid
 from typing import Annotated
 from urllib.parse import urlencode
 
@@ -49,6 +50,44 @@ from provider.shared.models import Client, RefreshToken, User
 router = APIRouter(prefix="/oauth2", tags=["oauth2"])
 
 
+PROMPT_VALUES = frozenset({"none", "login", "consent", "select_account"})
+
+# What `prompt=none` returns in place of each interaction it refused to start.
+SILENT_ERRORS = {
+    "/auth/login": "login_required",
+    "/auth/consent": "consent_required",
+}
+
+
+def _stale(login_session: session_store.Session, max_age: int | None) -> bool:
+    """Whether the login is older than the client is willing to accept.
+
+    `max_age=0` therefore means *authenticate now*, which is the point of it.
+    """
+    if max_age is None:
+        return False
+    age = tokens.now() - login_session.authenticated_at
+    return age.total_seconds() > max_age
+
+
+def _hint_mismatch(
+    id_token_hint: str | None, login_session: session_store.Session
+) -> bool:
+    """Whether an `id_token_hint` names someone other than the session's owner.
+
+    The hint is only read for its subject, and an unverifiable one is treated as
+    a mismatch rather than ignored — a client that asked about a specific person
+    should not silently receive a code for a different one.
+    """
+    if not id_token_hint:
+        return False
+    try:
+        claims = verify_jwt(id_token_hint, allow_expired=True)
+    except jwt.PyJWTError:
+        return True
+    return claims.get("sub") != str(login_session.user_id)
+
+
 def _auth_ui(path: str, challenge_id: str, **extra: str) -> RedirectResponse:
     query = urlencode({"challenge": challenge_id, **extra})
     return RedirectResponse(
@@ -64,8 +103,15 @@ def _auth_ui(path: str, challenge_id: str, **extra: str) -> RedirectResponse:
         "required of every client**, public or confidential — there is no "
         "non-PKCE path.\n\n"
         "Redirects to the hosted Auth UI when the browser has no session, when "
-        "the session does not meet the requested `acr_values`, or when consent "
-        "is needed. Otherwise issues a code and returns to `redirect_uri`.\n\n"
+        "the session does not meet the requested `acr_values` or `max_age`, or "
+        "when consent is needed. Otherwise issues a code and returns to "
+        "`redirect_uri` — which is single sign-on: a second application reaching "
+        "this endpoint with a live session gets a code without a prompt.\n\n"
+        "`prompt=none` never shows UI. When interaction would have been needed it "
+        "returns `login_required`, `consent_required`, or "
+        "`account_selection_required` to `redirect_uri` instead (OIDC Core "
+        "§3.1.2.6) — this is how a browser application checks silently whether "
+        "someone is still signed in.\n\n"
         "`client_id` and `redirect_uri` errors render as JSON rather than "
         "redirecting: before those two are validated the URI is unverified, and "
         "redirecting to it would make this an open redirector (RFC 6749 §3.1.2.3).\n\n"
@@ -95,6 +141,10 @@ async def authorize(
     code_challenge_method: Annotated[str, Query()] = CodeChallengeMethod.S256,
     nonce: Annotated[str | None, Query()] = None,
     acr_values: Annotated[str | None, Query()] = None,
+    prompt: Annotated[str | None, Query()] = None,
+    max_age: Annotated[int | None, Query(ge=0)] = None,
+    login_hint: Annotated[str | None, Query()] = None,
+    id_token_hint: Annotated[str | None, Query()] = None,
 ) -> Response:
     client = await get_client(session, client_id)
     if client is None:
@@ -126,32 +176,66 @@ async def authorize(
     if code_challenge_method != CodeChallengeMethod.S256:
         raise fail("invalid_request", "code_challenge_method must be S256.")
 
+    prompts = set(prompt.split()) if prompt else set()
+    if unknown := prompts - PROMPT_VALUES:
+        raise fail(
+            "invalid_request", f"Unsupported prompt: {' '.join(sorted(unknown))}"
+        )
+    if "none" in prompts and len(prompts) > 1:
+        raise fail(
+            "invalid_request", "prompt=none cannot be combined with other values."
+        )
+
+    silent = "none" in prompts
     params = dict(request.query_params)
 
-    if login_session is None:
+    async def interact(path: str, user_id: uuid.UUID | None = None, **extra: str):
+        """Hand the request to the Auth UI — unless the client forbade it.
+
+        Under `prompt=none` this raises instead, and raises *before* creating a
+        challenge: a challenge is the pending half of an interaction, and one
+        left in Redis for an interaction that will never happen is both a leak
+        and a lie about what took place.
+        """
+        if silent:
+            raise fail(SILENT_ERRORS[path], "This request needs interaction.")
         challenge = await challenge_store.create(redis, params)
-        return _auth_ui("/auth/login", challenge.id)
+        if user_id is not None:
+            challenge.user_id = user_id
+            await challenge_store.save(redis, challenge)
+        return _auth_ui(path, challenge.id, **extra)
+
+    # A hint naming someone other than the person signed in is not an error --
+    # it means this client is asking about a different account, so the session
+    # in hand is not the one it wants (OIDC Core §3.1.3.1).
+    if login_session is not None and _hint_mismatch(id_token_hint, login_session):
+        login_session = None
+
+    if login_session is None:
+        return await interact("/auth/login")
+
+    # `prompt=login` and `select_account` force a fresh authentication. IDEN has
+    # one account per session, so account selection is re-authentication; it is
+    # accepted rather than refused so a conforming client is not broken by it.
+    if prompts & {"login", "select_account"}:
+        return await interact("/auth/login", step_up="1")
+
+    if _stale(login_session, max_age):
+        return await interact("/auth/login", login_session.user_id, step_up="1")
 
     acr = auth_methods.derive_acr(login_session.amr)
     if not auth_methods.meets(acr, acr_values):
-        challenge = await challenge_store.create(redis, params)
-        challenge.user_id = login_session.user_id
-        await challenge_store.save(redis, challenge)
-        return _auth_ui("/auth/login", challenge.id, step_up="1")
+        return await interact("/auth/login", login_session.user_id, step_up="1")
 
     user = await session.get(User, login_session.user_id)
     if user is None or not user.is_active:
-        challenge = await challenge_store.create(redis, params)
-        return _auth_ui("/auth/login", challenge.id)
+        return await interact("/auth/login")
 
     requested = parse_scope(scope)
     granted = resolve_for_user(requested, client, user)
 
-    if await consent_required(session, user, client, granted):
-        challenge = await challenge_store.create(redis, params)
-        challenge.user_id = user.id
-        await challenge_store.save(redis, challenge)
-        return _auth_ui("/auth/consent", challenge.id)
+    if "consent" in prompts or await consent_required(session, user, client, granted):
+        return await interact("/auth/consent", user.id)
 
     code = await issue_code(
         session,
@@ -161,8 +245,13 @@ async def authorize(
         scopes=granted,
         acr=acr,
         amr=auth_methods.normalized_amr(login_session.amr),
+        sid=login_session.id,
+        authenticated_at=login_session.authenticated_at,
     )
     await session.commit()
+    # What makes single sign-out possible: this is the only record that the
+    # session ever reached this client.
+    await session_store.add_client(redis, login_session.id, client.client_id)
 
     query = {"code": code}
     if state:
@@ -275,6 +364,8 @@ async def _authorization_code_grant(
             scope=record.scope,
             acr=record.acr,
             amr=record.amr,
+            authenticated_at=record.authenticated_at,
+            sid=record.sid,
         )
 
     id_token = None
@@ -285,7 +376,8 @@ async def _authorization_code_grant(
             scopes=scopes,
             acr=record.acr,
             amr=record.amr,
-            authenticated_at=record.created_at,
+            authenticated_at=record.authenticated_at,
+            sid=record.sid,
             nonce=record.nonce,
         )
 
@@ -345,6 +437,8 @@ async def _refresh_token_grant(
         scope=format_scope(granted_scope),
         acr=record.acr,
         amr=record.amr,
+        authenticated_at=record.authenticated_at,
+        sid=record.sid,
         family_id=record.family_id,
     )
     record.rotated_to_id = new_record.id
@@ -367,7 +461,8 @@ async def _refresh_token_grant(
             scopes=granted,
             acr=record.acr,
             amr=record.amr,
-            authenticated_at=record.created_at,
+            authenticated_at=record.authenticated_at,
+            sid=record.sid,
         )
 
     await session.commit()

@@ -31,6 +31,17 @@ def _key(session_id: str) -> str:
     return f"session:{hash_token(session_id)}"
 
 
+def _clients_key(session_id: str) -> str:
+    """The clients a session has signed into.
+
+    Sign-out has to notify the applications this session reached, and there is
+    no other record of which those were: an authorization code is short-lived
+    and a refresh token may never have been issued. Keyed by the same hash as
+    the session, so it is unreadable from a Redis dump and expires with it.
+    """
+    return f"session_clients:{hash_token(session_id)}"
+
+
 def _user_key(user_id: UUID) -> str:
     """Index of a user's live sessions.
 
@@ -85,6 +96,32 @@ async def get(redis: Redis, session_id: str | None) -> Session | None:
     )
 
 
+async def add_client(redis: Redis, session_id: str, client_id: str) -> None:
+    """Record that this session issued a code to a client."""
+    await redis.sadd(_clients_key(session_id), client_id)
+    await redis.expire(_clients_key(session_id), settings.iden_session_ttl)
+
+
+async def clients_for(redis: Redis, session_id: str) -> set[str]:
+    # The client is built with decode_responses=True, so members come back as
+    # str; the type stubs describe both shapes.
+    return {str(value) for value in await redis.smembers(_clients_key(session_id))}
+
+
+async def reauthenticate(redis: Redis, session: Session, method: str) -> Session:
+    """A fresh authentication on an existing session — `prompt=login`, or a
+    `max_age` the session no longer satisfies.
+
+    The session id is kept. Replacing it would strand the old one in Redis with
+    no cookie pointing at it, and would break sign-out for every application
+    that was told the old `sid`.
+    """
+    session.amr = [method]
+    session.authenticated_at = datetime.now(UTC)
+    await _save(redis, session)
+    return session
+
+
 async def add_method(redis: Redis, session: Session, method: str) -> Session:
     """Record a step-up. The acr claim is recomputed from amr at issuance."""
     if method not in session.amr:
@@ -95,7 +132,7 @@ async def add_method(redis: Redis, session: Session, method: str) -> Session:
 
 async def delete(redis: Redis, session_id: str) -> None:
     session = await get(redis, session_id)
-    await redis.delete(_key(session_id))
+    await redis.delete(_key(session_id), _clients_key(session_id))
     if session is not None:
         await redis.srem(_user_key(session.user_id), _key(session_id))
 
@@ -104,8 +141,12 @@ async def delete_all_for_user(redis: Redis, user_id: UUID) -> int:
     """Sign a user out everywhere. Used when a password changes or an account
     is deactivated — a credential change that leaves old sessions alive has not
     really taken effect."""
-    keys = await redis.smembers(_user_key(user_id))
+    keys = [str(key) for key in await redis.smembers(_user_key(user_id))]
     if keys:
-        await redis.delete(*keys)
+        # The index stores session keys; the client set for each is the same
+        # hash under a different prefix, so both go in one delete.
+        await redis.delete(
+            *keys, *(key.replace("session:", "session_clients:", 1) for key in keys)
+        )
     await redis.delete(_user_key(user_id))
     return len(keys)

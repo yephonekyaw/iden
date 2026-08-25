@@ -1,6 +1,6 @@
 """Client authentication, redirect validation, and authorization codes."""
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,6 +101,8 @@ async def issue_code(
     scopes: set[str],
     acr: str,
     amr: list[str],
+    sid: str,
+    authenticated_at: datetime,
 ) -> str:
     code = generate_token()
     session.add(
@@ -115,6 +117,8 @@ async def issue_code(
             nonce=params.get("nonce"),
             acr=acr,
             amr=amr,
+            sid=sid,
+            authenticated_at=authenticated_at,
             expires_at=now() + timedelta(seconds=settings.iden_auth_code_ttl),
         )
     )

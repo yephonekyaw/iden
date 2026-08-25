@@ -54,16 +54,21 @@ async def sign_in(
 
 
 async def get_code(client, **overrides) -> tuple[str, str]:
-    """Run the flow from a cold browser to an authorization code.
+    """Run the flow to an authorization code, signing in only if needed.
+
+    A warm browser goes straight from /authorize to a code — that is single
+    sign-on, and it means a test can call this twice to model two applications.
 
     Returns (code, code_verifier).
     """
     verifier, challenge = pkce_pair()
 
     response = await start(client, challenge, **overrides)
-    challenge_id = query_of(response)["challenge"]
+    query = query_of(response)
+    if "code" in query:
+        return query["code"], verifier
 
-    login = await sign_in(client, challenge_id)
+    login = await sign_in(client, query["challenge"])
     resumed = await client.get(login.json()["resumeUrl"])
 
     return query_of(resumed)["code"], verifier

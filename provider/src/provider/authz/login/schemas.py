@@ -55,3 +55,11 @@ class ChallengeResponse(CamelCaseBaseModel):
     authenticated: bool = Field(
         description="Whether a session already exists in this browser."
     )
+    login_hint: str | None = Field(
+        default=None,
+        description=(
+            "The address the client suggested, for prefilling the form. A hint "
+            "from the client, never an assertion of who is signing in — the "
+            "password is still what decides that."
+        ),
+    )

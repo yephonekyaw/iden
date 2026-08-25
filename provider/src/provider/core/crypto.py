@@ -52,8 +52,15 @@ def sign_jwt(claims: dict[str, Any]) -> str:
     )
 
 
-def verify_jwt(token: str, audience: str | None = None) -> dict[str, Any]:
+def verify_jwt(
+    token: str, audience: str | None = None, *, allow_expired: bool = False
+) -> dict[str, Any]:
     """Verify signature, issuer, expiry, and — when given — audience.
+
+    `allow_expired` is for `id_token_hint`, where an expired token is the normal
+    case: the client is saying *this is who I last saw signed in*, and ID tokens
+    are minted to live ten minutes. The signature and issuer are still checked,
+    so the hint remains IDEN's own statement rather than the caller's.
 
     Raises the underlying `jwt.PyJWTError` on failure; callers decide the HTTP shape.
     """
@@ -68,7 +75,11 @@ def verify_jwt(token: str, audience: str | None = None) -> dict[str, Any]:
         algorithms=[settings.iden_signing_algorithm],
         issuer=settings.iden_issuer,
         audience=audience,
-        options={"verify_aud": audience is not None, "require": ["exp", "iat", "iss"]},
+        options={
+            "verify_aud": audience is not None,
+            "verify_exp": not allow_expired,
+            "require": ["exp", "iat", "iss"],
+        },
     )
 
 

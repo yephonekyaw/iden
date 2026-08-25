@@ -28,7 +28,7 @@ from provider.core.db import Base, get_db_session
 from provider.core.redis import get_redis
 from provider.core.security import hash_secret
 from provider.shared.enums import ClientType, GrantType
-from provider.shared.models import Client, ClientScope, User
+from provider.shared.models import Client, ClientScope, ResourceApi, Scope, User
 
 BASE_URL = make_url(settings.iden_database_url)
 TEST_URL = BASE_URL.set(database="iden_test")
@@ -41,6 +41,7 @@ TEST_REDIS_URL = f"{settings.iden_redis_url.rsplit('/', 1)[0]}/15"
 ADMIN_EMAIL = "admin@test.local"
 ADMIN_PASSWORD = "correct-horse-battery-staple"
 REDIRECT_URI = "http://localhost:5173/callback"
+THIRD_PARTY_REDIRECT = "https://library.example.org/callback"
 
 
 def _upgrade_to_head(url: str) -> None:
@@ -232,3 +233,38 @@ async def token_for(db, admin_user, dashboard):
 async def admin_headers(token_for, catalogue):
     """Every admin scope — for tests whose subject is the resource, not the gate."""
     return await token_for(*[v for v in catalogue["scopes"] if v.startswith("admin:")])
+
+
+@pytest.fixture
+async def unheld_scope(db, catalogue) -> Scope:
+    """A scope nobody holds — so it is always pruned at issuance."""
+    api = ResourceApi(name="library", audience="https://api.example.org/library")
+    db.add(api)
+    await db.flush()
+
+    scope = Scope(
+        api_id=api.id, value="library:loans:read", description="View your loans."
+    )
+    db.add(scope)
+    await db.commit()
+    return scope
+
+
+@pytest.fixture
+async def third_party(db, catalogue, unheld_scope) -> Client:
+    """A client that must ask, unlike the first-party dashboard."""
+    client = Client(
+        client_id="library",
+        name="Library",
+        client_type=ClientType.PUBLIC,
+        allowed_grants=[GrantType.AUTHORIZATION_CODE, GrantType.REFRESH_TOKEN],
+        redirect_uris=[THIRD_PARTY_REDIRECT],
+        skip_consent=False,
+    )
+    db.add(client)
+    await db.flush()
+
+    for scope in (catalogue["scopes"]["entity:profile:read"], unheld_scope):
+        db.add(ClientScope(client_id=client.id, scope_id=scope.id, grantable=True))
+    await db.commit()
+    return client

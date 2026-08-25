@@ -82,6 +82,7 @@ def mint_id_token(
     acr: str,
     amr: list[str],
     authenticated_at: datetime,
+    sid: str | None = None,
     nonce: str | None = None,
 ) -> str:
     """The ID token describes the authentication event to the client that asked
@@ -99,6 +100,11 @@ def mint_id_token(
         "acr": acr,
         "amr": amr,
     }
+    # Names the browser session, so a back-channel logout can tell this client
+    # which of its sessions to end. Absent on tokens issued before sessions
+    # were recorded.
+    if sid:
+        claims["sid"] = sid
     # Binds the token to the client's authorization request, defeating replay.
     if nonce:
         claims["nonce"] = nonce
@@ -131,6 +137,8 @@ async def issue_refresh_token(
     scope: str,
     acr: str,
     amr: list[str],
+    authenticated_at: datetime,
+    sid: str | None = None,
     family_id: uuid.UUID | None = None,
 ) -> tuple[str, RefreshToken]:
     token = generate_token()
@@ -141,6 +149,8 @@ async def issue_refresh_token(
         scope=scope,
         acr=acr,
         amr=amr,
+        authenticated_at=authenticated_at,
+        sid=sid,
         family_id=family_id or uuid.uuid7(),
         expires_at=now() + timedelta(seconds=settings.iden_refresh_token_ttl),
     )
