@@ -78,7 +78,8 @@ matches `IDEN_ISSUER` on purpose: `/authorize` builds absolute resume URLs from 
 cookie set on one host is not sent to another, so a mismatch silently breaks the login round-trip.
 
 The `catalogue` fixture seeds through the **real** functions in `scripts/seed.py`, so drift between
-the seed and the tests surfaces as a failure rather than as a surprise in production.
+the seed and the tests surfaces as a failure rather than as a surprise in production. The schema is
+built by running the migrations, for the same reason: it is the path a deployment takes.
 
 ---
 
@@ -101,20 +102,26 @@ provider/
     │   ├── router.py           # root APIRouter
     │   ├── db.py               # async engine, session, DBSessionDep
     │   ├── redis.py            # redis client + RedisDep
+    │   ├── audit.py            # AuditMiddleware, set_actor(), record()
+    │   ├── ratelimit.py        # per-address and per-account limits
+    │   ├── notifier.py         # outbound messages; logs in dev
     │   ├── security.py         # argon2 hashing, random token generation
     │   ├── crypto.py           # signing keys, JWKS, JWT sign/verify
-    │   ├── auth.py             # require_scope(), CurrentTokenDep
+    │   ├── auth.py             # require_scope(), require_fresh_auth()
     │   ├── errors.py           # base domain exception + HTTP error contract
     │   └── schemas.py          # CamelCaseBaseModel, shared response envelopes
     ├── shared/
     │   ├── models.py           # every SQLAlchemy model — one source of truth
     │   ├── enums.py            # ClientType, GrantType, AmrMethod, AcrLevel, …
+    │   ├── profile.py          # profile value validation and casting
     │   └── scopes.py           # the seeded system API/scope/role catalogue
     ├── authz/
     │   ├── discovery/          # /.well-known/*
     │   ├── oauth/              # /oauth2/*
     │   ├── login/              # /api/v1/auth/login · /totp · /biometric
     │   ├── consent/            # /api/v1/auth/consent
+    │   ├── logout/             # back-channel logout fan-out
+    │   ├── recovery/           # /api/v1/auth/password-reset
     │   └── services/
     │       ├── scope_resolver.py
     │       ├── token_service.py
@@ -124,9 +131,13 @@ provider/
     │       └── pkce.py
     ├── admin/
     │   ├── users/  groups/  roles/  apis/  scopes/  clients/
+    │   ├── audit/                  # read-only
+    │   └── profile_fields/
     ├── entity/
+    │   ├── deps.py                 # CurrentUserDep — subject from the token
     │   ├── profile/  credentials/  totp/  sessions/  permissions/
-    └── biometric/                  # feature-flagged, Phase 5
+    │   └── connections/
+    └── biometric/                  # Phase 5, not built yet
         ├── enroll/  verify/  liveness/  search/
         └── engine_client.py
 ```
@@ -413,9 +424,10 @@ curl -s -X POST localhost:8000/oauth2/token \
 # 6. a token missing a required scope hits 403; a tampered token hits 401
 ```
 
-Then, as the real check: `uv run pytest` — 124 tests covering PKCE against the RFC 7636 vector, acr
-derivation, the scope resolver, discovery, the full authorization code flow, refresh rotation and
-reuse detection, client credentials, revocation, introspection, logout, and `require_scope`.
+Then, as the real check: `uv run pytest`. At the end of Phase 1 that was 124 tests — PKCE against
+the RFC 7636 vector, acr derivation, the scope resolver, discovery, the full authorization code
+flow, refresh rotation and reuse detection, client credentials, revocation, introspection, logout,
+and `require_scope`. The suite grows with each phase; it stands at 333.
 
 ---
 
@@ -868,9 +880,9 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 - ~~**Migrations.**~~ Done ahead of Phase 3 — see [KI-15](#resolved). The reasoning for deferring
   them (the schema churns through Phases 0–3) turned out to argue the other way: the churn is
   exactly what produced three rounds of manual surgery on the dev database.
-- **Rate limiting.** Redis fixed-window limiter as middleware, with tighter per-route limits on
-  `/api/v1/auth/login`, `/totp`, `/oauth2/token`, and `/biometric/*`. Brute-force protection on
-  password and TOTP verification specifically.
+- ~~**Rate limiting.**~~ Done ahead of Phase 5 — see [KI-13](#resolved). It landed as per-route
+  dependencies rather than the middleware planned here: a refusal then runs after routing and still
+  reaches the audit log. `/biometric/*` still needs its own limits when it exists.
 - ~~**Audit log.**~~ Done ahead of Phase 3 — see [KI-12](#resolved). It should not have been here:
   history not written is lost, so every phase this waited for was history nobody could recover.
 - **Security headers & CORS.** HSTS, `X-Content-Type-Options`, `Referrer-Policy`, frame-ancestors;
@@ -878,8 +890,9 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 - **Error contract.** One documented JSON error shape everywhere except the OAuth endpoints, which
   keep the RFC format.
 - **Test coverage review.** The suite grows with each phase, so this is a gap review rather than a
-  build: coverage measurement, concurrency cases (two simultaneous refreshes of one token), and
-  failure injection (Redis down, database down).
+  build: coverage measurement and failure injection (Redis down, database down). The concurrency
+  cases listed here are done — `tests/test_concurrency.py` for redemption races and
+  `TestConcurrentRefresh` for two simultaneous refreshes of one token.
 - **Docker.** `Dockerfile` for the provider, extending `deploy/docker-compose.yml` (created in Phase 0
   with postgres and redis) to wire in the provider, minio, and nginx.
 - **Operational endpoints.** `/health` split into liveness and readiness.

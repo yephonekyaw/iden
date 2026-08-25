@@ -231,25 +231,29 @@ provider/
     │   ├── router.py           # root APIRouter
     │   ├── db.py               # async engine/session, DBSessionDep
     │   ├── redis.py            # redis client, RedisDep
-    │   ├── audit.py            # AuditMiddleware, set_actor()
+    │   ├── audit.py            # AuditMiddleware, set_actor(), record()
+    │   ├── ratelimit.py        # per-address and per-account limits
+    │   ├── notifier.py         # outbound messages; logs in dev
     │   ├── security.py         # argon2 hashing, secure random tokens
     │   ├── crypto.py           # signing keys, JWKS, JWT sign/verify
-    │   ├── auth.py             # require_scope(), CurrentTokenDep
+    │   ├── auth.py             # require_scope(), require_fresh_auth()
     │   ├── errors.py           # base domain exception, error contract
     │   └── schemas.py          # CamelCaseBaseModel, paging
     ├── shared/
     │   ├── models.py           # every SQLAlchemy model
     │   ├── enums.py            # ClientType, GrantType, AmrMethod, AcrLevel, …
+    │   ├── profile.py          # profile value validation and casting
     │   └── scopes.py           # seeded system API/scope/role catalogue
     ├── authz/
-    │   ├── discovery/ oauth/ login/ consent/
+    │   ├── discovery/ oauth/ login/ consent/ logout/ recovery/
     │   └── services/           # scope_resolver · token_service · session_store
     │                           # challenge_store · auth_methods · pkce
     ├── admin/
-    │   └── users/ groups/ roles/ apis/ scopes/ clients/ audit/
+    │   └── users/ groups/ roles/ apis/ scopes/ clients/ audit/ profile_fields/
     ├── entity/
-    │   └── profile/ credentials/ totp/ sessions/ permissions/
-    └── biometric/              # feature-flagged
+    │   ├── deps.py             # CurrentUserDep — the subject comes from the token
+    │   └── profile/ credentials/ totp/ sessions/ permissions/ connections/
+    └── biometric/              # Phase 5 — not built yet
         └── enroll/ verify/ liveness/ search/ · engine_client.py
 ```
 
@@ -724,6 +728,12 @@ not a credential for ending someone else's session.
 `Auth` column: **public** = no credentials; **client** = client authentication; **bearer** = access
 token with the named scope; **session** = browser session cookie. `Phase` refers to [PLAN.md](PLAN.md).
 
+### Service
+
+| Method | Path | Auth | Purpose | Phase |
+|---|---|---|---|---|
+| `GET` | `/health` | public | Always `200`; the body reports whether PostgreSQL and Redis are reachable, so a monitor can tell *down* from *up and degraded* | 0 |
+
 ### AuthZ — discovery & OAuth
 
 | Method | Path | Auth | Purpose | Phase |
@@ -768,7 +778,8 @@ reaches it again by following `resumeUrl`.
 | `GET` `POST` | `/admin/groups` | `admin:groups:read` / `:write` | 2 |
 | `GET` `PATCH` `DELETE` | `/admin/groups/{id}` | `admin:groups:read` / `:write` | 2 |
 | `PUT` | `/admin/groups/{id}/roles` | `admin:groups:write` | 2 |
-| `GET` `POST` `DELETE` | `/admin/groups/{id}/members` | `admin:groups:read` / `:write` | 2 |
+| `GET` `POST` | `/admin/groups/{id}/members` | `admin:groups:read` / `:write` | 2 |
+| `DELETE` | `/admin/groups/{id}/members/{userId}` | `admin:groups:write` | 2 |
 | `GET` `POST` | `/admin/users` | `admin:users:read` / `:write` | 2 |
 | `GET` `PATCH` `DELETE` | `/admin/users/{id}` | `admin:users:read` / `:write` | 2 |
 | `PUT` | `/admin/users/{id}/roles` | `admin:users:write` | 2 |

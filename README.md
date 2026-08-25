@@ -477,6 +477,7 @@ flowchart TB
       AZ3["/oauth2/authorize · /token · /userinfo"]
       AZ4["/oauth2/revoke · /introspect · /logout"]
       AZ5["/api/v1/auth/login · /totp · /biometric · /consent<br/>(records amr → derives acr)"]
+      AZ6["/api/v1/auth/password-reset<br/>(single-use token, no session needed)"]
     end
 
     subgraph AdminMod["Admin RS Module (scope-gated)"]
@@ -485,6 +486,8 @@ flowchart TB
       AD3["/admin/roles · admin:roles:*"]
       AD4["/admin/apis · /admin/scopes · admin:apis:* · admin:scopes:*"]
       AD5["/admin/clients · admin:clients:*"]
+      AD6["/admin/profile-fields · admin:profile-fields:*"]
+      AD7["/admin/audit · admin:audit:read ⟮read-only⟯"]
     end
 
     subgraph EntityMod["Entity RS Module (scope-gated)"]
@@ -492,6 +495,7 @@ flowchart TB
       EN2["/entity/credentials"]
       EN3["/entity/totp"]
       EN4["/entity/permissions · /entity/sessions"]
+      EN5["/entity/connections ⟮withdraw consent⟯"]
     end
 
     subgraph BioMod["Biometric RS Module ⟮feature-flagged⟯"]
