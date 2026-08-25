@@ -104,12 +104,12 @@ class User(Base, TimestampMixin):
     # selectin rather than lazy loading: these sets are small, they are always
     # needed together when resolving effective scopes, and a lazy load inside
     # async code fails with an unhelpful greenlet error.
-    groups: Mapped[list["Group"]] = relationship(
+    groups: Mapped[list[Group]] = relationship(
         secondary=user_groups, back_populates="users", lazy="selectin"
     )
-    roles: Mapped[list["Role"]] = relationship(secondary=user_roles, lazy="selectin")
-    scopes: Mapped[list["Scope"]] = relationship(secondary=user_scopes, lazy="selectin")
-    totp: Mapped["TotpCredential | None"] = relationship(
+    roles: Mapped[list[Role]] = relationship(secondary=user_roles, lazy="selectin")
+    scopes: Mapped[list[Scope]] = relationship(secondary=user_scopes, lazy="selectin")
+    totp: Mapped[TotpCredential | None] = relationship(
         back_populates="user", cascade="all, delete-orphan", uselist=False
     )
 
@@ -124,7 +124,7 @@ class Group(Base, TimestampMixin):
     users: Mapped[list[User]] = relationship(
         secondary=user_groups, back_populates="groups"
     )
-    roles: Mapped[list["Role"]] = relationship(secondary=group_roles, lazy="selectin")
+    roles: Mapped[list[Role]] = relationship(secondary=group_roles, lazy="selectin")
 
 
 class TotpCredential(Base, TimestampMixin):
@@ -156,7 +156,7 @@ class ResourceApi(Base, TimestampMixin):
     description: Mapped[str | None] = mapped_column(Text)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    scopes: Mapped[list["Scope"]] = relationship(
+    scopes: Mapped[list[Scope]] = relationship(
         back_populates="api", cascade="all, delete-orphan"
     )
 
@@ -212,7 +212,7 @@ class Client(Base, TimestampMixin):
     skip_consent: Mapped[bool] = mapped_column(Boolean, default=False)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False)
 
-    scopes: Mapped[list["ClientScope"]] = relationship(
+    scopes: Mapped[list[ClientScope]] = relationship(
         back_populates="client", cascade="all, delete-orphan", lazy="selectin"
     )
 

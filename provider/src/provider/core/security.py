@@ -16,7 +16,7 @@ def hash_secret(secret: str) -> str:
 def verify_secret(hashed: str, secret: str) -> bool:
     try:
         return _hasher.verify(hashed, secret)
-    except (VerifyMismatchError, VerificationError):
+    except VerifyMismatchError, VerificationError:
         return False
 
 
