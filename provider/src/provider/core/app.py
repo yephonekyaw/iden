@@ -6,8 +6,13 @@ from urllib.parse import urlencode
 import structlog
 import uvicorn
 from fastapi import FastAPI, Request, Response
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
+from redis.exceptions import ConnectionError as RedisConnectionError
+from redis.exceptions import TimeoutError as RedisTimeoutError
+from sqlalchemy.exc import InterfaceError, OperationalError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from provider.authz.oauth.errors import OAuthError, RedirectableError
 from provider.core import redis as redis_module
@@ -101,6 +106,123 @@ async def handle_iden_error(request: Request, exc: IdenError) -> JSONResponse:
         content=body.model_dump(by_alias=True),
         headers=headers,
     )
+
+
+# A bare HTTPException carries a status and a string. The contract needs a
+# stable machine-readable code as well, and there is no per-route information
+# to derive one from — the status is the whole of what was said.
+STATUS_CODES = {
+    400: "bad_request",
+    401: "unauthorized",
+    403: "forbidden",
+    404: "not_found",
+    405: "method_not_allowed",
+    409: "conflict",
+    422: "validation_error",
+    429: "rate_limited",
+    501: "not_implemented",
+}
+
+
+def _is_oauth(request: Request) -> bool:
+    return request.url.path.startswith(f"{settings.iden_api_prefix}/oauth2")
+
+
+@app.exception_handler(StarletteHTTPException)
+async def handle_http_exception(
+    request: Request, exc: StarletteHTTPException
+) -> JSONResponse:
+    """Give `raise HTTPException(...)` the same body shape as everything else.
+
+    Without this the provider speaks two dialects: `/admin/*` answers with
+    `code`/`message` from the domain-error handler, while every dependency that
+    raises HTTPException — `require_scope`, the entity user lookup, login —
+    answers with Starlette's `{"detail": ...}`. Handled centrally rather than by
+    replacing HTTPException everywhere, because the raising code is right; it is
+    only the serialization that was inconsistent.
+    """
+    body = ErrorResponse(
+        code=STATUS_CODES.get(exc.status_code, "error"),
+        message=str(exc.detail),
+    )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=body.model_dump(by_alias=True),
+        # WWW-Authenticate is where RFC 6750 and RFC 9470 put the machine-
+        # readable part of a 401 or a step-up, so it must survive.
+        headers=exc.headers,
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def handle_request_validation_error(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """A malformed request body, reported in the contract's shape.
+
+    FastAPI's default is a third shape again — `{"detail": [...]}` with a list
+    where every other error has a string.
+    """
+    if _is_oauth(request):
+        # A client library reading RFC 6749 §5.2 will not recognise anything
+        # else, and a missing `grant_type` is exactly `invalid_request`.
+        return JSONResponse(
+            status_code=400,
+            content={
+                "error": "invalid_request",
+                "error_description": "The request is missing a required parameter or is malformed.",
+            },
+        )
+
+    fields = [
+        {"field": ".".join(str(part) for part in error["loc"]), "message": error["msg"]}
+        for error in exc.errors()
+    ]
+    body = ErrorResponse(
+        code="validation_error",
+        message="The request is invalid.",
+        details={"fields": fields},
+    )
+    return JSONResponse(status_code=422, content=body.model_dump(by_alias=True))
+
+
+# Connectivity failures only. `SQLAlchemyError` and `RedisError` would also
+# catch a malformed query or a wrong argument — programming errors, which must
+# keep surfacing as 500s rather than being reported as someone else's outage.
+UNAVAILABLE = (
+    RedisConnectionError,
+    RedisTimeoutError,
+    OperationalError,
+    InterfaceError,
+)
+
+
+async def handle_unavailable(request: Request, exc: Exception) -> JSONResponse:
+    """A store the provider depends on is unreachable.
+
+    Without this the exception escapes to the ASGI server, which answers with a
+    bare `Internal Server Error` — a third body shape, arriving at exactly the
+    moment an operator is trying to work out what broke. 503 also tells a proxy
+    it may retry, which 500 does not.
+    """
+    logger.error(
+        "Dependency unavailable",
+        path=request.url.path,
+        error=type(exc).__name__,
+    )
+    body = ErrorResponse(
+        code="service_unavailable",
+        message="A service the provider depends on is unavailable.",
+    )
+    return JSONResponse(
+        status_code=503,
+        content=body.model_dump(by_alias=True),
+        headers={"Retry-After": "5"},
+    )
+
+
+for _exception in UNAVAILABLE:
+    app.add_exception_handler(_exception, handle_unavailable)
 
 
 @app.exception_handler(RedirectableError)

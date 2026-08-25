@@ -16,6 +16,18 @@ Everywhere except the OAuth endpoints:
 
 `code` is stable and safe to branch on. `message` is written for a person and may change.
 
+Every refusal outside `/oauth2/*` uses it — including the ones that come from the framework rather
+than from a route. A missing token, an unrouted path, and a malformed body all arrive in this shape.
+A validation failure names the fields:
+
+```json
+{
+  "code": "validation_error",
+  "message": "The request is invalid.",
+  "details": {"fields": [{"field": "body.audience", "message": "Field required"}]}
+}
+```
+
 ## The OAuth shape
 
 `/oauth2/token`, `/revoke`, `/introspect`, and error redirects from `/authorize` use the format fixed
@@ -25,6 +37,10 @@ not understand anything else:
 ```json
 {"error": "invalid_grant", "error_description": "Unknown or expired refresh token."}
 ```
+
+A malformed request to these endpoints — a missing `grant_type`, say — comes back as
+`invalid_request` in the same shape, never as IDEN's validation error. A client library reading
+§5.2 has no way to read anything else.
 
 Errors from `/authorize` arrive as query parameters on your redirect URI, not as a response body —
 unless `client_id` or `redirect_uri` was itself invalid, in which case IDEN answers with JSON rather
@@ -41,6 +57,7 @@ than redirecting somewhere it has not verified.
 | `409` | Conflicts with what exists — a name taken, or a system row that cannot be changed. |
 | `422` | The request was understood and is not acceptable. |
 | `429` | Rate limited. `Retry-After` says how long. |
+| `503` | PostgreSQL or Redis is unreachable. `Retry-After` says when to try again; the request itself was fine. |
 
 The `401`/`403` distinction is deliberate everywhere. Collapsing them tells a client to retry a
 sign-in that cannot fix anything.

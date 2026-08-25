@@ -18,7 +18,7 @@ class TestAuthorization:
         response = await client.post("/admin/apis", json=NEW_API, headers=headers)
 
         assert response.status_code == 403
-        assert "admin:apis:write" in response.json()["detail"]
+        assert "admin:apis:write" in response.json()["message"]
 
     async def test_write_scope_is_accepted(self, client, token_for):
         headers = await token_for("admin:apis:write")

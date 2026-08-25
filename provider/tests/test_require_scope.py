@@ -90,6 +90,8 @@ async def test_right_audience_but_missing_scope_is_403(guarded, mint):
     response = await guarded.get("/admin/users", headers=bearer(token))
 
     assert response.status_code == 403
+    # `detail`, not `message`: this fixture mounts a bare app to isolate the
+    # dependency, so the provider's error-shape handler is not in the way.
     assert "admin:users:read" in response.json()["detail"]
 
 
