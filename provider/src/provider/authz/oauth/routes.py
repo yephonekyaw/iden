@@ -5,7 +5,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 import jwt
-from fastapi import APIRouter, Form, Query, Request, Response
+from fastapi import APIRouter, Depends, Form, Query, Request, Response
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
 
@@ -41,6 +41,7 @@ from provider.authz.services.scope_resolver import (
     resolve_for_client,
     resolve_for_user,
 )
+from provider.core import ratelimit
 from provider.core.config import settings
 from provider.core.crypto import verify_jwt
 from provider.core.db import DBSessionDep
@@ -325,6 +326,7 @@ def _client_auth(request: Request, client_id: str | None, client_secret: str | N
         },
         401: {"model": OAuthErrorResponse, "description": "invalid_client"},
     },
+    dependencies=[Depends(ratelimit.TOKEN_PER_IP)],
 )
 async def token(
     request: Request,

@@ -19,6 +19,7 @@ from provider.core.errors import (
     IdenError,
     ImmutableError,
     NotFoundError,
+    RateLimitedError,
     ValidationError,
 )
 from provider.core.logging import configure_logging, logger
@@ -32,6 +33,7 @@ configure_logging()
 # package can raise `ApiNotFound` with its own message and still land on 404.
 # Most specific first: ImmutableError is a ConflictError.
 ERROR_STATUS = (
+    (RateLimitedError, 429),
     (NotFoundError, 404),
     (ImmutableError, 409),
     (ConflictError, 409),
@@ -87,7 +89,17 @@ async def handle_iden_error(request: Request, exc: IdenError) -> JSONResponse:
         logger.error("Unmapped domain error", code=exc.code, path=request.url.path)
 
     body = ErrorResponse(code=exc.code, message=exc.message, details=exc.details)
-    return JSONResponse(status_code=status_code, content=body.model_dump(by_alias=True))
+    # A client told to back off but not told for how long simply retries at once.
+    headers = (
+        {"Retry-After": str(exc.retry_after)}
+        if isinstance(exc, RateLimitedError)
+        else None
+    )
+    return JSONResponse(
+        status_code=status_code,
+        content=body.model_dump(by_alias=True),
+        headers=headers,
+    )
 
 
 @app.exception_handler(RedirectableError)

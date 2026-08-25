@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     # is unlikely to be spent inside it.
     iden_refresh_grace_period: int = 30
 
+    # Rate limiting. Off only for load tests against a deployment you own —
+    # with it off, `/api/v1/auth/login` is both a brute-force target and a way
+    # to exhaust the machine's CPU, since argon2 is expensive for the server.
+    iden_rate_limit_enabled: bool = True
+
     # Bootstrap
     iden_bootstrap_admin_email: str = "admin@localhost"
     iden_bootstrap_admin_password: str = ""

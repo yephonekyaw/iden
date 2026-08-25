@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 
 from provider.authz import session_cookie
@@ -21,6 +21,7 @@ from provider.authz.login.schemas import (
 from provider.authz.login.service import authenticate_password, verify_totp
 from provider.authz.services import auth_methods, challenge_store, session_store
 from provider.authz.services.scope_resolver import OIDC_SCOPES, parse_scope
+from provider.core import ratelimit
 from provider.core.audit import set_actor
 from provider.core.config import settings
 from provider.core.db import DBSessionDep
@@ -115,7 +116,12 @@ async def read_challenge(
         401: {"model": ErrorResponse, "description": "Email or password incorrect"},
         403: {"model": ErrorResponse, "description": "Account disabled"},
         404: {"model": ErrorResponse, "description": "Challenge expired or unknown"},
+        429: {
+            "model": ErrorResponse,
+            "description": "Too many attempts, from this address or against this account",
+        },
     },
+    dependencies=[Depends(ratelimit.LOGIN_PER_IP)],
 )
 async def login(
     body: LoginRequest,
@@ -129,12 +135,26 @@ async def login(
     if challenge is None:
         raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
 
+    # Counted per account as well as per address: credential stuffing rotates
+    # addresses and does not rotate the target.
+    await ratelimit.guard(redis, identity=body.email, **ratelimit.LOGIN_FAILURES)
+
     try:
         user = await authenticate_password(session, body.email, body.password)
     except InvalidCredentials as exc:
+        await ratelimit.record_failure(
+            redis,
+            ratelimit.LOGIN_FAILURES["bucket"],
+            body.email,
+            window=ratelimit.LOGIN_FAILURES["window"],
+        )
         raise HTTPException(status_code=401, detail=exc.message) from exc
     except InactiveUser as exc:
         raise HTTPException(status_code=403, detail=exc.message) from exc
+
+    # Cleared on success, so someone under attack can still sign in with the
+    # password they know.
+    await ratelimit.clear(redis, ratelimit.LOGIN_FAILURES["bucket"], body.email)
 
     await session.commit()
     # A failed attempt is audited too, with no actor — the submitted email is
@@ -181,7 +201,9 @@ async def login(
         },
         401: {"model": ErrorResponse, "description": "No session"},
         404: {"model": ErrorResponse, "description": "Challenge expired or unknown"},
+        429: {"model": ErrorResponse, "description": "Too many attempts"},
     },
+    dependencies=[Depends(ratelimit.TOTP_PER_IP)],
 )
 async def totp(
     body: TotpRequest,
@@ -203,10 +225,22 @@ async def totp(
 
     set_actor(request, user_id=user.id)
 
+    # A six-digit code is a small space; without this an attacker with a valid
+    # session could simply try them all.
+    await ratelimit.guard(redis, identity=str(user.id), **ratelimit.TOTP_FAILURES)
+
     try:
         await verify_totp(session, user, body.code)
     except (InvalidTotpCode, TotpNotEnrolled) as exc:
+        await ratelimit.record_failure(
+            redis,
+            ratelimit.TOTP_FAILURES["bucket"],
+            str(user.id),
+            window=ratelimit.TOTP_FAILURES["window"],
+        )
         raise HTTPException(status_code=400, detail=exc.message) from exc
+
+    await ratelimit.clear(redis, ratelimit.TOTP_FAILURES["bucket"], str(user.id))
 
     await session_store.add_method(redis, login_session, AmrMethod.OTP)
     return await _next_step(redis, login_session, challenge)

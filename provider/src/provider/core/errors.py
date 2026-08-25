@@ -36,3 +36,15 @@ class ImmutableError(ConflictError):
 class ValidationError(IdenError):
     code = "validation_error"
     message = "The request is invalid."
+
+
+class RateLimitedError(IdenError):
+    """Too many attempts. Carries how long to wait, because a client that is
+    not told simply retries immediately."""
+
+    code = "rate_limited"
+    message = "Too many attempts. Try again shortly."
+
+    def __init__(self, retry_after: int, message: str | None = None) -> None:
+        super().__init__(message, retry_after=retry_after)
+        self.retry_after = retry_after

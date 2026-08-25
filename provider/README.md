@@ -29,6 +29,7 @@ same guarantee by validating against the published JWKS.
 - [Data Model](#data-model)
 - [Access Control in Practice](#access-control-in-practice)
 - [The Audit Log](#the-audit-log)
+- [Rate Limiting](#rate-limiting)
 - [Organization-Defined Profiles](#organization-defined-profiles)
 - [Refresh Rotation and the Grace Window](#refresh-rotation-and-the-grace-window)
 - [Single Sign-On and Sign-Out](#single-sign-on-and-sign-out)
@@ -74,7 +75,7 @@ dependency list — `uv` owns it and the lockfile.
 **Running the tests:**
 
 ```bash
-uv run pytest                             # 326 tests, ~21s
+uv run pytest                             # 333 tests, ~22s
 uv run pytest tests/test_scope_resolver.py -q
 ```
 
@@ -199,6 +200,7 @@ All settings are environment variables prefixed `IDEN_`, loaded by `core/config.
 | `IDEN_AUTH_CODE_TTL` | `60` | Single use. |
 | `IDEN_SESSION_TTL` | `86400` (24 h) | Sliding browser session. |
 | `IDEN_CHALLENGE_TTL` | `600` | Login/consent challenges. |
+| `IDEN_RATE_LIMIT_ENABLED` | `true` | Off only for a load test against a deployment you own. |
 | `IDEN_REFRESH_GRACE_PERIOD` | `30` | How long a spent refresh token keeps returning what it was already exchanged for. Set to `0` to make every second use theft — see below. |
 
 ### Bootstrap & extensions
@@ -535,6 +537,44 @@ Tracked as KI-17 in [PLAN.md](PLAN.md#known-issues).
 
 Read it with `GET /admin/audit`, newest first, filtered by `actorUserId`, `action` (substring),
 `since`, and `until`.
+
+---
+
+## Rate Limiting
+
+Argon2 makes a password guess expensive for **the server**, not for the attacker. Unlimited,
+`/api/v1/auth/login` is both a credential-stuffing target and a way to exhaust the machine's CPU with
+a few hundred requests.
+
+Two different limits, because there are two different attacks:
+
+| Counter | Applies to | Why |
+|---|---|---|
+| **Per address** — all attempts | login, TOTP, `/oauth2/token`, password reset | Crude flooding from one place. Generous, because an office or a campus is a single address as far as IDEN can tell. |
+| **Per account** — failures only | login, TOTP | The one that stops credential stuffing, which rotates addresses and does not rotate the target. |
+| **Per email address** — requests | password reset | The endpoint sends mail to someone else. Without it, it is a way to bury a person in messages they never asked for. |
+
+**Failures, not attempts, for the per-account counter.** Counting every attempt against one account
+hands anyone a way to lock its owner out: burn the allowance with deliberate nonsense and the real
+person is refused. Counting only what went wrong, and clearing it on success, means whoever knows the
+password can always still sign in.
+
+**Per-route, not global middleware.** A blanket cap in front of everything is either too loose to
+stop credential stuffing or too tight for a dashboard making many legitimate calls. It is also a
+dependency rather than middleware, so it runs *after* routing — which means a refusal still lands in
+the audit log, and a burst of them is exactly what someone reviewing that log wants to find.
+
+A global cap against crude flooding belongs in the reverse proxy. nginx's `limit_req` can refuse a
+connection before Python is involved at all, which is the right place for it.
+
+**Fixed windows, not sliding.** A counter and an expiry, one round trip. The cost is that an attacker
+can spend a full allowance at the end of one window and again at the start of the next; for limits of
+a handful of attempts per minute, that doubling changes nothing about whether guessing works.
+
+The addresses come from the socket, never from `X-Forwarded-For` — a header the caller sets is a
+claim, and trusting it would let anyone spread attempts across as many imaginary addresses as they
+like. Behind a proxy every request appears to come from the proxy, which is another reason the proxy
+should be doing its own limiting.
 
 ---
 

@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Response
+from fastapi import APIRouter, Depends, Response
 
 from provider.authz.recovery import service
 from provider.authz.recovery.schemas import PasswordResetConfirm, PasswordResetRequest
+from provider.core import ratelimit
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.schemas import ErrorResponse
@@ -20,11 +21,26 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
         "The link is single use and lives fifteen minutes.\n\n"
         "**Required scope:** none — the person asking cannot sign in."
     ),
-    responses={202: {"description": "Accepted, whether or not anything was sent"}},
+    responses={
+        202: {"description": "Accepted, whether or not anything was sent"},
+        429: {"model": ErrorResponse, "description": "Too many requests"},
+    },
+    dependencies=[Depends(ratelimit.RESET_PER_IP)],
 )
 async def request_reset(
     body: PasswordResetRequest, session: DBSessionDep, redis: RedisDep
 ) -> Response:
+    # Per address as well as per caller: the endpoint sends mail to someone
+    # else, so without this it is a way to bury a person in messages they did
+    # not ask for.
+    await ratelimit.guard(redis, identity=body.email, **ratelimit.RESET_PER_ADDRESS)
+    await ratelimit.record_failure(
+        redis,
+        ratelimit.RESET_PER_ADDRESS["bucket"],
+        body.email,
+        window=ratelimit.RESET_PER_ADDRESS["window"],
+    )
+
     await service.request_reset(session, redis, body.email)
     return Response(status_code=202)
 
