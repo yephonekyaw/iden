@@ -94,12 +94,17 @@ the data in it is silent. Server defaults and `CHECK` constraints are often miss
 surfaces in the suite rather than at deployment. The test database is built by running the
 migrations, which is the same path a deployment takes.
 
-If your development database predates Alembic, it already has the tables — record that fact rather
-than rebuilding it:
+If your development database predates Alembic, it already has the Phase 2 tables — record that fact
+rather than rebuilding it, then apply everything added since:
 
 ```bash
-uv run alembic stamp head
+uv run alembic stamp 582ce19a8898    # the initial revision; those tables already exist
+uv run alembic upgrade head          # audit_events and anything after it
+uv run python -m scripts.seed        # pick up newly catalogued scopes
 ```
+
+Stamping `head` instead would claim every revision is applied and leave the tables they create
+missing.
 
 The seed is still idempotent and still safe to re-run; it just no longer creates anything structural.
 
