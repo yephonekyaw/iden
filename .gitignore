@@ -9,7 +9,8 @@ claude/
 .claude/
 old-provider/
 verification/
-web/
+web/**/node_modules/
+web/**/dist/
 
 *.log
 *.sql

@@ -1,0 +1,7 @@
+packages:
+  - shared
+  - auth-ui
+  - dashboard
+
+allowBuilds:
+  esbuild: true
