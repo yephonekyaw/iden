@@ -262,16 +262,16 @@ Seeded roles: **`administrator`** (every `admin:*` and `entity:*` scope) and **`
 
 ### 0.7 Seed script — `scripts/seed.py`
 
-Idempotent, safe to re-run after every model change during development:
+Idempotent, safe to re-run at any time. The schema is not its job — Alembic owns that, and the seed
+exits with an instruction if the database has not been migrated (see [KI-15](#resolved)):
 
-1. `CREATE EXTENSION IF NOT EXISTS vector`
-2. `Base.metadata.create_all` (Alembic arrives in Phase 5 — see the note there)
-3. Upsert system APIs, scopes, and roles from `shared/scopes.py`
-4. Upsert the bootstrap `dashboard` client (public, PKCE, `skip_consent=true`) and the `kiosk` client
+1. Refuse to run unless `alembic_version` exists
+2. Upsert system APIs, scopes, and roles from `shared/scopes.py`
+3. Upsert the bootstrap `dashboard` client (public, PKCE, `skip_consent=true`) and the `kiosk` client
    (confidential, `client_credentials`) — print the kiosk secret once
 5. Create the bootstrap admin user with the `administrator` role; print the generated password once
 
-Run with `uv run python -m scripts.seed` from `provider/`.
+Run `uv run alembic upgrade head` then `uv run python -m scripts.seed`, both from `provider/`.
 
 `scripts/gen_keys.py` writes an RSA keypair into `iden_signing_key_dir` for local development.
 
@@ -575,8 +575,8 @@ system-row protection, and the guarded deletes.
 **Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
 schema that makes IDEN usable by a university and a company without either one forking it.
 
-**Before starting:** clear KI-1, and take KI-15 (Alembic) and KI-12 (audit log) from
-[Known issues](#known-issues) — all three get more expensive with every phase that passes.
+**Before starting:** ~~KI-1~~, ~~KI-15~~ (Alembic) and KI-12 (audit log) — all three were more
+expensive with every phase that passed, so they were taken first. See [Known issues](#known-issues).
 
 **The governing rule:** *a user may change anything about themselves that does not change what they
 are allowed to do.* Authority is admin territory; everything else is theirs. Roles, groups, and
@@ -737,9 +737,9 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 
 **Goal:** the difference between "the flows work" and "this can be deployed".
 
-- **Migrations.** Replace `create_all` with Alembic. Deferred to here on purpose: the schema churns
-  through Phases 0–3, and hand-editing migrations during that churn wastes time. Generate one
-  baseline migration from the settled models, then migrate normally.
+- ~~**Migrations.**~~ Done ahead of Phase 3 — see [KI-15](#resolved). The reasoning for deferring
+  them (the schema churns through Phases 0–3) turned out to argue the other way: the churn is
+  exactly what produced three rounds of manual surgery on the dev database.
 - **Rate limiting.** Redis fixed-window limiter as middleware, with tighter per-route limits on
   `/api/v1/auth/login`, `/totp`, `/oauth2/token`, and `/biometric/*`. Brute-force protection on
   password and TOTP verification specifically.
@@ -783,6 +783,7 @@ ones with a failing test first — see ground rule 9.
 | **KI-4** | Consent recorded requested scopes, not granted ones | The consent route resolves the request first and stores what was actually granted, so a scope pruned for lack of permission is not silently pre-consented. | `test_consent.py::test_consent_records_what_was_granted_not_what_was_asked` |
 | **KI-5** | `IndexError` on a client with no grants | The management endpoints no longer touch `allowed_grants` at all — they are not a grant. | `::test_client_with_no_grants_does_not_crash` |
 | **KI-6** | `GET /admin/groups` was N+1 | One grouped `member_counts` query for the whole page. | `test_admin_users_groups.py::TestGroupListingCost` — asserts query count does not grow with row count |
+| **KI-15** | No migrations; `create_all` was the only way to build the schema | Alembic, with the initial revision generated from the settled Phase 2 models. `scripts/seed.py` no longer creates anything structural, and the test database is built by running the migrations — the same path a deployment takes, so there is only one way to produce a schema. | `tests/test_migrations.py` — autogenerate must find nothing left to do; confirmed to fail when a column is added to a model without a revision |
 
 A correction to the earlier writeup of **KI-2**: the old test was *under-specified*, not wrong. It
 checked that narrowing narrowed and that widening beyond the grant was refused — it simply never
@@ -839,14 +840,11 @@ endpoints are live now. **With KI-1 fixed this is the largest remaining exposure
 **KI-14 · Expired authorization codes and refresh tokens are never deleted.** Both tables grow
 without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
 
-**KI-15 · Alembic is still scheduled for Phase 5.** The schema has already needed three rounds of
-manual surgery on the dev database, and Phase 3 adds two more tables. Move it to the start of
-Phase 3, before there is data worth keeping.
 
 ### Suggested order
 
 1. ~~KI-1~~ ✅ — with KI-2 through KI-6.
-2. **KI-15**, then **KI-12**, at the start of Phase 3 — both get more expensive with every phase.
+2. ~~KI-15~~ ✅ — Alembic, ahead of Phase 3. **KI-12** next.
 3. **KI-13** before any deployment reachable by others; it is now the largest exposure.
 4. **KI-16** before real traffic — decide the grace window or the mutex.
 5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.

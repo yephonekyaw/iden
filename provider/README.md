@@ -52,7 +52,8 @@ uv sync                              # install dependencies into .venv
 cp .env.example .env                 # then fill it in
 
 uv run python -m scripts.gen_keys    # RSA signing keypair for local dev
-uv run python -m scripts.seed        # extension, tables, system catalogue, bootstrap admin
+uv run alembic upgrade head          # pgvector extension + every table
+uv run python -m scripts.seed        # system catalogue, bootstrap admin and clients
 
 uv run provider                      # uvicorn on :8000, reload enabled
 ```
@@ -69,7 +70,7 @@ dependency list — `uv` owns it and the lockfile.
 **Running the tests:**
 
 ```bash
-uv run pytest                             # 124 tests, ~5s
+uv run pytest                             # 224 tests, ~12s
 uv run pytest tests/test_scope_resolver.py -q
 ```
 
@@ -77,9 +78,29 @@ They use their own `iden_test` database (created and dropped per run) and Redis 
 so they never touch your development data. The app is driven in-process over ASGI — no server to
 start. See [PLAN.md § Testing](PLAN.md#testing) for how the fixtures work.
 
-**After changing a model:** re-run `uv run python -m scripts.seed`. It is idempotent by design, so
-re-running it during development is the normal path. (Alembic migrations land in Phase 5, once the
-schema stops moving.)
+**After changing a model:**
+
+```bash
+uv run alembic revision --autogenerate -m "what changed"   # then read it
+uv run alembic upgrade head
+```
+
+Read what autogenerate produced before applying it. It is reliable for added tables and columns, and
+unreliable for anything it has to infer — a renamed column looks like a drop plus an add, and losing
+the data in it is silent. Server defaults and `CHECK` constraints are often missed entirely.
+
+`tests/test_migrations.py` fails if the models and the migrations disagree, so a forgotten revision
+surfaces in the suite rather than at deployment. The test database is built by running the
+migrations, which is the same path a deployment takes.
+
+If your development database predates Alembic, it already has the tables — record that fact rather
+than rebuilding it:
+
+```bash
+uv run alembic stamp head
+```
+
+The seed is still idempotent and still safe to re-run; it just no longer creates anything structural.
 
 The seed prints the bootstrap administrator's password and the kiosk client's secret **once**. They
 are argon2-hashed on the way into the database and cannot be recovered afterwards — losing them means
@@ -148,7 +169,8 @@ All settings are environment variables prefixed `IDEN_`, loaded by `core/config.
 
 ```text
 provider/
-├── PLAN.md · README.md · pyproject.toml · .env.example
+├── PLAN.md · README.md · pyproject.toml · alembic.ini · .env.example
+├── migrations/                 # Alembic; versions/ holds one file per revision
 ├── scripts/
 │   ├── seed.py                 # idempotent dev bootstrap
 │   └── gen_keys.py             # local signing keypair

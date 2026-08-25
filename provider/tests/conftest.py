@@ -4,11 +4,19 @@ Tests run against a real PostgreSQL database (`iden_test`), created once per
 session and truncated between tests. Not SQLite: the models use PostgreSQL
 arrays and UUIDs, and a test that passes on a different engine than production
 proves less than it appears to.
+
+The schema is built by running the migrations, not by `create_all`. Two ways of
+creating the same tables is one way too many — this is the path a deployment
+takes, so it is the path the tests take.
 """
 
+import asyncio
 from collections.abc import AsyncGenerator
+from pathlib import Path
 
 import pytest
+from alembic import command
+from alembic.config import Config
 from httpx import ASGITransport, AsyncClient
 from redis.asyncio import Redis
 from sqlalchemy import text
@@ -35,18 +43,29 @@ ADMIN_PASSWORD = "correct-horse-battery-staple"
 REDIRECT_URI = "http://localhost:5173/callback"
 
 
+def _upgrade_to_head(url: str) -> None:
+    """Run the migrations against `url`.
+
+    Called in a worker thread: Alembic's env.py calls `asyncio.run`, which
+    cannot nest inside the loop pytest is already running.
+    """
+    config = Config(str(Path(__file__).resolve().parents[1] / "alembic.ini"))
+    config.set_main_option("sqlalchemy.url", url)
+    command.upgrade(config, "head")
+
+
 @pytest.fixture(scope="session")
 async def engine():
     admin = create_async_engine(MAINTENANCE_URL, isolation_level="AUTOCOMMIT")
     async with admin.connect() as conn:
-        _ =await conn.execute(text("DROP DATABASE IF EXISTS iden_test WITH (FORCE)"))
+        _ = await conn.execute(text("DROP DATABASE IF EXISTS iden_test WITH (FORCE)"))
         _ = await conn.execute(text("CREATE DATABASE iden_test"))
     await admin.dispose()
 
+    await asyncio.to_thread(
+        _upgrade_to_head, TEST_URL.render_as_string(hide_password=False)
+    )
     test_engine = create_async_engine(TEST_URL)
-    async with test_engine.begin() as conn:
-        _ = await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        _ = await conn.run_sync(Base.metadata.create_all)
 
     yield test_engine
     await test_engine.dispose()

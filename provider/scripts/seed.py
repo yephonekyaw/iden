@@ -1,9 +1,12 @@
 """Idempotent development bootstrap.
 
-Enables pgvector, creates tables, upserts the system catalogue, and registers
-the bootstrap clients and administrator. Safe to re-run after every model
-change — which is the normal path until Alembic arrives in Phase 5.
+Upserts the system catalogue and registers the bootstrap clients and
+administrator. Safe to re-run at any time.
 
+The schema is not its job: Alembic owns that, and the seed refuses to run
+against a database that has not been migrated.
+
+    uv run alembic upgrade head
     uv run python -m scripts.seed
 """
 
@@ -15,7 +18,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from provider.core.config import settings
-from provider.core.db import Base, engine, session_factory
+from provider.core.db import engine, session_factory
 from provider.core.security import hash_secret
 from provider.shared.enums import ClientType, GrantType
 from provider.shared.models import (
@@ -168,10 +171,19 @@ async def seed_admin_user(session: AsyncSession, roles: dict[str, Role]) -> str 
     return password
 
 
+async def require_schema() -> None:
+    """Fail loudly rather than half-seeding an empty database."""
+    async with engine.connect() as conn:
+        migrated = await conn.scalar(
+            text("SELECT to_regclass('public.alembic_version')")
+        )
+
+    if migrated is None:
+        sys.exit("No schema found. Run `uv run alembic upgrade head` first.")
+
+
 async def main() -> None:
-    async with engine.begin() as conn:
-        await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        await conn.run_sync(Base.metadata.create_all)
+    await require_schema()
 
     async with session_factory() as session:
         scopes = await seed_catalogue(session)
