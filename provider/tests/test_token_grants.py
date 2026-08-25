@@ -84,8 +84,13 @@ class TestRefreshRotation:
         assert "admin:users:read" not in rotated["scope"]
         assert "openid" in rotated["scope"]
 
-    async def test_scope_can_be_narrowed_but_not_widened(self, client):
-        """RFC 6749 §6 — a refresh must not gain scopes the original lacked."""
+    async def test_scope_narrowing_applies_to_one_response_only(self, client):
+        """KI-2. `scope` narrows the response; it must not shrink the grant.
+
+        The refresh token represents the original grant (RFC 6749 §6). A client
+        that once asked for less has to be able to get the rest back, or a single
+        narrow request silently downgrades it forever.
+        """
         tokens = await get_tokens(client, scope="openid admin:users:read")
 
         narrowed = (
@@ -93,9 +98,16 @@ class TestRefreshRotation:
         ).json()
         assert set(narrowed["scope"].split()) == {"openid"}
 
+        restored = (await refresh(client, narrowed["refresh_token"])).json()
+        assert "admin:users:read" in restored["scope"].split()
+
+    async def test_scope_cannot_be_widened_beyond_the_original_grant(self, client):
+        """RFC 6749 §6 — a refresh must not gain scopes the original lacked."""
+        tokens = await get_tokens(client, scope="openid admin:users:read")
+
         widened = (
             await refresh(
-                client, narrowed["refresh_token"], scope="openid admin:clients:write"
+                client, tokens["refresh_token"], scope="openid admin:clients:write"
             )
         ).json()
         assert "admin:clients:write" not in widened["scope"]

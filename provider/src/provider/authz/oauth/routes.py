@@ -322,18 +322,27 @@ async def _refresh_token_grant(
         await session.commit()
         raise InvalidGrant("The user is no longer active.")
 
+    # `record.scope` is the *original* grant and stays that way across every
+    # rotation. A `scope` parameter narrows this one response (RFC 6749 §6
+    # forbids widening, and an intersection cannot widen) without shrinking the
+    # grant itself — otherwise a client that once asked for less could never
+    # get the rest back.
+    granted_scope = parse_scope(record.scope)
+    requested = (
+        parse_scope(requested_scope) & granted_scope
+        if requested_scope
+        else granted_scope
+    )
+
     # Re-resolved rather than replayed: this is where a revoked role or a
-    # narrowed client actually takes effect. RFC 6749 §6 forbids widening, and
-    # an intersection cannot widen.
-    previous = parse_scope(record.scope)
-    narrowed = parse_scope(requested_scope) & previous if requested_scope else previous
-    granted = resolve_for_user(narrowed, client, user)
+    # narrowed client actually takes effect.
+    granted = resolve_for_user(requested, client, user)
 
     new_token, new_record = await tokens.issue_refresh_token(
         session,
         client=client,
         user=user,
-        scope=format_scope(granted),
+        scope=format_scope(granted_scope),
         acr=record.acr,
         amr=record.amr,
         family_id=record.family_id,
