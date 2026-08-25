@@ -1,0 +1,72 @@
+# Development setup
+
+See [Run it locally](../guides/quickstart.md) for the environment. This page is about working on the
+code.
+
+## The checks
+
+All four run from `provider/`, and all four are expected to be clean:
+
+```bash
+uv run ruff format .    # formatting, 88 columns
+uv run ruff check .     # lint: E, F, I, UP, B
+uv run pyright          # types, standard mode
+uv run pytest           # the suite
+```
+
+The first three run automatically on commit. Install the hook once per clone, from the repository
+root:
+
+```bash
+uv run --project provider pre-commit install
+```
+
+It checks **staged content only** — unstaged work is stashed first — so what is checked is what is
+being committed. A hook that rewrites a file fails the commit: stage the result and commit again.
+
+`pytest` is deliberately **not** in the hook. It needs PostgreSQL and Redis running and takes about
+twenty seconds; a gate that fails because Docker is down teaches people to reach for `--no-verify`,
+and a hook everyone bypasses is worse than no hook.
+
+## Two disabled lint rules
+
+Both have their reasoning next to them in `pyproject.toml`:
+
+- **`E501`** (line too long) — the formatter owns line length and will not split a string or a
+  comment, so this only ever reports lines ruff itself chose to leave.
+- **`B008`** (call in argument default) — `Depends(require_scope(...))` is the FastAPI idiom. B008
+  exists to catch mutable defaults, which this is not.
+
+## Type checking
+
+`typeCheckingMode` is pinned to `standard` so an editor set to `strict` agrees with what runs here.
+
+Strict is not a useful bar on a pytest suite: fixtures arrive as unannotated parameters, and each
+unknown type cascades through every use of it — about two thousand findings that say nothing about
+the tests. Clearing it honestly would mean annotating some four hundred and seventy parameters.
+
+## Adding a dependency
+
+```bash
+cd provider
+uv add <package>            # runtime
+uv add --dev <package>      # tooling
+```
+
+Never hand-edit the dependency lists — `uv` owns them and the lockfile.
+
+## Working on these docs
+
+```bash
+# From the repository root. Port 8001, because the provider itself uses 8000.
+uv run --project provider mkdocs serve -a localhost:8001
+```
+
+Live reload at <http://localhost:8001>. The site lives at the repository root rather than under
+`provider/` because it will grow sections for the kiosk, the engine, and the front ends.
+
+```bash
+uv run --project provider mkdocs build --strict
+```
+
+`--strict` turns broken internal links into failures, which is what you want before pushing.

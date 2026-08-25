@@ -30,3 +30,6 @@ CVS
 *~.nib
 *.swp
 *~
+
+# MkDocs build output
+site/

@@ -14,6 +14,22 @@ Everything deploys via Docker Compose.
 
 ---
 
+## Documentation
+
+Full documentation — concepts, integration guides, reference, and operations — lives in
+[`docs/`](docs/index.md) and builds as a site:
+
+```bash
+uv run --project provider mkdocs serve -a localhost:8001
+```
+
+Start with [Concepts](docs/concepts/index.md) if identity is new to you, or
+[Run it locally](docs/guides/quickstart.md) to have something working in five minutes. This file
+stays as the system-level overview; the server's own reference is
+[`provider/README.md`](provider/README.md).
+
+---
+
 ## Table of Contents
 
 - [Single-Organization by Design](#single-organization-by-design)

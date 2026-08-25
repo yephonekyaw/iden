@@ -3,7 +3,9 @@
 The IDEN backend: a single FastAPI application that is simultaneously an **OpenID Connect provider**
 and an **access-control service**. This document is the reference — setup, configuration, data model,
 endpoints, tokens, and conventions. For the *order of work*, see [PLAN.md](PLAN.md). For the
-system-level picture (Docker topology, frontends, kiosks), see the [root README](../README.md).
+system-level picture (Docker topology, frontends, kiosks), see the [root README](../README.md). For the
+reader-facing documentation — concepts, integration guides, operations — see
+[`docs/`](../docs/index.md), which builds as a MkDocs site.
 
 One process hosts four logical modules:
 
