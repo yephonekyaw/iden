@@ -29,6 +29,7 @@ same guarantee by validating against the published JWKS.
 - [Data Model](#data-model)
 - [Access Control in Practice](#access-control-in-practice)
 - [The Audit Log](#the-audit-log)
+- [Organization-Defined Profiles](#organization-defined-profiles)
 - [Refresh Rotation and the Grace Window](#refresh-rotation-and-the-grace-window)
 - [Single Sign-On and Sign-Out](#single-sign-on-and-sign-out)
 - [Endpoint Reference](#endpoint-reference)
@@ -73,7 +74,7 @@ dependency list — `uv` owns it and the lockfile.
 **Running the tests:**
 
 ```bash
-uv run pytest                             # 238 tests, ~13s
+uv run pytest                             # 326 tests, ~21s
 uv run pytest tests/test_scope_resolver.py -q
 ```
 
@@ -399,6 +400,7 @@ erDiagram
 | Scope values are globally unique | A token carries scopes as bare strings and the audience is resolved from the value, so two APIs sharing a value would blend their audiences into one token. Namespace by API: `attendance:records:read`. |
 | Groups do not nest | Recursive resolution is hard to explain, hard to audit, and hard to make fast. Flat membership covers the real cases. |
 | No `tenant_id` on any table | IDEN is single-organization by design — see the [root README](../README.md#single-organization-by-design). |
+| A profile value's `is_unique` mirrors its field | An index predicate cannot reach into another table, so the partial unique index needs the flag on the row it indexes. |
 | `sid` is a hash of the session id | The id itself is the `iden_session` cookie. Publishing it in every ID token would let any client, or anyone reading a token in transit, set that cookie and become the user. |
 | `AuthorizationCode.authenticated_at` is the session's, not the code's | `auth_time` is what a client's `max_age` is measured against. Taking it from the code would make every SSO session look freshly authenticated. |
 | `AuditEvent.actor_user_id` is `ON DELETE SET NULL` | Deleting a user must not erase the record of what they did. `actor_label` keeps their email as it was, so the row still names someone after the account is gone. |
@@ -536,6 +538,49 @@ Read it with `GET /admin/audit`, newest first, filtered by `actorUserId`, `actio
 
 ---
 
+## Organization-Defined Profiles
+
+IDEN ships no profile fields beyond `email`, `username` and `displayName`. A university needs
+`student_id`, `department`, `enrollment_year`; a company needs `employee_id` and `cost_centre`.
+Shipping either set would make the other organization's deployment wrong, so administrators define
+fields at runtime — the same way they define scopes.
+
+### Why a values table, not a JSONB column
+
+| Reason | Detail |
+|---|---|
+| Uniqueness is a real constraint | Two students must not end up sharing a number. With JSONB that needs a partial unique index created *per field at runtime* — DDL triggered by an API call — and a check-then-write in the service layer races under load. |
+| Filtering has to work | "Everyone in Computer Science" is an indexed query, not a scan over documents. |
+| Renaming is free | Values reference `field_id`, so changing a key rewrites one row rather than every profile. |
+
+The cost is that values are stored as text with `dataType` driving the cast at the boundary, plus one
+extra query per profile read. Both are acceptable; the constraint story is not negotiable. Keycloak's
+`USER_ATTRIBUTE` table has the same shape for the same reasons.
+
+### `userWritable` is what self-service *means*
+
+`PATCH /entity/profile` has no fixed field list. It accepts exactly the fields an administrator
+marked writable, and **refuses anything else rather than ignoring it** — a client should never
+believe it saved something it did not.
+
+The same values are writable by an administrator through `PATCH /admin/users/{id}/profile`, which is
+*not* held to the flag. Being able to write what the field's owner cannot is precisely what
+`userWritable: false` means: the registrar sets `student_id`, the student cannot.
+
+`groupId` binds a field to a group, so students and staff get different forms without a second
+grouping concept.
+
+### Claims are opt-in
+
+A field is invisible to clients until someone sets both `claimName` and `claimScope`. It then reaches
+a token only for a client that was granted that scope — data minimization by default, reusing the
+scope system rather than inventing a parallel release mechanism.
+
+`claimName` is checked against the reserved OIDC names (`sub`, `iss`, `aud`, `acr`, `sid`, …), so a
+custom field cannot shadow a claim a token's meaning depends on.
+
+---
+
 ## Refresh Rotation and the Grace Window
 
 Every refresh is single use: presenting one returns a new one and burns the old. A token presented
@@ -661,7 +706,7 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 | `POST` | `/api/v1/auth/totp` | session | TOTP verification / step-up; appends `otp` | 1 |
 | `POST` | `/api/v1/auth/biometric` | session | Face login; appends `face`. `501` unless biometric is enabled | 1 stub / 4 |
 | `POST` | `/api/v1/auth/consent` | session | Persist or deny a consent grant, then resume `/authorize` | 1 |
-| `POST` | `/api/v1/auth/password-reset` | public | Begin recovery. Always `202`, even for an unknown address — a different answer would enumerate accounts | 4 |
+| `POST` | `/api/v1/auth/password-reset` | public | Begin recovery. Always `202` with an empty body, even for an unknown address — a different answer would enumerate accounts | 4 |
 | `POST` | `/api/v1/auth/password-reset/confirm` | public | Single-use token, 15-minute TTL; revokes every session and refresh token on success | 4 |
 
 Login returns `complete` with a `resumeUrl`, or `totpRequired` when the client asked for an
@@ -695,6 +740,7 @@ reaches it again by following `resumeUrl`.
 | `POST` | `/admin/clients/{id}/rotate-secret` | `admin:clients:write` | 2 |
 | `PUT` | `/admin/clients/{id}/scopes` | `admin:clients:write` | 2 |
 | `GET` | `/admin/audit` | `admin:audit:read` | 2 |
+| `GET` `PATCH` | `/admin/users/{id}/profile` | `admin:users:read` / `:write` | 4 |
 | `GET` `POST` | `/admin/profile-fields` | `admin:profile-fields:read` / `:write` | 4 |
 | `GET` `PATCH` `DELETE` | `/admin/profile-fields/{id}` | `admin:profile-fields:read` / `:write` | 4 |
 
@@ -714,8 +760,9 @@ Every route derives the user from the token's `sub` and never accepts a user id 
 | `POST` | `/entity/totp/enroll` · `/entity/totp/confirm` | `entity:totp:enroll` | 4 |
 | `GET` `DELETE` | `/entity/totp` | `entity:totp:read` / `:enroll` | 4 |
 | `GET` | `/entity/sessions` | `entity:sessions:read` | 4 |
-| `DELETE` | `/entity/sessions/{id}` | `entity:sessions:revoke` | 4 |
-| `GET` `DELETE` | `/entity/connections` | `entity:connections:read` / `:revoke` | 4 |
+| `DELETE` | `/entity/sessions/{id}` | `entity:sessions:revoke` + fresh auth | 4 |
+| `GET` | `/entity/connections` | `entity:connections:read` | 4 |
+| `DELETE` | `/entity/connections/{clientId}` | `entity:connections:revoke` | 4 |
 | `GET` | `/entity/permissions` | `entity:permissions:read` | 4 |
 
 Sensitive routes are additionally gated by `require_fresh_auth(max_age=300)`: a valid access token is

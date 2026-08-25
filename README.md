@@ -639,8 +639,8 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 | **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Done |
 | **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Done |
 | **Phase 3** | Provider SSO — `prompt`, `max_age`, `sid`, back-channel logout (single sign-*out*) | Done |
-| **Phase 4** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Next |
-| **Phase 5** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
+| **Phase 4** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Done |
+| **Phase 5** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Next |
 | **Phase 6** | Hardening — rate limiting, tests, Docker Compose (migrations and the audit log landed early) | Planned |
 | **Phase 7** | Frontends — auth-ui and dashboard SPAs | Planned |
 | **Phase 8** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |

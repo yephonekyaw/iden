@@ -692,6 +692,12 @@ attempt any of this without them. `admin/clients/` accepts and returns the two n
 
 ## Phase 4 — Entity RS (self-service)
 
+**Status: done.** 4.1 through 4.4 shipped; `tests/test_profile_fields.py`, `tests/test_entity.py`
+and `tests/test_recovery.py` pin them. One thing the plan did not anticipate: `require_fresh_auth`
+reads `auth_time`, and access tokens did not carry it — only ID tokens did. A resource server never
+sees an ID token, so freshness was unenforceable until access tokens gained the claim (RFC 9068
+§2.2.1).
+
 **Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
 schema that makes IDEN usable by a university and a company without either one forking it.
 
