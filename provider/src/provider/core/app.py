@@ -22,6 +22,7 @@ from provider.core.errors import (
     RateLimitedError,
     ValidationError,
 )
+from provider.core.headers import SecurityHeadersMiddleware
 from provider.core.logging import configure_logging, logger
 from provider.core.router import router
 from provider.core.schemas import ErrorResponse
@@ -146,6 +147,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Outermost, so the headers reach responses the inner middleware produces on
+# its own — a CORS preflight, an audit failure — not only the ones routes return.
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.include_router(router, prefix=settings.iden_api_prefix)
 
