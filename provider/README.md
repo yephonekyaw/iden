@@ -114,7 +114,7 @@ dependency list — `uv` owns it and the lockfile.
 **Running the tests:**
 
 ```bash
-uv run pytest                             # 388 tests, ~26s
+uv run pytest                             # 398 tests, ~30s
 uv run pytest tests/test_scope_resolver.py -q
 ```
 
@@ -446,6 +446,7 @@ erDiagram
 | Invariant | Why |
 |---|---|
 | `is_system` rows cannot be renamed or deleted through the API | An admin deleting `admin:roles:write` would lock the organization out of its own deployment, permanently. |
+| At least one active user must hold `admin:users:write` | `is_system` protects the scope catalogue; this protects the *assignment*, which is the other half of the same lockout. Any change leaving nobody able to administer — a deactivation, a deletion, an emptied role or group — is refused with `409`. That scope specifically, because whoever holds it can restore every other one. See `admin/lockout.py`. |
 | Authorization codes, refresh tokens, and client secrets are stored **hashed** | A database read must never yield a usable credential. Same reasoning as passwords. |
 | `RefreshToken.family_id` + `rotated_to_id` | Rotation with reuse detection: presenting an already-rotated token revokes the whole family, on the assumption it was stolen. |
 | `Scope.description` is required | It is the sentence a user reads on the consent screen. An undescribed permission is one nobody can consent to meaningfully. |

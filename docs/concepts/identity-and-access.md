@@ -105,3 +105,25 @@ Without that guard, an administrator could delete `admin:roles:write` and lock t
 of its own deployment permanently, with no way back in short of editing the database by hand.
 
 Your own APIs, scopes, and roles carry no such flag and are fully yours to change.
+
+### And so is the last administrator
+
+Protecting the permission is only half of it. The permission can still exist while nobody holds it —
+deactivate the last administrator, or take the role off them, and the catalogue is intact and the
+deployment is just as locked.
+
+So IDEN counts. Any change that would leave **no active user holding `admin:users:write`** is refused
+with `409`, whichever door it came through:
+
+- deactivating or deleting that user
+- replacing their roles, or their direct grants
+- emptying the role that granted it, or deleting that role
+- taking the role off the group that granted it, removing the last member, or deleting the group
+
+That one scope, rather than the `administrator` role, because it is the one that can restore all the
+others: whoever holds it can set anyone's roles, including their own. Everything else an
+administrator can get wrong, another administrator can put right. This is the only door that locks
+from the outside.
+
+You will still meet the refusal legitimately — usually when handing over. Grant the scope to the
+person taking over **first**, then step down.

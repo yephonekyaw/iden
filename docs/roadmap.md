@@ -29,7 +29,7 @@ dependency, and everything it plugs into already exists.
 
 | | Issue | Consequence |
 |---|---|---|
-| **KI-7 / KI-8** | `admin:*` is all-or-nothing | No "administrator who cannot create administrators". Anyone with `admin:users:write` can grant themselves anything. |
+| **KI-7** | `admin:*` is all-or-nothing | No "administrator who cannot create administrators". Anyone with `admin:users:write` can grant themselves anything. |
 | **KI-9** | One token can carry several audiences | Ask for admin and entity scopes together and both are in `aud`. Standard, but a compromised resource server could replay the token at the other. |
 | **KI-10** | The audience is derived from the scope prefix | Correct for `admin:`, `entity:`, `biometric:`. An IDEN route guarded by a scope outside that convention would 401 every request. |
 | **KI-17** | An audit row is not atomic with its change | Written just after; a database failure in between loses the record. Logged loudly. |

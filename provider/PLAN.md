@@ -430,7 +430,7 @@ curl -s -X POST localhost:8000/oauth2/token \
 Then, as the real check: `uv run pytest`. At the end of Phase 1 that was 124 tests — PKCE against
 the RFC 7636 vector, acr derivation, the scope resolver, discovery, the full authorization code
 flow, refresh rotation and reuse detection, client credentials, revocation, introspection, logout,
-and `require_scope`. The suite grows with each phase; it stands at 388.
+and `require_scope`. The suite grows with each phase; it stands at 398.
 
 ---
 
@@ -994,6 +994,7 @@ ones with a failing test first — see ground rule 9.
 | **KI-12** | No audit log | `audit_events`, written by pure-ASGI middleware in `core/audit.py` for every state-changing request — `/admin/*`, `/entity/*`, `/api/v1/auth/*`, `/oauth2/revoke` and `GET /oauth2/logout`. Records actor, route template, target, status, IP, and the request body with secrets redacted. `actor_user_id` is `ON DELETE SET NULL` with the actor's email kept alongside, so deleting a user cannot erase what they did. Readable at `GET /admin/audit` under the new `admin:audit:read` scope; there is no write endpoint. | `tests/test_audit.py` — 14 tests, including that reads are not recorded, that refused attempts are, that a password never reaches the row, and that history survives the actor's deletion |
 | **KI-16** | Two honest simultaneous refreshes revoked the family | Both options from the writeup turned out to be needed, not either. A **replay window** (`IDEN_REFRESH_GRACE_PERIOD`, 30s) returns what a spent token was already exchanged for, to the same client only, with `expires_in` recomputed. A **Redis lock on the token** wraps the exchange, because the window alone only helps a caller arriving after the first finished — two requests in the same instant both find no replay and both rotate. Detection is delayed by one rotation, never removed: both parties end up holding the same next token, which collides outside the window. | `test_token_grants.py::TestConcurrentRefresh` — six tests; four fail without the window, and the `asyncio.gather` one fails without the lock (reliably under full-suite load, which is how the gap was found) |
 | **KI-13** | No rate limiting | Two counters, because there are two attacks: **per address** on login, TOTP, `/oauth2/token` and password reset, and **per account, failures only** on login and TOTP. Failures rather than attempts, because counting every attempt against one account hands anyone a way to lock its owner out — clearing on success means whoever knows the password can still sign in. Per-route dependencies rather than middleware, so a refusal runs after routing and still reaches the audit log. A global flood cap belongs in the reverse proxy. | `tests/test_rate_limit.py` — seven tests; three fail without the limiter, including the one asserting the 429 is audited |
+| **KI-8** | Nothing prevented locking yourself out | `admin/lockout.py`, called as a **post-condition** from the nine mutations that can remove authority. Every one asks the same question after the change and before the commit — *can anyone still administer this?* — which is one rule to get right instead of nine, answered against the world the commit would create rather than a prediction of it. The count is of active users holding **`admin:users:write`**, whatever the route: a direct grant, a role, or a role held by a group. That scope rather than the `administrator` role, because it is the one that can restore every other one — whoever holds it can set anyone's roles, including their own. Refusal is a `409`; the session rolls back, so a refused change lands nowhere. | `tests/test_lockout.py` — ten tests; eight fail without the guard. The two that do not are the ones asserting it does **not** over-fire, which is the other half of being right |
 | **KI-15** | No migrations; `create_all` was the only way to build the schema | Alembic, with the initial revision generated from the settled Phase 2 models. `scripts/seed.py` no longer creates anything structural, and the test database is built by running the migrations — the same path a deployment takes, so there is only one way to produce a schema. | `tests/test_migrations.py` — autogenerate must find nothing left to do; confirmed to fail when a column is added to a model without a revision |
 
 A correction to the earlier writeup of **KI-2**: the old test was *under-specified*, not wrong. It
@@ -1019,10 +1020,6 @@ deliberately, and each has a real cost.
 **KI-7 · `admin:roles:write` is effectively root.** Anyone holding it can add `admin:*` to a role
 they hold. Reasonable for a single-org IdP, but it means "an admin who can only manage groups" is not
 expressible. Expressing it needs a rule such as *you may not grant a scope you do not hold*.
-
-**KI-8 · Nothing prevents locking yourself out.** The `administrator` role can be removed from the
-last admin, or that admin deactivated. `is_system` protects the scope catalogue, not the assignment.
-A "last active administrator" guard is cheap insurance against a one-way door.
 
 **KI-9 · One token may carry several audiences.** Requesting admin and entity scopes yields both in
 `aud`. Standard per RFC 9068, but a compromised resource server can replay the token at the other.
@@ -1056,7 +1053,8 @@ detection needs the row.
 2. ~~KI-15~~ ✅ Alembic, ~~KI-12~~ ✅ audit log — both taken ahead of Phase 3.
 3. ~~KI-13~~ ✅ — per-address and per-account limits, with a proxy expected to cap floods.
 4. ~~KI-16~~ ✅ — the replay window and the lock, together.
-5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
+5. ~~KI-8~~ ✅ — the last-administrator guard. **KI-7** still waits on what a non-root administrator
+   should be.
 6. ~~KI-14~~ ✅ and ~~KI-11~~ ✅ (as a documentation fix) with Phase 6 hardening. **KI-9, KI-10**
    remain open and deliberately so — see below.
 
@@ -1067,15 +1065,15 @@ they were reviewed and left standing rather than fixed first. What that decision
   permission model, per-audience tokens, an actor plumbed through every service — and each protects
   against something a single-organization deployment does not yet face. They stay recorded so the
   cost is a choice rather than a surprise.
-- **KI-8** is the one with a one-way door behind it: lock out the last administrator and nothing in
-  the API can undo it. It is deferred, not dismissed.
+- ~~**KI-8**~~ was the one with a one-way door behind it, and was taken straight after Phase 6 for
+  exactly that reason.
 - **KI-10** is latent. The prefix convention holds for `admin:`, `entity:`, `biometric:` and every
   scope any phase plans to add. It bites the first time an IDEN route is guarded by a scope that does
   not follow it.
 - ~~**KI-11, KI-14**~~ were deployment concerns and were answered inside Phase 6 — rotation as a
   documentation correction, cleanup as `scripts/cleanup.py`.
 
-That leaves **five** open, all by choice: KI-7, KI-8, KI-9, KI-10, KI-17.
+That leaves **four** open, all by choice: KI-7, KI-9, KI-10, KI-17.
 
 ---
 

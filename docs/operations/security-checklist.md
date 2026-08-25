@@ -50,6 +50,12 @@ immediate revocation, use introspection on the endpoints where it earns the roun
 everything, an administrator can revoke all sessions for a user; changing a password does it
 automatically.
 
+**You cannot remove the last administrator.** Any change that would leave no active user holding
+`admin:users:write` is refused with `409` — deactivating them, deleting them, stripping their roles,
+emptying the role or group that granted it. It is the only permission whose last holder is protected,
+because it is the only one that can restore all the others; without it the way back in is a
+hand-edited database.
+
 **A refresh token can be presented twice within 30 seconds.** That is the grace window that stops
 honest double-refreshes signing people out. Detection is delayed by one rotation, never removed. Set
 `IDEN_REFRESH_GRACE_PERIOD=0` to opt out.
