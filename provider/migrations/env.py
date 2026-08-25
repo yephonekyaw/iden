@@ -6,11 +6,11 @@ there is one source of truth for it and no credentials in a committed file.
 
 import asyncio
 
+from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
-from alembic import context
 from provider.core.config import settings
 from provider.core.db import Base
 from provider.shared import models  # noqa: F401

@@ -41,8 +41,8 @@ from provider.authz.services.scope_resolver import (
 from provider.core.config import settings
 from provider.core.crypto import verify_jwt
 from provider.core.db import DBSessionDep
-from provider.core.security import hash_token
 from provider.core.redis import RedisDep
+from provider.core.security import hash_token
 from provider.shared.enums import ClientType, CodeChallengeMethod, GrantType
 from provider.shared.models import Client, RefreshToken, User
 

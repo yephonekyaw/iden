@@ -1,7 +1,7 @@
 import uuid
 from collections.abc import Callable
-from urllib.parse import urlencode
 from contextlib import asynccontextmanager
+from urllib.parse import urlencode
 
 import structlog
 import uvicorn
@@ -9,11 +9,11 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from provider.authz.oauth.errors import OAuthError, RedirectableError
 from provider.core import redis as redis_module
 from provider.core.audit import AuditMiddleware
 from provider.core.config import settings
 from provider.core.db import engine
-from provider.authz.oauth.errors import OAuthError, RedirectableError
 from provider.core.errors import (
     ConflictError,
     IdenError,

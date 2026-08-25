@@ -4,7 +4,6 @@ import pytest
 from sqlalchemy import select
 
 from provider.shared.models import AuditEvent, User
-
 from tests.flows import get_tokens, pkce_pair, query_of, sign_in, start
 
 pytestmark = pytest.mark.usefixtures("admin_user", "dashboard")

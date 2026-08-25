@@ -71,13 +71,30 @@ dependency list — `uv` owns it and the lockfile.
 **Running the tests:**
 
 ```bash
-uv run pytest                             # 224 tests, ~12s
+uv run pytest                             # 238 tests, ~13s
 uv run pytest tests/test_scope_resolver.py -q
 ```
 
 They use their own `iden_test` database (created and dropped per run) and Redis logical database 15,
 so they never touch your development data. The app is driven in-process over ASGI — no server to
 start. See [PLAN.md § Testing](PLAN.md#testing) for how the fixtures work.
+
+**The three checks**, all expected to be clean before a commit:
+
+```bash
+uv run ruff format .    # formatting, 88 columns
+uv run ruff check .     # lint: E, F, I, UP, B
+uv run pyright          # types, `standard` mode
+```
+
+`E501` and `B008` are switched off in `pyproject.toml`, each with the reason next to it: the
+formatter already owns line length, and `Depends(require_scope(...))` in a parameter default is the
+FastAPI idiom rather than the mutable default B008 is looking for.
+
+`typeCheckingMode` is pinned to `standard` in the same file so an editor set to `strict` agrees with
+what runs here. Strict is not a useful bar for a pytest suite — fixtures arrive as unannotated
+parameters, and each unknown type cascades through every use of it, which produces about two thousand
+findings that say nothing about the tests.
 
 **After changing a model:**
 

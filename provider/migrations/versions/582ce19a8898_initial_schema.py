@@ -14,7 +14,6 @@ Create Date: 2026-08-25 10:58:29.372965
 from collections.abc import Sequence
 
 import sqlalchemy as sa
-
 from alembic import op
 from sqlalchemy.dialects import postgresql
 

@@ -38,10 +38,26 @@ dev = [
     "ruff>=0.16.4",
 ]
 
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    # The formatter owns line length. It will not split a long string or
+    # comment, so E501 only ever reports lines ruff itself chose to leave.
+    "E501",
+    # `Depends(require_scope(...))` in a parameter default is the FastAPI
+    # idiom. B008 exists to catch mutable defaults, which this is not.
+    "B008",
+]
+
 [tool.pyright]
-include = ["src", "tests", "scripts"]
+include = ["src", "tests", "scripts", "migrations"]
 venvPath = "."
 venv = ".venv"
+# Declared rather than left to the default so an editor set to strict agrees
+# with what CI checks. Strict is not a useful bar for a pytest suite: fixtures
+# arrive as unannotated parameters, and one unknown type cascades through every
+# use of it — roughly 2,000 findings that say nothing about the tests.
+typeCheckingMode = "standard"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

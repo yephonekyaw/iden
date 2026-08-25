@@ -7,11 +7,11 @@ from typing import Annotated
 import jwt
 from fastapi import Depends, HTTPException, Request
 
+from provider.authz.services.token_service import is_denylisted
 from provider.core.audit import set_actor
 from provider.core.config import settings
 from provider.core.crypto import verify_jwt
 from provider.core.redis import RedisDep
-from provider.authz.services.token_service import is_denylisted
 
 
 @dataclass
