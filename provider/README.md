@@ -83,15 +83,6 @@ They use their own `iden_test` database (created and dropped per run) and Redis 
 so they never touch your development data. The app is driven in-process over ASGI — no server to
 start. See [PLAN.md § Testing](PLAN.md#testing) for how the fixtures work.
 
-**These documents are tested.** `tests/test_docs.py` reads the running application — its route
-table, scope catalogue, settings model, ORM metadata and package tree — and fails when any of them
-describes something no document mentions. It also checks that code fences are balanced and that
-every internal and cross-document link resolves.
-
-It cannot tell whether the prose is still *true*; no test can. What it guarantees is that nothing is
-missing outright, which is the half that drifts silently — nothing breaks when a route is added and
-its table row is not.
-
 **The three checks**, all expected to be clean before a commit:
 
 ```bash
