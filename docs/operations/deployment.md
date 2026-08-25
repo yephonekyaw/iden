@@ -9,6 +9,11 @@
 | **Redis 8** | Sessions, pending sign-ins, the denylist, rate limits. |
 | **A reverse proxy** | TLS termination, and flood protection IDEN cannot do for itself. |
 
+`provider/Dockerfile` and `deploy/docker-compose.yml` build and wire the first three;
+`docker compose -f deploy/docker-compose.yml up --build` is a working deployment. The proxy is not in
+that file — certificates are site-specific — and neither is MinIO, which exists for the biometric
+module that is not built yet.
+
 The provider is a single deployable. The admin, entity, and biometric modules are logical
 boundaries, not separate services — one image, one port, one thing to run.
 
@@ -72,6 +77,12 @@ These sign every token. Anyone who can read them can mint a token for anyone.
 
 Rotation is filename-ordered; see [Configuration](../reference/configuration.md#rotating-a-signing-key).
 
+!!! warning "Rotation needs a rolling restart, and five minutes of patience"
+    The keys are read once at startup, so a new file is invisible until the process restarts. Plan
+    for two waits, not one: restart the replicas, then leave the **old** key in place for at least
+    five minutes more. Resource servers cache the key set for that long, and one still holding the
+    previous copy will reject a token signed with the new key it has never seen.
+
 ## Backups
 
 | | |
@@ -82,11 +93,54 @@ Rotation is filename-ordered; see [Configuration](../reference/configuration.md#
 
 ## Health
 
-`GET /health` always returns `200`, with a body reporting whether PostgreSQL and Redis are reachable.
+Three endpoints, because "is it healthy" is really three questions with different consequences.
 
-That is deliberate: a monitor needs to tell *the service is down* from *the service is up and telling
-you a dependency is down*. A 5xx conflates them.
+| Endpoint | Answers | What to do when it fails |
+|---|---|---|
+| `GET /health/live` | Is the process running? Touches nothing else. | **Restart it.** |
+| `GET /health/ready` | Can it serve a request end to end? `503` when PostgreSQL or Redis is unreachable. | **Stop sending it traffic.** Do not restart. |
+| `GET /health` | The same detail, always `200`. | Read it. |
+
+The split matters more than it looks. Point a liveness probe at the database and the first bad minute
+PostgreSQL has restarts every replica you own — turning an outage that would have recovered into a
+restart loop that will not. Liveness asks *is this process wedged*; readiness asks *is this replica
+useful right now*.
+
+`GET /health` stays always-`200` for a human: a monitor needs to tell *the service is down* from
+*the service is up and telling you a dependency is down*, and a 5xx conflates them.
 
 ```json
 {"status": "degraded", "database": "ok", "redis": "unreachable"}
 ```
+
+## Housekeeping
+
+Authorization codes and refresh tokens are not deleted when they expire. Nothing breaks — expired
+credentials are refused either way — but both tables grow for the life of the deployment. Schedule
+this:
+
+```bash
+uv run python -m scripts.cleanup --dry-run   # count what would go
+uv run python -m scripts.cleanup             # delete it
+```
+
+Cron, a Kubernetes `CronJob`, or a systemd timer — daily is plenty. It is not an in-process
+background task on purpose: every replica would race on the same rows, and a job you cannot run by
+hand is a job you cannot debug.
+
+It deletes only rows past `expiresAt` plus an hour's margin. A **revoked** token that has not yet
+expired is kept deliberately — reuse detection works by finding the spent row and revoking its
+family, so removing it early would turn a detectable theft into an ordinary `invalid_grant`.
+
+`audit_events` is never touched. How long to keep a record of who did what is your organization's
+decision, not a maintenance script's.
+
+## Response headers
+
+The provider sets `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, and — when
+`IDEN_ENV=prod` — `Strict-Transport-Security` on every response. If your proxy adds its own copy of
+any of these, remove one of the two. Two headers stating one policy is a place for them to disagree.
+
+Responses carrying a token are `Cache-Control: no-store` (RFC 6749 §5.1). The two exceptions are
+discovery and JWKS, at `public, max-age=300`, because every resource server fetches the key set and
+making it uncacheable would put IDEN in the path of every token validation your APIs do.

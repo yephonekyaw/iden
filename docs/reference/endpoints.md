@@ -161,7 +161,9 @@ Every `/admin/*` and `/entity/*` route is gated by a permission named in its des
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/health` | Service health |
+| `GET` | `/health` | Service health, always `200` — detail in the body |
+| `GET` | `/health/live` | Liveness probe. Restart on a failure here |
+| `GET` | `/health/ready` | Readiness probe. `503` when a dependency is unreachable; drain, do not restart |
 
 ### OAuth 2.0 and OIDC
 

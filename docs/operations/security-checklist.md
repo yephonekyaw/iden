@@ -14,6 +14,10 @@ Work through this before anyone outside your own machine can reach the deploymen
 - [ ] **`IDEN_ALLOWED_ADMIN_ORIGINS` lists only origins you control.** It permits credentialed
       cross-origin requests.
 - [ ] **Database and Redis are not reachable from outside** the deployment network.
+- [ ] **The proxy does not strip or rewrite IDEN's response headers.** The application sets
+      `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, and — when
+      `IDEN_ENV=prod` — `Strict-Transport-Security`. A proxy that adds its own copy of any of these
+      leaves two policies to disagree with each other.
 - [ ] **Backups exist and have been restored at least once.** An untested backup is a hope.
 
 ## Should be true
@@ -24,6 +28,7 @@ Work through this before anyone outside your own machine can reach the deploymen
 - [ ] `backchannelLogoutUri` is registered for every application with its own session, so signing out
       means something.
 - [ ] Someone reads `GET /admin/audit` on a schedule. A log nobody reads is a log nobody reads.
+- [ ] `scripts/cleanup.py` is scheduled, so expired codes and tokens do not accumulate forever.
 
 ## Known gaps
 
@@ -31,9 +36,7 @@ Honest rather than reassuring. Each is tracked on the [roadmap](../roadmap.md).
 
 | Gap | Consequence |
 |---|---|
-| **No cleanup of expired codes and tokens** | Two tables grow without bound. Nothing breaks; the database gets larger forever. |
 | **An audit row is written just after the change** | If the database becomes unreachable in between, the change stands and the record is lost. Logged loudly, but lost. |
-| **No security headers middleware** | HSTS, `X-Content-Type-Options`, `Referrer-Policy` and frame-ancestors are not set by the application. Set them at the proxy. |
 | **`admin:*` is all-or-nothing** | There is no "administrator who cannot create administrators". Anyone with `admin:users:write` can grant themselves anything. |
 | **Biometrics are unbuilt** | The permissions exist; the module does not. `IDEN_BIOMETRIC_ENABLED` should stay `false`. |
 

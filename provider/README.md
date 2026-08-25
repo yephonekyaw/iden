@@ -71,19 +71,66 @@ Then:
 - Discovery — <http://localhost:8000/.well-known/openid-configuration>
 - Health — <http://localhost:8000/health>
 
+### Running it in a container
+
+The same stack, with the provider built and wired in rather than run from your shell:
+
+```bash
+uv run python -m scripts.gen_keys                              # once; mounted read-only
+docker compose -f deploy/docker-compose.yml up --build
+```
+
+`migrate` runs `alembic upgrade head` and exits; `provider` waits for it to finish, then starts on
+`:8000`. Migrations are a separate service rather than an entrypoint step on purpose — scale
+`provider` to two replicas with migrations in the entrypoint and they run twice, at the same time,
+against one database.
+
+The image is two-stage: dependencies resolve in a `uv` image and are copied into a plain
+`python:3.14-slim`, so what ships carries no uv, no build tools, and no lockfile, and runs as uid
+1000. Its `HEALTHCHECK` calls `/health/live`, never `/health/ready` — see the note under those
+endpoints for why.
+
+TLS, a reverse proxy, and MinIO are not in this file. The first two are site-specific and belong to
+whoever operates the deployment; MinIO exists for the biometric module, which is not built.
+
+### Housekeeping
+
+Authorization codes and refresh tokens are not deleted when they expire, so both tables grow for the
+life of the deployment. Run this from cron, a Kubernetes `CronJob`, or a systemd timer:
+
+```bash
+uv run python -m scripts.cleanup --dry-run   # count what would go
+uv run python -m scripts.cleanup             # delete it
+```
+
+It removes only rows past `expiresAt` plus an hour's margin. A revoked token that has not yet expired
+is kept deliberately: reuse detection works by finding the spent row and revoking its family, so
+deleting it early would turn a detectable theft into an ordinary `invalid_grant`. `audit_events` is
+never touched — how long to keep a record of who did what is your organization's decision.
+
 **Adding a dependency:** `uv add <package>` from `provider/`. Never hand-edit the `pyproject.toml`
 dependency list — `uv` owns it and the lockfile.
 
 **Running the tests:**
 
 ```bash
-uv run pytest                             # 333 tests, ~22s
+uv run pytest                             # 388 tests, ~26s
 uv run pytest tests/test_scope_resolver.py -q
 ```
 
 They use their own `iden_test` database (created and dropped per run) and Redis logical database 15,
 so they never touch your development data. The app is driven in-process over ASGI — no server to
 start. See [PLAN.md § Testing](PLAN.md#testing) for how the fixtures work.
+
+**Coverage**, when you want to know what is not exercised:
+
+```bash
+uv run pytest --cov=provider --cov-report=term-missing
+```
+
+There is deliberately no threshold. Coverage here is a tool for finding gaps worth filling, not a
+gate — a build that fails below a number teaches people to write tests that touch lines rather than
+tests that check behaviour. It currently sits at 93%.
 
 **The three checks**, all expected to be clean before a commit:
 
@@ -735,6 +782,8 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 | Method | Path | Auth | Purpose | Phase |
 |---|---|---|---|---|
 | `GET` | `/health` | public | Always `200`; the body reports whether PostgreSQL and Redis are reachable, so a monitor can tell *down* from *up and degraded* | 0 |
+| `GET` | `/health/live` | public | Liveness. `200` whenever the process can answer at all; touches no dependency. This is what an orchestrator restarts on | 6 |
+| `GET` | `/health/ready` | public | Readiness. `503` when PostgreSQL or Redis is unreachable, so a load balancer drains the replica without parsing a body. Never a reason to restart | 6 |
 
 ### AuthZ — discovery & OAuth
 

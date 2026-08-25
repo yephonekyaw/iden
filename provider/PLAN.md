@@ -430,7 +430,7 @@ curl -s -X POST localhost:8000/oauth2/token \
 Then, as the real check: `uv run pytest`. At the end of Phase 1 that was 124 tests — PKCE against
 the RFC 7636 vector, acr derivation, the scope resolver, discovery, the full authorization code
 flow, refresh rotation and reuse detection, client credentials, revocation, introspection, logout,
-and `require_scope`. The suite grows with each phase; it stands at 333.
+and `require_scope`. The suite grows with each phase; it stands at 388.
 
 ---
 
@@ -888,22 +888,87 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
   reaches the audit log. `/biometric/*` still needs its own limits when it exists.
 - ~~**Audit log.**~~ Done ahead of Phase 3 — see [KI-12](#resolved). It should not have been here:
   history not written is lost, so every phase this waited for was history nobody could recover.
-- **Security headers & CORS.** HSTS, `X-Content-Type-Options`, `Referrer-Policy`, frame-ancestors;
-  CORS restricted to `iden_allowed_admin_origins`.
-- **Error contract.** One documented JSON error shape everywhere except the OAuth endpoints, which
-  keep the RFC format.
-- **Test coverage review.** The suite grows with each phase, so this is a gap review rather than a
-  build: coverage measurement and failure injection (Redis down, database down). The concurrency
-  cases listed here are done — `tests/test_concurrency.py` for redemption races and
-  `TestConcurrentRefresh` for two simultaneous refreshes of one token.
-- **Docker.** `Dockerfile` for the provider, extending `deploy/docker-compose.yml` (created in Phase 0
-  with postgres and redis) to wire in the provider, minio, and nginx.
-- **Operational endpoints.** `/health` split into liveness and readiness.
+- ~~**Security headers & CORS.**~~ Done. `core/headers.py`, one pure-ASGI middleware mounted
+  outermost so the headers reach the responses the inner middleware produces on its own — a CORS
+  preflight, an audit failure — not only the ones routes return. CORS was already restricted, since
+  the Auth UI is a separate origin and credentialed CORS is what makes login work at all.
+  - `X-Content-Type-Options: nosniff` and `Referrer-Policy: no-referrer` everywhere.
+  - **CSP** `default-src 'none'; frame-ancestors 'none'; base-uri 'none'`. The provider serves JSON,
+    so nothing may load. `/docs` and `/redoc` get the same policy minus `default-src` — they pull
+    Swagger and ReDoc from a CDN, and render no user data. `X-Frame-Options` is deliberately absent:
+    `frame-ancestors` replaces it in every browser new enough to run an OIDC client, and two headers
+    expressing one policy is one more place for them to disagree.
+  - **HSTS in production only.** Sent from `http://localhost` it pins *every* project on localhost
+    to HTTPS in the developer's browser, which is slow to discover and tedious to undo.
+  - **`Cache-Control: no-store` (with the RFC 6749 §5.1 `Pragma: no-cache`) by default**, closing a
+    gap open since Phase 1: token responses carried no cache directives at all. Discovery and JWKS
+    are the exception at `public, max-age=300` — every resource server fetches the key set, and
+    making it uncacheable would put IDEN in the path of every token validation. That age doubles as
+    the rotation budget: a new `kid` is invisible for up to five minutes.
+- ~~**Error contract.**~~ Done. The shape existed since Phase 0; what was missing was everything that
+  did not go through it. The provider spoke three dialects: `code`/`message`/`details` from the
+  domain-error handler, Starlette's `{"detail": "..."}` from every dependency that raises
+  `HTTPException` — `require_scope`, the entity user lookup, login — and FastAPI's
+  `{"detail": [ ... ]}` for a malformed body, where the same key holds a list. Two handlers in
+  `core/app.py` now translate both, centrally, rather than replacing `HTTPException` at forty call
+  sites: the raising code was right, only the serialization was inconsistent. `WWW-Authenticate` is
+  preserved, because RFC 6750 and RFC 9470 put the machine-readable part of a 401 and a step-up
+  there. A malformed request to `/oauth2/*` answers RFC 6749 `invalid_request` instead — a client
+  library reading §5.2 has no way to read anything else.
+- ~~**Test coverage review.**~~ Done. `pytest-cov` measures it; the config in `pyproject.toml` says
+  why there is deliberately **no threshold** — a gate teaches people to write tests that touch lines
+  rather than tests that check behaviour. The review found two gaps worth filling and one bug:
+  - **`shared/profile.py` was at 60%** — pure validation logic, the kind ground rule 8 says gets unit
+    tests, reached only indirectly through endpoint tests. `tests/test_profile_values.py` covers it
+    directly: every field type, every validator, and the `min: 0` case a truthiness check would
+    silently ignore.
+  - **Failure injection found an undocumented failure mode.** With Redis or PostgreSQL unreachable,
+    the exception escaped to the ASGI server, which answers a bare `Internal Server Error` as plain
+    text — a fourth body shape, appearing for the first time at the exact moment an operator is
+    trying to work out what broke. Now `503` in the contract's shape with `Retry-After`. Narrowly
+    caught: `OperationalError` and `InterfaceError`, not `SQLAlchemyError`, so a malformed query
+    stays a 500. Reporting a bug as an outage sends someone hunting a problem that is not happening.
+  - The concurrency cases listed here were already done — `tests/test_concurrency.py` for redemption
+    races and `TestConcurrentRefresh` for two simultaneous refreshes of one token.
+
+  93% of statements, 388 tests.
+- ~~**Docker.**~~ Done. A two-stage `provider/Dockerfile`: dependencies resolve in a `uv` image and
+  are copied forward, so the runtime image carries no uv, no build tools, and no lockfile, and runs
+  as uid 1000 rather than root. Its `HEALTHCHECK` calls `/health/live` — readiness is the
+  orchestrator's, since Compose has no way to drain traffic and checking dependencies there would
+  only kill the container that reported them.
+
+  `deploy/docker-compose.yml` gains `migrate` and `provider`. Migrations run as a **separate service
+  that exits**, with `provider` waiting on `service_completed_successfully` — not an entrypoint step,
+  because scaling the provider to two replicas would then run the migrations twice, concurrently,
+  against one database.
+
+  Two things are deliberately not here. **nginx**, because certificates are site-specific and the
+  proxy is where flood protection belongs — it is the operator's, and the deployment guide says so.
+  **MinIO**, because it exists for the biometric module, which is not built. Also fixed on the way
+  through: `main()` hard-coded `reload=True`, which in a container is a memory cost and a restart
+  loop waiting for a mounted file to change. It follows `IDEN_ENV` now.
+- ~~**Operational endpoints.**~~ Done. `/health/live` answers `200` whenever the process can answer
+  at all and touches no dependency; `/health/ready` checks PostgreSQL and Redis and answers `503`
+  when either is unreachable, so a load balancer drains the replica without parsing a body. The split
+  is the point: a liveness probe that checks the database restarts every replica the moment the
+  database has a bad minute, turning a recoverable outage into a restart loop. `/health` stays as it
+  was — always `200`, detail in the body — for a human who wants to know *why*.
+
+- **Expired codes and tokens are deleted.** `scripts/cleanup.py`, run from cron or a scheduler, with
+  `--dry-run` to see what it would remove first. Closes [KI-14](#operational-gaps). Only rows past
+  `expires_at` plus an hour's margin: reuse detection works by finding the spent row and revoking its
+  family, so deleting a revoked-but-unexpired token would turn a detectable theft into an ordinary
+  `invalid_grant`. `audit_events` is deliberately untouched — a retention policy for who-did-what is
+  an organizational decision, not a maintenance one.
 
 ### Done when
 
-`docker compose up --build` brings up a working deployment; the test suite passes; the OWASP-relevant
-checks — rate limits engaged, no secrets in logs, headers present — all hold.
+✅ `docker compose -f deploy/docker-compose.yml up --build` brings up a working deployment —
+verified: migrations ran to completion, the container reported healthy as uid `iden`, and
+`/health/ready` answered `{"status":"ok"}` with the security headers attached. The suite passes at
+388 tests, and the OWASP-relevant checks — rate limits engaged, no secrets in logs, headers present —
+all hold.
 
 ---
 
@@ -969,13 +1034,20 @@ guarded by a custom scope would compute a nonexistent audience and 401 every req
 rail or an explicit audience argument. **Phase 4 will add `admin:profile-fields:*`, which keeps the
 prefix convention — but it is one custom scope away from biting.**
 
-**KI-11 · Key rotation needs a restart.** `core/crypto._keys` is `@cache`d at import. The docs call
-rotation "a config change"; it is a config change *and* a restart.
+**KI-11 · Key rotation needs a restart.** `core/crypto._keys` is `@cache`d at import. The docs called
+rotation "a config change"; it is a config change *and* a rolling restart. **Resolved in Phase 6 by
+correcting the documentation rather than the code**: re-reading keys on a timer buys nothing a
+rolling restart does not already give, and adds a state where half the workers sign with the old key.
+The five-minute `Cache-Control` on JWKS is the other half of the story — a resource server will not
+see a new `kid` until its copy expires, so the restart has to lead the retirement of the old key by
+at least that long.
 
 ### Operational gaps
 
-**KI-14 · Expired authorization codes and refresh tokens are never deleted.** Both tables grow
-without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
+~~**KI-14 · Expired authorization codes and refresh tokens are never deleted.**~~ Resolved in Phase 6
+by `scripts/cleanup.py` — see the Phase 6 entry. Pinned by `tests/test_hardening.py::TestCleanup`,
+including the case that matters most: a revoked token is kept until it expires, because reuse
+detection needs the row.
 
 
 ### Suggested order
@@ -985,7 +1057,25 @@ without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
 3. ~~KI-13~~ ✅ — per-address and per-account limits, with a proxy expected to cap floods.
 4. ~~KI-16~~ ✅ — the replay window and the lock, together.
 5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
-6. **KI-9, KI-10, KI-11, KI-14** with Phase 6 hardening.
+6. ~~KI-14~~ ✅ and ~~KI-11~~ ✅ (as a documentation fix) with Phase 6 hardening. **KI-9, KI-10**
+   remain open and deliberately so — see below.
+
+**Deferred deliberately, before Phase 6.** None of the seven open issues blocks a later phase, so
+they were reviewed and left standing rather than fixed first. What that decision rests on:
+
+- **KI-7, KI-9, KI-17** are trade-offs, not defects. Each has a fix with a real cost — a partial-admin
+  permission model, per-audience tokens, an actor plumbed through every service — and each protects
+  against something a single-organization deployment does not yet face. They stay recorded so the
+  cost is a choice rather than a surprise.
+- **KI-8** is the one with a one-way door behind it: lock out the last administrator and nothing in
+  the API can undo it. It is deferred, not dismissed.
+- **KI-10** is latent. The prefix convention holds for `admin:`, `entity:`, `biometric:` and every
+  scope any phase plans to add. It bites the first time an IDEN route is guarded by a scope that does
+  not follow it.
+- ~~**KI-11, KI-14**~~ were deployment concerns and were answered inside Phase 6 — rotation as a
+  documentation correction, cleanup as `scripts/cleanup.py`.
+
+That leaves **five** open, all by choice: KI-7, KI-8, KI-9, KI-10, KI-17.
 
 ---
 

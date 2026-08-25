@@ -14,7 +14,7 @@ the summary.
 | 3 | SSO — `prompt`, `max_age`, `sid`, single sign-out | ✅ Done |
 | 4 | Self-service — profile, org-defined fields, credentials, TOTP, recovery | ✅ Done |
 | 5 | Biometrics — enrollment, verification, liveness | On hold |
-| 6 | Hardening — Docker, TLS, security headers, coverage review | Planned |
+| 6 | Hardening — Docker, security headers, error contract, probes, coverage review | ✅ Done |
 | 7 | Front ends — the sign-in UI and the dashboard | Planned |
 | 8 | Kiosk — device registration and enrollment | Planned |
 
@@ -22,13 +22,16 @@ Migrations, the audit log, and rate limiting were all pulled forward out of Phas
 scheduled late and each got more expensive with every phase that passed — history not written is
 lost, and an unmigrated schema needs manual surgery.
 
+Phase 5 is on hold rather than next: the biometric module is the only part with an external
+dependency, and everything it plugs into already exists.
+
 ## Open issues
 
 | | Issue | Consequence |
 |---|---|---|
 | **KI-7 / KI-8** | `admin:*` is all-or-nothing | No "administrator who cannot create administrators". Anyone with `admin:users:write` can grant themselves anything. |
-| **KI-9 / KI-10 / KI-11** | Assorted hardening | Security headers, error-shape edge cases, operational endpoints. |
-| **KI-14** | Expired codes and tokens are never deleted | Two tables grow without bound. |
+| **KI-9** | One token can carry several audiences | Ask for admin and entity scopes together and both are in `aud`. Standard, but a compromised resource server could replay the token at the other. |
+| **KI-10** | The audience is derived from the scope prefix | Correct for `admin:`, `entity:`, `biometric:`. An IDEN route guarded by a scope outside that convention would 401 every request. |
 | **KI-17** | An audit row is not atomic with its change | Written just after; a database failure in between loses the record. Logged loudly. |
 
 ## Federation
