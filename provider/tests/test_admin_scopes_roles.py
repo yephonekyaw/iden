@@ -225,16 +225,16 @@ class TestRoles:
 
         assert response.status_code == 409
 
-    async def test_assigned_role_refuses_deletion(
-        self, client, admin_headers, admin_user
-    ):
+    async def test_assigned_role_refuses_deletion(self, client, admin_headers, member):
         role = (
             await client.post(
                 "/admin/roles", json={"name": "officer"}, headers=admin_headers
             )
         ).json()
+        # Assigned to an ordinary member, not the administrator: replacing the
+        # only administrator's roles is refused outright — see the lockout guard.
         await client.put(
-            f"/admin/users/{admin_user.id}/roles",
+            f"/admin/users/{member.id}/roles",
             json={"roleIds": [role["id"]]},
             headers=admin_headers,
         )

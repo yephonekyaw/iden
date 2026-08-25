@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from provider.admin import lockout
 from provider.admin.roles.errors import (
     RoleInUse,
     RoleNameTaken,
@@ -88,6 +89,7 @@ async def set_role_scopes(
         raise SystemRoleImmutable
 
     role.scopes = await resolve_scopes(session, scope_ids)
+    await lockout.refuse_if_last(session)
     await session.commit()
     return role
 
@@ -116,4 +118,5 @@ async def delete_role(session: AsyncSession, role_id: UUID, *, force: bool) -> N
         raise RoleInUse
 
     await session.delete(role)
+    await lockout.refuse_if_last(session)
     await session.commit()

@@ -121,7 +121,9 @@ class TestUserFiltering:
 
 
 class TestDeactivation:
-    async def test_deactivated_user_cannot_refresh(self, client, admin_headers, db):
+    async def test_deactivated_user_cannot_refresh(
+        self, client, admin_headers, db, catalogue
+    ):
         """Deactivation has to reach live credentials, or the account stays
         usable until they expire on their own."""
         from tests.flows import get_tokens
@@ -131,6 +133,19 @@ class TestDeactivation:
             await client.get("/admin/users?search=admin@test", headers=admin_headers)
         ).json()
         user_id = me["items"][0]["id"]
+
+        # A second administrator first: deactivating the only one is refused,
+        # and this test is about credentials, not about the lockout guard.
+        await client.post(
+            "/admin/users",
+            json={
+                "email": "deputy@test.local",
+                "username": "deputy",
+                "password": "correct-horse-battery",
+                "roleIds": [str(catalogue["roles"]["administrator"].id)],
+            },
+            headers=admin_headers,
+        )
 
         await client.patch(
             f"/admin/users/{user_id}", json={"isActive": False}, headers=admin_headers

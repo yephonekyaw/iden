@@ -114,13 +114,16 @@ async def update_group(
     description=(
         "**Replaces the entire set.** Every member inherits these roles, which is "
         "how one change reaches a whole department.\n\n"
+        "Refused with `409` when the group is the last source of "
+        "`admin:users:write` for an active user.\n\n"
         "**Required scope:** `admin:groups:write`"
     ),
     responses={
         404: {
             "model": ErrorResponse,
             "description": "No such group, or unknown role ids",
-        }
+        },
+        409: {"model": ErrorResponse, "description": "Would leave no administrator"},
     },
     dependencies=[WRITE],
 )
@@ -184,7 +187,10 @@ async def add_members(
         "Removes the membership only — the user is untouched.\n\n"
         "**Required scope:** `admin:groups:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such group"}},
+    responses={
+        404: {"model": ErrorResponse, "description": "No such group"},
+        409: {"model": ErrorResponse, "description": "Would leave no administrator"},
+    },
     dependencies=[WRITE],
 )
 async def remove_member(
@@ -203,7 +209,10 @@ async def remove_member(
         "not deleted** — they simply lose whatever the group granted them.\n\n"
         "**Required scope:** `admin:groups:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such group"}},
+    responses={
+        404: {"model": ErrorResponse, "description": "No such group"},
+        409: {"model": ErrorResponse, "description": "Would leave no administrator"},
+    },
     dependencies=[WRITE],
 )
 async def delete_group(group_id: UUID, session: DBSessionDep) -> Response:

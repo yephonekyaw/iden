@@ -3,6 +3,7 @@ from uuid import UUID
 from sqlalchemy import delete, func, insert, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from provider.admin import lockout
 from provider.admin.groups.errors import (
     GroupNameTaken,
     GroupNotFound,
@@ -104,6 +105,7 @@ async def set_group_roles(
 ) -> Group:
     group = await get_group(session, group_id)
     group.roles = await resolve_roles(session, role_ids)
+    await lockout.refuse_if_last(session)
     await session.commit()
     return group
 
@@ -158,6 +160,7 @@ async def remove_member(session: AsyncSession, group_id: UUID, user_id: UUID) ->
             user_groups.c.group_id == group_id, user_groups.c.user_id == user_id
         )
     )
+    await lockout.refuse_if_last(session)
     await session.commit()
 
 
@@ -165,4 +168,5 @@ async def delete_group(session: AsyncSession, group_id: UUID) -> None:
     """Removes the group, its role bindings, and its memberships — never its users."""
     group = await get_group(session, group_id)
     await session.delete(group)
+    await lockout.refuse_if_last(session)
     await session.commit()

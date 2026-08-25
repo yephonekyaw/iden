@@ -136,7 +136,10 @@ async def update_role(
             "model": ErrorResponse,
             "description": "No such role, or unknown scope ids",
         },
-        409: {"model": ErrorResponse, "description": "System role"},
+        409: {
+            "model": ErrorResponse,
+            "description": "System role, or would leave no administrator",
+        },
     },
     dependencies=[WRITE],
 )
@@ -157,7 +160,12 @@ async def set_role_scopes(
     ),
     responses={
         404: {"model": ErrorResponse, "description": "No such role"},
-        409: {"model": ErrorResponse, "description": "System role, or still assigned"},
+        409: {
+            "model": ErrorResponse,
+            "description": (
+                "System role, still assigned, or would leave no administrator"
+            ),
+        },
     },
     dependencies=[WRITE],
 )

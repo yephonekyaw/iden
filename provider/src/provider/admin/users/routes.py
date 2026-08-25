@@ -166,11 +166,15 @@ async def effective_scopes(user_id: UUID, session: DBSessionDep) -> EffectiveSco
         "Deactivating a user (`isActive: false`) immediately revokes every "
         "session and refresh token — otherwise the account stays usable until "
         "they expire on their own.\n\n"
+        "Deactivating the last active administrator is refused with `409`.\n\n"
         "**Required scope:** `admin:users:write`"
     ),
     responses={
         404: {"model": ErrorResponse, "description": "No such user"},
-        409: {"model": ErrorResponse, "description": "Email or username already taken"},
+        409: {
+            "model": ErrorResponse,
+            "description": "Email or username taken, or would leave no administrator",
+        },
     },
     dependencies=[WRITE],
 )
@@ -187,13 +191,16 @@ async def update_user(
     description=(
         "**Replaces the entire set.** Roles inherited from groups are unaffected "
         "— those are managed on the group.\n\n"
+        "Refused with `409` when it would leave no active user holding "
+        "`admin:users:write`: nothing in the API can grant it back.\n\n"
         "**Required scope:** `admin:users:write`"
     ),
     responses={
         404: {
             "model": ErrorResponse,
             "description": "No such user, or unknown role ids",
-        }
+        },
+        409: {"model": ErrorResponse, "description": "Would leave no administrator"},
     },
     dependencies=[WRITE],
 )
@@ -212,13 +219,16 @@ async def set_roles(
         "**Replaces the entire set.**\n\n"
         "Prefer roles: a direct grant is invisible in any role listing and is "
         "easy to forget when someone changes jobs.\n\n"
+        "Refused with `409` when it would leave no active user holding "
+        "`admin:users:write`.\n\n"
         "**Required scope:** `admin:users:write`"
     ),
     responses={
         404: {
             "model": ErrorResponse,
             "description": "No such user, or unknown scope ids",
-        }
+        },
+        409: {"model": ErrorResponse, "description": "Would leave no administrator"},
     },
     dependencies=[WRITE],
 )
@@ -260,7 +270,10 @@ async def reset_password(
         "deactivating instead — deletion loses the audit trail of who did what.\n\n"
         "**Required scope:** `admin:users:write`"
     ),
-    responses={404: {"model": ErrorResponse, "description": "No such user"}},
+    responses={
+        404: {"model": ErrorResponse, "description": "No such user"},
+        409: {"model": ErrorResponse, "description": "Would leave no administrator"},
+    },
     dependencies=[WRITE],
 )
 async def delete_user(

@@ -5,6 +5,7 @@ from redis.asyncio import Redis
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from provider.admin import lockout
 from provider.admin.users.errors import (
     EmailTaken,
     UnknownRoles,
@@ -152,6 +153,7 @@ async def update_user(
         # account stays usable until they expire on their own.
         if not data.is_active:
             await revoke_everything(session, redis, user_id)
+            await lockout.refuse_if_last(session)
 
     await session.commit()
     return user
@@ -160,6 +162,7 @@ async def update_user(
 async def set_roles(session: AsyncSession, user_id: UUID, role_ids: list[UUID]) -> User:
     user = await get_user(session, user_id)
     user.roles = await _resolve(session, Role, role_ids, UnknownRoles)
+    await lockout.refuse_if_last(session)
     await session.commit()
     return user
 
@@ -169,6 +172,7 @@ async def set_direct_scopes(
 ) -> User:
     user = await get_user(session, user_id)
     user.scopes = await _resolve(session, Scope, scope_ids, UnknownScopes)
+    await lockout.refuse_if_last(session)
     await session.commit()
     return user
 
@@ -201,4 +205,5 @@ async def delete_user(session: AsyncSession, redis: Redis, user_id: UUID) -> Non
     user = await get_user(session, user_id)
     await revoke_everything(session, redis, user_id)
     await session.delete(user)
+    await lockout.refuse_if_last(session)
     await session.commit()
