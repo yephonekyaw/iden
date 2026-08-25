@@ -21,6 +21,7 @@ Everything deploys via Docker Compose.
 - [Component Overview](#component-overview)
 - [Identity & Access Model](#identity--access-model)
 - [Supported Grants](#supported-grants)
+- [Single Sign-On](#single-sign-on)
 - [Tokens](#tokens)
 - [Authentication Assurance (acr / amr)](#authentication-assurance-acr--amr)
 - [Provider Internal Architecture](#provider-internal-architecture)
@@ -317,6 +318,54 @@ Only **confidential** clients may use this grant; a public client has no secret 
 
 ---
 
+## Single Sign-On
+
+SSO is not a separate feature bolted onto an identity provider — it is what one *is*. In IDEN it is
+the browser session: a user signs into the first application through `/oauth2/authorize` and receives
+the `iden_session` cookie; when the second application redirects to the same endpoint, the session is
+already there, so a code is returned without another password prompt. Nothing in the client
+applications coordinates this, and they never see each other.
+
+```mermaid
+sequenceDiagram
+    participant U as Browser
+    participant A as App A
+    participant P as IDEN
+    participant B as App B
+
+    U->>A: open
+    A->>P: /authorize
+    P->>U: login page
+    U->>P: password (+ TOTP)
+    P-->>U: Set-Cookie iden_session
+    P->>A: code → tokens
+
+    Note over U,B: later, a different application
+
+    U->>B: open
+    B->>P: /authorize
+    P->>P: session found, acr satisfied, consent on file
+    P->>B: code → tokens (no prompt)
+```
+
+Two things make this more than a shared cookie, and both are **Phase 3** work:
+
+- **Control.** `prompt=none` lets a browser application ask "is this person still signed in?" without
+  a visible redirect — the mechanism behind silent token renewal. `max_age` lets a client insist on a
+  recent authentication for a sensitive screen, which is the same machinery as `acr_values` measured
+  in seconds instead of methods.
+- **Single sign-*out*.** Ending the IDEN session has to end the applications' sessions too, or
+  "sign out" means "sign out of one tab". IDEN records which clients a session issued codes to and,
+  on logout, delivers a signed **logout token** to each one's registered back-channel URI
+  (OIDC Back-Channel Logout 1.0). Sign-out is the half of SSO that is easy to skip and the half users
+  notice.
+
+Federation — *sign in with Google, or with the campus IdP* — is a different feature: it would make
+IDEN a relying party to someone else's provider rather than the provider itself. It is not planned;
+see [Open Design Questions](#open-design-questions).
+
+---
+
 ## Tokens
 
 | Token | Format | Lifetime | Storage |
@@ -539,6 +588,9 @@ network.
 | Assurance reporting | Standard `amr` + `acr` with IDEN-defined `iden:loa:{1,2,3}` | Relying parties request a minimum via `acr_values`; IDEN enforces step-up when the session falls short |
 | Bootstrapped client | Dashboard SPA registered by the seed script on first start | Avoids the chicken-and-egg of needing an OIDC client to manage OIDC clients |
 | Password hashing | argon2id (time=1, mem=64MB, threads=4) | OWASP recommended, memory-hard |
+| Single sign-on | The browser session cookie; no extra protocol | SSO is what an OIDC provider *is* — a shared session plus per-client consent, not a feature layered on top |
+| Single sign-out | Back-channel logout tokens to each client the session touched | Front-channel logout depends on hidden iframes and third-party cookies, which browsers are removing; a server-to-server POST works regardless |
+| Federation | Out of scope — IDEN is the provider, not a broker | Linking an upstream identity to a local account by email is the standard shortcut and a standard account takeover; a deliberate feature, not a default |
 | Session storage | Redis with sliding 24h TTL | Fast lookups, automatic expiry |
 | Challenge pattern | Redis with 10min TTL | Ephemeral by design, prevents replay |
 | Database driver | asyncpg + SQLAlchemy 2.0 async ORM | Native async PostgreSQL driver; one source of truth for models |
@@ -586,13 +638,14 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 | **Phase 0** | Provider foundation — config, database, models, security, seed | Done |
 | **Phase 1** | Provider AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, login/consent | Done |
 | **Phase 2** | Provider Admin RS — users, groups, roles, APIs, scopes, clients (the access-control surface) | Done |
-| **Phase 3** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Next |
-| **Phase 4** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
-| **Phase 5** | Hardening — rate limiting, tests, Docker Compose (migrations and the audit log landed early) | Planned |
-| **Phase 6** | Frontends — auth-ui and dashboard SPAs | Planned |
-| **Phase 7** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |
+| **Phase 3** | Provider SSO — `prompt`, `max_age`, `sid`, back-channel logout (single sign-*out*) | Next |
+| **Phase 4** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Planned |
+| **Phase 5** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Planned |
+| **Phase 6** | Hardening — rate limiting, tests, Docker Compose (migrations and the audit log landed early) | Planned |
+| **Phase 7** | Frontends — auth-ui and dashboard SPAs | Planned |
+| **Phase 8** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |
 
-Phases 0–5 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md). Tests ship with the
+Phases 0–6 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md). Tests ship with the
 phase that introduces the code — `uv run pytest` from `provider/` runs the suite.
 
 Issues found in review are tracked in
@@ -608,7 +661,7 @@ is no rate limiting yet (KI-13).
   organization-defined custom profile fields are modelled.~~ **Settled:** a user may change anything
   about themselves that does not change what they are allowed to do; profile fields are defined by
   administrators at runtime, with per-field read/write permissions deciding what self-service means.
-  See [provider/PLAN.md § Phase 3](provider/PLAN.md#phase-3--entity-rs-self-service).
+  See [provider/PLAN.md § Phase 4](provider/PLAN.md#phase-4--entity-rs-self-service).
 - **Biometric kiosk handoff** — how a kiosk-enrolled person is later prompted (and authenticated) to
   complete their profile via the Dashboard SPA.
 - **Biometric engine** — model selection, GPU vs CPU deployment, accuracy/latency targets.
@@ -618,9 +671,17 @@ is no rate limiting yet (KI-13).
 - **External systems of record** — when a university's SIS owns `department`, IDEN should probably
   sync rather than store it authoritatively. For now `user_writable=false` plus admin API writes is
   the integration point.
-- **Audit log destination** — Postgres table vs. append-only object storage, and retention policy.
-- **Federation** — whether IDEN should ever broker an upstream IdP (Google, SAML), currently out of
-  scope.
+- **Audit log retention** — the log is a Postgres table today (see
+  [provider/README.md § The Audit Log](provider/README.md#the-audit-log)). Unresolved: how long rows
+  are kept, and whether an append-only external store is worth it for tamper evidence — a database
+  administrator can edit a table.
+- **Federation** — whether IDEN should ever broker an upstream IdP (Google, Microsoft, a campus
+  SAML IdP). Currently out of scope. The hard part is not the protocol but **account linking**:
+  matching an incoming federated identity to an existing user by email address is the obvious
+  shortcut and a well-known account takeover, since it trusts the upstream provider's word about an
+  address it may not own. The safe rules — link only on a verified address from a provider trusted
+  for that domain, or require an explicit link from an already-signed-in session — are what make it a
+  phase rather than an afternoon.
 
 ---
 

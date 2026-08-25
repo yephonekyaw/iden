@@ -20,9 +20,10 @@ begins.
 - [Phase 0 — Foundation](#phase-0--foundation)
 - [Phase 1 — AuthZ core](#phase-1--authz-core)
 - [Phase 2 — Admin RS (identity & access control)](#phase-2--admin-rs-identity--access-control)
-- [Phase 3 — Entity RS (self-service)](#phase-3--entity-rs-self-service)
-- [Phase 4 — Biometric module](#phase-4--biometric-module)
-- [Phase 5 — Hardening](#phase-5--hardening)
+- [Phase 3 — SSO: session control and single sign-out](#phase-3--sso-session-control-and-single-sign-out)
+- [Phase 4 — Entity RS (self-service)](#phase-4--entity-rs-self-service)
+- [Phase 5 — Biometric module](#phase-5--biometric-module)
+- [Phase 6 — Hardening](#phase-6--hardening)
 - [Known issues](#known-issues)
 - [Why this order](#why-this-order)
 
@@ -125,7 +126,7 @@ provider/
     │   ├── users/  groups/  roles/  apis/  scopes/  clients/
     ├── entity/
     │   ├── profile/  credentials/  totp/  sessions/  permissions/
-    └── biometric/                  # feature-flagged, Phase 4
+    └── biometric/                  # feature-flagged, Phase 5
         ├── enroll/  verify/  liveness/  search/
         └── engine_client.py
 ```
@@ -151,7 +152,7 @@ docker compose -f deploy/docker-compose.yml up -d
 
 Postgres 18 moved its recommended volume mount to `/var/lib/postgresql` (not `/var/lib/postgresql/data`);
 mounting the old path makes the container refuse to start. The provider image, nginx, minio, and the
-engine stay in Phase 5.
+engine stay in Phase 6.
 
 ### 0.2 Clean up the skeleton
 
@@ -316,7 +317,7 @@ redirect_uri matching: RFC 6749 §3.1.2.3; token error codes: RFC 6749 §5.2). H
 spec is the reference, and a reader should not have to go looking for which rule a line enforces.
 | `session_store.py` | Redis-backed login session: `sub`, `amr` list, `authenticated_at`, sliding 24h TTL. Keyed by an opaque id held in an `HttpOnly` `Secure` `SameSite=Lax` cookie. |
 | `challenge_store.py` | Redis-backed 10-minute, single-use challenges carrying the pending `/authorize` parameters across the redirect to `auth-ui` and back. |
-| `auth_methods.py` | The registry. Each method declares a name (`pwd`, `otp`, `face`) and a verify callable. `pwd` and `otp` register here; Phase 4 adds `face` **without touching this file's callers**. |
+| `auth_methods.py` | The registry. Each method declares a name (`pwd`, `otp`, `face`) and a verify callable. `pwd` and `otp` register here; Phase 5 adds `face` **without touching this file's callers**. |
 | `scope_resolver.py` | The centrepiece — see below. |
 | `token_service.py` | Mint access/ID/refresh tokens, verify access tokens, denylist a `jti`, rotate a refresh token with reuse detection. |
 
@@ -367,7 +368,7 @@ error contract. Redirect-safe errors go back to `redirect_uri`; everything else 
 |---|---|
 | `POST /api/v1/auth/login` | Verify email + password (argon2), append `pwd` to the session `amr`, return the next step (`totp_required`, `consent_required`, or the resume URL). |
 | `POST /api/v1/auth/totp` | Verify a TOTP code (pyotp), append `otp`. Step-up: usable both during initial login and mid-session when a client requests a higher `acr`. |
-| `POST /api/v1/auth/biometric` | Phase 4. The route exists here as a `501` stub when `iden_biometric_enabled` is false, so the Auth UI contract is fixed from the start. |
+| `POST /api/v1/auth/biometric` | Phase 5. The route exists here as a `501` stub when `iden_biometric_enabled` is false, so the Auth UI contract is fixed from the start. |
 | `GET  /api/v1/auth/challenge/{id}` | The Auth UI reads the pending client name and requested scopes to render the page. |
 | `POST /api/v1/auth/consent` | Persist a `ConsentGrant` (or deny) and resume `/authorize`. |
 
@@ -454,7 +455,7 @@ Recorded so the code and this plan do not drift apart:
 - **`/oauth2/userinfo` does not use `require_scope`.** That helper derives an audience from the
   scope's prefix, which is meaningless for `openid`. Userinfo verifies the token itself and gates on
   the `openid` scope instead — OIDC Core §5.3.
-- **CORS middleware moved up from Phase 5.** The Auth UI is a separate origin and sends the session
+- **CORS middleware moved up from Phase 6.** The Auth UI is a separate origin and sends the session
   cookie, so credentialed CORS is what makes login work at all rather than a hardening extra.
 - **A token for the wrong API returns `401`, not `403`.** Audience is validated as part of the token,
   before any scope comparison. Worth knowing before it looks like a bug.
@@ -545,7 +546,7 @@ behalf of a user) and *granted* (held by the client itself for `client_credentia
   would make the bootstrap administrator un-creatable through IDEN's own API.
 - **`session_store` gained a per-user index.** Sessions are keyed by a hash of a secret only the
   browser holds, so without it "revoke every session for this user" is unanswerable. Password reset
-  and deactivation both need it, and Phase 3's `/entity/sessions` will too.
+  and deactivation both need it, and Phase 4's `/entity/sessions` will too.
 - **Deactivating a user revokes sessions and refresh tokens immediately**, rather than letting the
   account stay usable until they expire.
 
@@ -570,15 +571,121 @@ system-row protection, and the guarded deletes.
 
 ---
 
-## Phase 3 — Entity RS (self-service)
+## Phase 3 — SSO: session control and single sign-out
+
+**Goal:** finish the single sign-on that Phase 1 half-built.
+
+**Start by reading this, because the phase is easy to misread.** IDEN already does SSO. The
+`iden_session` cookie is the mechanism: a user signs into app A through `/authorize`, and when app B
+redirects to `/authorize` the session is found, `acr` is checked, consent is skipped if it was
+already given, and a code comes straight back with no second password prompt. That works today for
+every registered client.
+
+What is missing is the other two thirds of the feature:
+
+1. **The parameters a relying party uses to steer it.** Without `prompt=none` a browser app cannot
+   ask "is this person still signed in?" without a full-page redirect, which is why it exists.
+   Without `max_age` a bank-like client cannot demand a fresh login for a sensitive screen.
+2. **Single sign-*out*.** `GET /oauth2/logout` clears IDEN's own cookie and nothing else. Every
+   relying party keeps its own session, so the user is "signed out" and still signed in everywhere.
+   An identity provider that cannot end the sessions it started is not finished.
+
+Ordered before the Entity RS deliberately: `/entity/sessions` should be able to show *which
+applications* a session is signed into, and that list only exists once this phase records it.
+
+### 3.1 Session identity — `authz/services/session_store.py`
+
+The `Session` already carries `authenticated_at`, which is what `auth_time` is minted from. Two
+things are added:
+
+| Addition | Why |
+|---|---|
+| `sid` in the ID token — the session id | The relying party needs a name for the session it is being told to end. It is the existing session id, not a new one. |
+| `session_clients:{sid}` — a Redis set, same TTL as the session | Sign-out cannot notify the applications a session touched without recording which applications it touched. Written whenever a code is issued for a client. |
+
+`sid` is safe to publish: session lookups key on a **hash** of the id, so knowing a `sid` does not
+let anyone assume the session. That is the same reason it is safe to log.
+
+### 3.2 `/authorize` parameters — `authz/oauth/routes.py`
+
+| Parameter | Behaviour |
+|---|---|
+| `prompt=none` | Never show UI. If there is no session, the session fails `acr_values`/`max_age`, or consent is missing, redirect back with `login_required`, `interaction_required`, or `consent_required` (OIDC Core §3.1.2.6). **Must not create a challenge** — a challenge is interaction. |
+| `prompt=login` | Force re-authentication even with a live session. Records a fresh `amr`/`authenticated_at`; the existing session is reused, not replaced, so other applications stay signed in. |
+| `prompt=consent` | Ask again even when a consent grant exists. Does not delete the stored grant unless the user changes it. |
+| `prompt=select_account` | Same as `login` for now, and documented as such: IDEN has no multi-account session. Recognised rather than rejected so conforming clients do not break. |
+| `max_age` | Seconds. If `now - authenticated_at > max_age`, step up exactly as an unmet `acr_values` does today. Combined with `prompt=none`, a stale session is `login_required`. |
+| `login_hint` | Passed through to the Auth UI to prefill the email. Never trusted as an assertion of identity. |
+| `id_token_hint` | Which subject the client believes is signed in. If it disagrees with the session, treat as no session. |
+
+`prompt=none` deserves care: it is the one path where an error is the *expected* outcome, and it must
+be indistinguishable in timing and shape from any other refusal, or it becomes a probe for whether a
+given browser has a session at IDEN.
+
+### 3.3 Back-channel logout — `authz/logout/`
+
+The substance of the phase. OIDC Back-Channel Logout 1.0.
+
+`Client` gains `backchannel_logout_uri` and `backchannel_logout_session_required`. When a session
+ends — via `/oauth2/logout`, an admin's "revoke everything", a password change, or a deactivation —
+IDEN reads `session_clients:{sid}` and POSTs a **logout token** to each registered URI.
+
+A logout token is a signed JWT that must not be mistakable for an ID token:
+
+```json
+{
+  "iss": "…", "aud": "<client_id>", "iat": …, "jti": "…",
+  "sub": "<user id>", "sid": "<session id>",
+  "events": { "http://schemas.openid.net/event/backchannel-logout": {} }
+}
+```
+
+The `events` claim is what makes it a logout token, and the **absence of `nonce`** is required —
+without both rules a stolen logout token could be replayed as proof of authentication.
+
+Delivery is best-effort with a short timeout, run concurrently, and every attempt is audited with its
+outcome. Deliberately *not* retried into a queue: a relying party that was unreachable will
+re-validate on its next token exchange anyway, and a durable job queue is a dependency this project
+does not otherwise need. Record the failure and move on.
+
+### 3.4 The end-session endpoint — `/oauth2/logout`
+
+Already exists and already validates `post_logout_redirect_uri`. It gains `id_token_hint` (which
+identifies the session and the client), `client_id`, and `state`, and it now triggers §3.3 before
+clearing the cookie.
+
+Deleting the session must happen **after** the fan-out is dispatched but must not wait on its
+result; the user's redirect is not held up by a slow relying party.
+
+### 3.5 Discovery and the admin surface
+
+`end_session_endpoint`, `backchannel_logout_supported`, `backchannel_logout_session_supported`, and
+`prompt_values_supported` in `/.well-known/openid-configuration` — a conforming client will not
+attempt any of this without them. `admin/clients/` accepts and returns the two new columns.
+
+**Done when:**
+
+- A second application signs a user in with no prompt (already true — pin it with a test).
+- `prompt=none` with a live session returns a code; with no session it returns `login_required` to
+  the redirect URI and creates nothing in Redis.
+- `max_age=0` forces a password prompt on an otherwise valid session.
+- Signing out of one application delivers a logout token to every other application the session
+  touched, and none to applications it did not.
+- A logout token has `events`, has no `nonce`, and is rejected by IDEN's own `verify_jwt` when
+  presented as an ID token.
+- The audit log shows the fan-out, one entry per relying party, including the failures.
+
+---
+
+## Phase 4 — Entity RS (self-service)
 
 **Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
 schema that makes IDEN usable by a university and a company without either one forking it.
 
 **Before starting:** ~~KI-1~~, ~~KI-15~~ (Alembic) and ~~KI-12~~ (audit log) — all three grew more
-expensive with every phase that passed, so all three were taken first. Phase 3's new tables arrive as
-migrations, and its write endpoints are audited by the middleware without touching them. See
-[Known issues](#known-issues).
+expensive with every phase that passed, so all three were taken before Phase 3. This phase's new
+tables arrive as migrations, and its write endpoints are audited by the middleware without touching
+them. See [Known issues](#known-issues).
 
 **The governing rule:** *a user may change anything about themselves that does not change what they
 are allowed to do.* Authority is admin territory; everything else is theirs. Roles, groups, and
@@ -587,7 +694,7 @@ scopes are therefore absent from this module entirely.
 Every route derives the user from the token's `sub` and never accepts a user id from the caller —
 that alone removes an entire class of IDOR bugs.
 
-### 3.1 Organization-defined profile fields
+### 4.1 Organization-defined profile fields
 
 The feature that makes the Entity RS worth building. A university needs `student_id`, `department`,
 `enrollment_year`; a company needs `employee_id`, `cost_centre`, `manager`. IDEN ships neither —
@@ -634,7 +741,7 @@ Same table, same endpoint, opposite permissions.
 inventing a parallel release mechanism. Validate `claim_name` against the reserved OIDC claim names
 so a custom field cannot shadow `sub`, `iss`, or `aud`.
 
-### 3.2 Self-service endpoints
+### 4.2 Self-service endpoints
 
 | Package | Endpoints | Scope |
 |---|---|---|
@@ -651,7 +758,7 @@ the form from data instead of hardcoding one organization's fields into a genera
 `/entity/connections` closes a Phase 1 gap: `ConsentGrant` rows are persisted but the user currently
 has no way to see which applications hold access, or to withdraw it.
 
-### 3.3 Freshness for sensitive operations
+### 4.3 Freshness for sensitive operations
 
 `require_fresh_auth(max_age=300)` in `core/auth.py`, checking the token's `auth_time`, applied to
 password change, email change, TOTP removal, and session revocation.
@@ -661,7 +768,7 @@ over the account outright. Requiring a *recent* authentication forces them back 
 they cannot complete. Returns `403` with `error="insufficient_user_authentication"` and the required
 `max_age`, so the client knows to send the user through a re-auth rather than giving up.
 
-### 3.4 Password reset
+### 4.4 Password reset
 
 Belongs to the AuthZ module, not here: a locked-out user has no token, so no Entity RS route can
 help them. Without it every forgotten password is an admin support ticket.
@@ -671,7 +778,7 @@ help them. Without it every forgotten password is an admin support ticket.
 - `POST /api/v1/auth/password-reset/confirm` — single-use token, 15-minute TTL, hashed in Redis.
   On success: revoke every refresh token and clear every session for that user.
 - Delivery sits behind a small `notifier` interface that writes the link to the log in dev. Choosing
-  an SMTP provider is a Phase 5 concern and should not block this.
+  an SMTP provider is a Phase 6 concern and should not block this.
 
 ### Other rules worth encoding
 
@@ -698,7 +805,7 @@ tests for the schema endpoint, the writability rejection, claim release, and fre
 
 ---
 
-## Phase 4 — Biometric module
+## Phase 5 — Biometric module
 
 **Goal:** facial enrollment and verification, shipped in-repo but **inert unless enabled**. The work
 is deferred; the seams are not — they were built in Phases 0, 1, and 3.
@@ -735,7 +842,7 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 
 ---
 
-## Phase 5 — Hardening
+## Phase 6 — Hardening
 
 **Goal:** the difference between "the flows work" and "this can be deployed".
 
@@ -830,7 +937,7 @@ RFC 8707 (`resource`) is the tighter design if that matters.
 **KI-10 · `require_scope` derives the audience from the scope prefix.** `core/auth._audience_for`
 is correct for `admin:`/`entity:`/`biometric:` and silently wrong for anything else — an IDEN route
 guarded by a custom scope would compute a nonexistent audience and 401 every request. Needs a guard
-rail or an explicit audience argument. **Phase 3 will add `admin:profile-fields:*`, which keeps the
+rail or an explicit audience argument. **Phase 4 will add `admin:profile-fields:*`, which keeps the
 prefix convention — but it is one custom scope away from biting.**
 
 **KI-11 · Key rotation needs a restart.** `core/crypto._keys` is `@cache`d at import. The docs call
@@ -839,7 +946,7 @@ rotation "a config change"; it is a config change *and* a restart.
 ### Operational gaps
 
 **KI-13 · No rate limiting.** `/api/v1/auth/login` and `/oauth2/token` accept unlimited attempts.
-Argon2 makes each attempt expensive for the server, not the attacker. Phase 5 owns it, but the
+Argon2 makes each attempt expensive for the server, not the attacker. Phase 6 owns it, but the
 endpoints are live now. **With KI-1 fixed this is the largest remaining exposure.**
 
 **KI-14 · Expired authorization codes and refresh tokens are never deleted.** Both tables grow
@@ -853,7 +960,7 @@ without bound. Needs a periodic cleanup, or a partitioning/TTL strategy.
 3. **KI-13** before any deployment reachable by others; it is now the largest exposure.
 4. **KI-16** before real traffic — decide the grace window or the mutex.
 5. **KI-7, KI-8** whenever you decide what a non-root administrator should be.
-6. **KI-9, KI-10, KI-11, KI-14** with Phase 5 hardening.
+6. **KI-9, KI-10, KI-11, KI-14** with Phase 6 hardening.
 
 ---
 

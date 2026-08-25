@@ -505,12 +505,12 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 |---|---|---|---|---|
 | `GET` | `/.well-known/openid-configuration` | public | Provider metadata; `scopes_supported` is read live from the database | 1 |
 | `GET` | `/.well-known/jwks.json` | public | Public signing keys, one JWK per `kid` | 1 |
-| `GET` | `/oauth2/authorize` | session | Start authorization code + PKCE; redirects to `auth-ui` when login or consent is needed | 1 |
+| `GET` | `/oauth2/authorize` | session | Start authorization code + PKCE; redirects to `auth-ui` when login or consent is needed. Gains `prompt`, `max_age`, `login_hint`, `id_token_hint` | 1, 3 |
 | `POST` | `/oauth2/token` | client | `authorization_code`, `refresh_token`, `client_credentials` | 1 |
 | `GET` | `/oauth2/userinfo` | bearer `openid` | Claims filtered by granted scopes | 1 |
 | `POST` | `/oauth2/revoke` | client | RFC 7009 — revoke a refresh family or denylist a `jti`. Public clients may revoke their own tokens | 1 |
 | `POST` | `/oauth2/introspect` | client | RFC 7662 — **confidential clients only**: the response describes someone else's token, and a `client_id` is public by definition | 1 |
-| `GET` | `/oauth2/logout` | session | End session, honour `post_logout_redirect_uri` | 1 |
+| `GET` | `/oauth2/logout` | session | End session, honour `post_logout_redirect_uri`. Gains `id_token_hint` and the back-channel fan-out | 1, 3 |
 
 ### AuthZ — login & consent (consumed by `auth-ui`)
 
@@ -521,8 +521,8 @@ token with the named scope; **session** = browser session cookie. `Phase` refers
 | `POST` | `/api/v1/auth/totp` | session | TOTP verification / step-up; appends `otp` | 1 |
 | `POST` | `/api/v1/auth/biometric` | session | Face login; appends `face`. `501` unless biometric is enabled | 1 stub / 4 |
 | `POST` | `/api/v1/auth/consent` | session | Persist or deny a consent grant, then resume `/authorize` | 1 |
-| `POST` | `/api/v1/auth/password-reset` | public | Begin recovery. Always `202`, even for an unknown address — a different answer would enumerate accounts | 3 |
-| `POST` | `/api/v1/auth/password-reset/confirm` | public | Single-use token, 15-minute TTL; revokes every session and refresh token on success | 3 |
+| `POST` | `/api/v1/auth/password-reset` | public | Begin recovery. Always `202`, even for an unknown address — a different answer would enumerate accounts | 4 |
+| `POST` | `/api/v1/auth/password-reset/confirm` | public | Single-use token, 15-minute TTL; revokes every session and refresh token on success | 4 |
 
 Login returns `complete` with a `resumeUrl`, or `totpRequired` when the client asked for an
 assurance level a password alone does not reach. It never reports `consentRequired`: consent is
@@ -555,8 +555,8 @@ reaches it again by following `resumeUrl`.
 | `POST` | `/admin/clients/{id}/rotate-secret` | `admin:clients:write` | 2 |
 | `PUT` | `/admin/clients/{id}/scopes` | `admin:clients:write` | 2 |
 | `GET` | `/admin/audit` | `admin:audit:read` | 2 |
-| `GET` `POST` | `/admin/profile-fields` | `admin:profile-fields:read` / `:write` | 3 |
-| `GET` `PATCH` `DELETE` | `/admin/profile-fields/{id}` | `admin:profile-fields:read` / `:write` | 3 |
+| `GET` `POST` | `/admin/profile-fields` | `admin:profile-fields:read` / `:write` | 4 |
+| `GET` `PATCH` `DELETE` | `/admin/profile-fields/{id}` | `admin:profile-fields:read` / `:write` | 4 |
 
 `PUT` on a relationship (`.../roles`, `.../scopes`) **replaces the whole set** rather than adding to
 it. Set semantics make the endpoint idempotent and the dashboard's editing UI trivial.
@@ -567,16 +567,16 @@ Every route derives the user from the token's `sub` and never accepts a user id 
 
 | Method | Path | Scope | Phase |
 |---|---|---|---|
-| `GET` `PATCH` | `/entity/profile` | `entity:profile:read` / `:write` | 3 |
-| `GET` | `/entity/profile/schema` | `entity:profile:read` | 3 |
-| `POST` | `/entity/credentials/password` | `entity:credentials:write` + fresh auth | 3 |
-| `POST` | `/entity/credentials/email` | `entity:credentials:write` + fresh auth | 3 |
-| `POST` | `/entity/totp/enroll` · `/entity/totp/confirm` | `entity:totp:enroll` | 3 |
-| `GET` `DELETE` | `/entity/totp` | `entity:totp:read` / `:enroll` | 3 |
-| `GET` | `/entity/sessions` | `entity:sessions:read` | 3 |
-| `DELETE` | `/entity/sessions/{id}` | `entity:sessions:revoke` | 3 |
-| `GET` `DELETE` | `/entity/connections` | `entity:connections:read` / `:revoke` | 3 |
-| `GET` | `/entity/permissions` | `entity:permissions:read` | 3 |
+| `GET` `PATCH` | `/entity/profile` | `entity:profile:read` / `:write` | 4 |
+| `GET` | `/entity/profile/schema` | `entity:profile:read` | 4 |
+| `POST` | `/entity/credentials/password` | `entity:credentials:write` + fresh auth | 4 |
+| `POST` | `/entity/credentials/email` | `entity:credentials:write` + fresh auth | 4 |
+| `POST` | `/entity/totp/enroll` · `/entity/totp/confirm` | `entity:totp:enroll` | 4 |
+| `GET` `DELETE` | `/entity/totp` | `entity:totp:read` / `:enroll` | 4 |
+| `GET` | `/entity/sessions` | `entity:sessions:read` | 4 |
+| `DELETE` | `/entity/sessions/{id}` | `entity:sessions:revoke` | 4 |
+| `GET` `DELETE` | `/entity/connections` | `entity:connections:read` / `:revoke` | 4 |
+| `GET` | `/entity/permissions` | `entity:permissions:read` | 4 |
 
 Sensitive routes are additionally gated by `require_fresh_auth(max_age=300)`: a valid access token is
 not enough to change a password or remove a second factor, because an attacker holding a stolen
@@ -586,10 +586,10 @@ token would otherwise take over the account outright. They must pass a login the
 
 | Method | Path | Scope | Phase |
 |---|---|---|---|
-| `POST` | `/biometric/enroll` | `biometric:enroll` | 4 |
-| `POST` | `/biometric/verify` | `biometric:verify` | 4 |
-| `POST` | `/biometric/search` | `biometric:search` | 4 |
-| `POST` | `/biometric/liveness` | `biometric:liveness` | 4 |
+| `POST` | `/biometric/enroll` | `biometric:enroll` | 5 |
+| `POST` | `/biometric/verify` | `biometric:verify` | 5 |
+| `POST` | `/biometric/search` | `biometric:search` | 5 |
+| `POST` | `/biometric/liveness` | `biometric:liveness` | 5 |
 
 ---
 
@@ -651,7 +651,7 @@ Where a request goes, and which file owns each step:
 ```text
 nginx
   → core/app.py            request-id + structlog binding
-  → rate limiter           Redis fixed window                       (Phase 5)
+  → rate limiter           Redis fixed window                       (Phase 6)
   → CORS / security headers
   → routes.py              validate the request body via schemas.py
       · resource server?   core/auth.require_scope(...)
