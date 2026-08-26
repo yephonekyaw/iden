@@ -86,7 +86,9 @@ nav:
       - The audit log: concepts/audit.md
   - Guides:
       - guides/index.md
+      - Install it for your organization: guides/install.md
       - Run it locally: guides/quickstart.md
+      - Run the frontends: guides/run-the-frontends.md
       - Integrating an application:
           - Register your application: guides/register-a-client.md
           - Using a standard OIDC library: guides/oidc-libraries.md

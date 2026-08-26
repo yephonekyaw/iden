@@ -20,5 +20,9 @@ Start here if you are connecting something you built to IDEN.
 
 ## Running and administering IDEN
 
-- **[Run it locally](quickstart.md)** — a working deployment in about five minutes.
+- **[Install it for your organization](install.md)** — the whole system, from a clone to a
+  signed-in administrator, with a check on every part before anyone else is let in.
+- **[Run it locally](quickstart.md)** — the server alone, in about five minutes.
+- **[Run the frontends](run-the-frontends.md)** — the development loop for the login and the
+  dashboard themselves.
 - **[Define your profile schema](profile-schema.md)** — the fields your organization collects.
