@@ -433,7 +433,66 @@ Consistency with the surrounding code is usually more valuable than introducing 
 
 ---
 
-## 17. Agent Guidelines
+## 17. Frontend Code (`web/`)
+
+The rules above are language-agnostic; this is how they read in TypeScript and React. The apps are
+described in [web/README.md](web/README.md) and planned in [web/PLAN.md](web/PLAN.md).
+
+### Organize by feature, not by layer
+
+§1 applies unchanged. A resource lives in one directory:
+
+```text
+features/<resource>/
+├── routes.tsx      # screens
+├── api.ts          # queries and mutations
+├── schemas.ts      # zod, when there is a form
+└── components/     # pieces only this feature uses
+```
+
+Anything a second feature needs moves to `shared/`. Not every feature needs all four files —
+create a file when there is something to put in it.
+
+### Types come from the server
+
+Request and response types are generated from the provider's OpenAPI document into
+`shared/api/schema.d.ts` (`pnpm gen:api`). Never hand-write a type that describes a wire shape; if
+one is wrong, the fix belongs in `provider/`.
+
+### No `any`, no `!`
+
+§4's "type hints everywhere, avoid `Any`" reads as `no-explicit-any` and `no-non-null-assertion`,
+both errors in `eslint.config.js`. Genuinely unknown data is `unknown` and narrowed at the boundary.
+
+### Server state belongs to TanStack Query
+
+Zustand holds the auth session and nothing else. A `useState` that mirrors a query result is a bug,
+and so is a `useEffect` that copies props into state — pass `values` to react-hook-form instead.
+
+### One design system, no inline values
+
+Every colour, size, radius and type step resolves through `shared/tokens/theme.css`. No inline hex,
+no magic pixel values, no second definition of a brand colour.
+
+### Every screen has four states
+
+Loading, empty, error, and populated. The empty state says what to do next; the error says what
+happened and how to fix it. Both are written deliberately, not defaulted.
+
+### Errors land where they can be fixed
+
+Field-level errors go beside the field: `email_taken` beside the email input, `unknown_scopes`
+beside the picker that produced them. A toast is for what succeeded.
+
+### No barrel re-exports inside an app
+
+`shared/` has one entry point on purpose. Inside an app, import from the module that defines the
+thing — a barrel there only hides where code lives.
+
+
+---
+
+## 18. Agent Guidelines
 
 When modifying the codebase, coding agents should:
 
