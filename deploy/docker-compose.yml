@@ -75,14 +75,19 @@ services:
       redis:
         condition: service_healthy
 
-  # The two browser applications. Both are static builds: the issuer is written
-  # into /config.js at container start, so the same image serves any deployment.
+  # The two browser applications. Both are static builds: the issuer and the
+  # organization's branding are written into /config.js at container start, so
+  # the same image serves any deployment. Set IDEN_ORG_NAME to the organization
+  # people think they are signing in to; it takes the larger type and IDEN drops
+  # to a caption beneath it. IDEN_ORG_LOGO_URL is optional and sits beside it.
   auth-ui:
     build:
       context: ../web
       dockerfile: auth-ui/Dockerfile
     environment:
       IDEN_ISSUER: http://localhost:8000
+      IDEN_ORG_NAME: ""
+      IDEN_ORG_LOGO_URL: ""
     ports:
       - "4000:4000"
     depends_on:
@@ -95,6 +100,8 @@ services:
       dockerfile: dashboard/Dockerfile
     environment:
       IDEN_ISSUER: http://localhost:8000
+      IDEN_ORG_NAME: ""
+      IDEN_ORG_LOGO_URL: ""
     ports:
       - "3000:3000"
     depends_on:

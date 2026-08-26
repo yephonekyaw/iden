@@ -2,10 +2,10 @@
 
 The two browser applications that make IDEN usable by people rather than by `curl`.
 
-| App | Port | What it is |
-|---|---|---|
-| **auth-ui** | 4000 | The hosted login. `/oauth2/authorize` redirects here; it is the only place a password is ever typed. |
-| **dashboard** | 3000 (dev 5173) | One SPA for both administrators and ordinary people. Navigation renders from the token's scopes. |
+| App           | Port            | What it is                                                                                           |
+| ------------- | --------------- | ---------------------------------------------------------------------------------------------------- |
+| **auth-ui**   | 4000            | The hosted login. `/oauth2/authorize` redirects here; it is the only place a password is ever typed. |
+| **dashboard** | 3000 (dev 5173) | One SPA for both administrators and ordinary people. Navigation renders from the token's scopes.     |
 
 Both are React 19 + TypeScript on Vite, sharing `@iden/shared` — design tokens, the generated API
 types, one axios client, and the components that render identity data.
@@ -82,10 +82,12 @@ pnpm build
 
 ## Configuration
 
-| Variable | Where | Meaning |
-|---|---|---|
-| `VITE_IDEN_ISSUER` | `pnpm dev` | The provider's origin. Defaults to `http://localhost:8000`. |
-| `IDEN_ISSUER` | container | Written into `/config.js` at start-up, so one image serves any deployment. |
+| Variable                                   | Where      | Meaning                                                                                                                                                     |
+| ------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `VITE_IDEN_ISSUER`                         | `pnpm dev` | The provider's origin. Defaults to `http://localhost:8000`.                                                                                                 |
+| `IDEN_ISSUER`                              | container  | Written into `/config.js` at start-up, so one image serves any deployment.                                                                                  |
+| `VITE_IDEN_ORG_NAME` / `IDEN_ORG_NAME`     | both       | The organization this deployment belongs to. It takes the larger type in the brand lockup and IDEN drops to a caption beneath it. Unset, IDEN stands alone. |
+| `VITE_IDEN_ORG_LOGO` / `IDEN_ORG_LOGO_URL` | both       | Optional logo shown beside the organization name. Any URL the browser can reach.                                                                            |
 
 Whichever origin serves the dashboard must appear in the provider's
 `IDEN_ALLOWED_ADMIN_ORIGINS`, and be registered as a redirect URI on the `dashboard` client —
