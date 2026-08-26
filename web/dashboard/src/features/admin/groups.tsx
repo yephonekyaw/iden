@@ -1,0 +1,412 @@
+import {
+  Button,
+  ConfirmDialog,
+  DataTable,
+  Dialog,
+  EmptyState,
+  ErrorState,
+  Field,
+  IdenError,
+  Input,
+  Pagination,
+  Spinner,
+  type Column,
+} from "@iden/shared";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { Link, useNavigate, useParams } from "react-router";
+import { useApi } from "../../app/api";
+import { PageHeader } from "../../app/shell";
+import {
+  fetchAll,
+  useList,
+  useRecord,
+  useWrite,
+  type GroupRecord,
+  type MemberRecord,
+  type UserRecord,
+} from "./api";
+import { SetPicker, type PickerOption } from "./picker";
+import { useRoleOptions } from "./options";
+import { useQuery } from "@tanstack/react-query";
+
+const columns: Column<GroupRecord>[] = [
+  { key: "name", header: "Group", cell: (group) => <span className="text-ink">{group.name}</span> },
+  { key: "description", header: "What it is", cell: (group) => group.description ?? "—" },
+  {
+    key: "roles",
+    header: "Roles",
+    secondary: true,
+    cell: (group) => group.roles.map((role) => role.name).join(", ") || "—",
+  },
+  { key: "members", header: "People", cell: (group) => `${group.memberCount}` },
+];
+
+export function GroupsRoute() {
+  const api = useApi();
+  const navigate = useNavigate();
+  const [offset, setOffset] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const groups = useList<GroupRecord>(api, "/admin/groups", { offset });
+
+  return (
+    <>
+      <PageHeader
+        title="Groups"
+        lede="Departments, teams, cohorts. A group holds roles, and everyone in it inherits them."
+      />
+
+      <div className="mb-6">
+        <Button variant="primary" onClick={() => setCreating(true)}>
+          Create group
+        </Button>
+      </div>
+
+      {groups.isPending ? (
+        <Spinner label="Loading groups" />
+      ) : groups.isError ? (
+        <ErrorState error={groups.error} onRetry={() => void groups.refetch()} />
+      ) : groups.data.items.length === 0 ? (
+        <EmptyState
+          title="No groups yet"
+          body="Groups mirror how your organization is actually structured. Create one, give it roles, and add people to it."
+          action={
+            <Button variant="primary" onClick={() => setCreating(true)}>
+              Create group
+            </Button>
+          }
+        />
+      ) : (
+        <>
+          <DataTable
+            caption="Groups"
+            columns={columns}
+            rows={groups.data.items}
+            rowKey={(group) => group.id}
+            onRowClick={(group) => void navigate(`/admin/groups/${group.id}`)}
+          />
+          <Pagination meta={groups.data.meta} onOffsetChange={setOffset} />
+        </>
+      )}
+
+      <CreateGroupDialog open={creating} onOpenChange={setCreating} />
+    </>
+  );
+}
+
+function CreateGroupDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const api = useApi();
+  const navigate = useNavigate();
+  const form = useForm({ defaultValues: { name: "", description: "" } });
+
+  const create = useWrite<{ name: string; description: string }, GroupRecord>(
+    ["/admin/groups"],
+    async (body) => {
+      const response = await api.post<GroupRecord>("/admin/groups", {
+        ...body,
+        description: body.description || null,
+      });
+      return response.data;
+    },
+  );
+
+  const problem = create.error instanceof IdenError ? create.error : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content>
+        <form
+          noValidate
+          onSubmit={form.handleSubmit((values) =>
+            create.mutate(values, {
+              onSuccess: (group) => {
+                onOpenChange(false);
+                form.reset();
+                void navigate(`/admin/groups/${group.id}`);
+              },
+            }),
+          )}
+        >
+          <Dialog.Title className="text-display-sm font-display text-ink">
+            Create a group
+          </Dialog.Title>
+          <Dialog.Description className="mt-2 text-body-sm text-body">
+            Groups don't nest. One flat set of people, sharing the same roles.
+          </Dialog.Description>
+
+          <div className="mt-6 flex flex-col gap-5">
+            <Field
+              label="Name"
+              required
+              error={
+                problem?.code === "group_name_taken"
+                  ? "A group with this name already exists."
+                  : undefined
+              }
+            >
+              {(props) => <Input {...props} {...form.register("name")} />}
+            </Field>
+            <Field label="What it is">
+              {(props) => <Input {...props} {...form.register("description")} />}
+            </Field>
+          </div>
+
+          <div className="mt-8 flex justify-end gap-3">
+            <Dialog.Close asChild>
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
+            </Dialog.Close>
+            <Button type="submit" variant="primary" disabled={create.isPending}>
+              {create.isPending ? "Creating…" : "Create group"}
+            </Button>
+          </div>
+        </form>
+      </Dialog.Content>
+    </Dialog>
+  );
+}
+
+export function GroupDetailRoute() {
+  const { groupId = "" } = useParams();
+  const api = useApi();
+  const navigate = useNavigate();
+
+  const group = useRecord<GroupRecord>(api, `/admin/groups/${groupId}`);
+  const members = useList<MemberRecord>(api, `/admin/groups/${groupId}/members`, { limit: 200 });
+  const roleOptions = useRoleOptions();
+
+  const [roles, setRoles] = useState<Set<string> | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [removingMember, setRemovingMember] = useState<MemberRecord | null>(null);
+
+  const invalidates = [`/admin/groups/${groupId}`, "/admin/groups"];
+
+  const saveRoles = useWrite<string[], void>(invalidates, async (roleIds) => {
+    await api.put(`/admin/groups/${groupId}/roles`, { roleIds });
+  });
+
+  const removeMember = useWrite<string, void>(
+    [...invalidates, `/admin/groups/${groupId}/members`],
+    async (userId) => {
+      await api.delete(`/admin/groups/${groupId}/members/${userId}`);
+    },
+  );
+
+  const remove = useWrite<void, void>(["/admin/groups"], async () => {
+    await api.delete(`/admin/groups/${groupId}`);
+  });
+
+  if (group.isPending) return <Spinner label="Loading this group" />;
+  if (group.isError) return <ErrorState error={group.error} onRetry={() => void group.refetch()} />;
+
+  const record = group.data;
+  const current = new Set(record.roles.map((role) => role.id));
+  const chosen = roles ?? current;
+  const changed = chosen.size !== current.size || [...chosen].some((id) => !current.has(id));
+
+  return (
+    <>
+      <Link to="/admin/groups" className="text-caption text-muted hover:text-ink">
+        ← Groups
+      </Link>
+
+      <PageHeader title={record.name} lede={record.description ?? "No description."} />
+
+      <section className="mb-12">
+        <h2 className="mb-3 text-title-lg text-ink">Roles</h2>
+        <p className="mb-4 max-w-prose text-body-sm text-muted">
+          Everyone in this group inherits these. Saving replaces the whole set.
+        </p>
+        {roleOptions.data ? (
+          <>
+            <SetPicker
+              legend="Roles"
+              options={roleOptions.data}
+              selected={chosen}
+              onChange={setRoles}
+              emptyLabel="No roles defined yet."
+            />
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                variant="primary"
+                disabled={!changed || saveRoles.isPending}
+                onClick={() => saveRoles.mutate([...chosen], { onSuccess: () => setRoles(null) })}
+              >
+                {saveRoles.isPending ? "Saving…" : "Save roles"}
+              </Button>
+              {changed ? (
+                <Button variant="ghost" onClick={() => setRoles(null)}>
+                  Discard
+                </Button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <Spinner label="Loading roles" />
+        )}
+      </section>
+
+      <section className="mb-12">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h2 className="text-title-lg text-ink">People</h2>
+          <Button onClick={() => setAdding(true)}>Add people</Button>
+        </div>
+
+        {members.isPending ? (
+          <Spinner label="Loading members" />
+        ) : members.isError ? (
+          <ErrorState error={members.error} />
+        ) : members.data.items.length === 0 ? (
+          <EmptyState
+            title="Nobody is in this group yet"
+            body="Add people and they immediately inherit the roles above."
+            action={<Button onClick={() => setAdding(true)}>Add people</Button>}
+          />
+        ) : (
+          <ul className="m-0 list-none border-t border-hairline p-0">
+            {members.data.items.map((member) => (
+              <li
+                key={member.id}
+                className="flex items-center justify-between gap-4 border-b border-hairline py-3"
+              >
+                <span className="min-w-0">
+                  <Link
+                    to={`/admin/users/${member.id}`}
+                    className="text-body-sm text-ink hover:underline"
+                  >
+                    {member.displayName ?? member.username}
+                  </Link>
+                  <span className="ml-2 text-caption text-muted">{member.email}</span>
+                </span>
+                <Button size="sm" onClick={() => setRemovingMember(member)}>
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="border-t border-hairline pt-8">
+        <Button variant="danger" onClick={() => setDeleting(true)}>
+          Delete group
+        </Button>
+      </section>
+
+      <AddMembersDialog groupId={groupId} open={adding} onOpenChange={setAdding} />
+
+      <ConfirmDialog
+        open={removingMember !== null}
+        onOpenChange={(open) => !open && setRemovingMember(null)}
+        title="Remove from this group?"
+        body={`${removingMember?.displayName ?? removingMember?.username ?? "This person"} loses every role this group holds, unless they have it another way.`}
+        confirmLabel="Remove"
+        pending={removeMember.isPending}
+        onConfirm={() =>
+          removingMember &&
+          removeMember.mutate(removingMember.id, { onSuccess: () => setRemovingMember(null) })
+        }
+      />
+
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={`Delete ${record.name}?`}
+        body="Its members keep their accounts but lose the roles this group gave them."
+        confirmLabel="Delete group"
+        pending={remove.isPending}
+        onConfirm={() =>
+          remove.mutate(undefined, { onSuccess: () => void navigate("/admin/groups") })
+        }
+      />
+    </>
+  );
+}
+
+function AddMembersDialog({
+  groupId,
+  open,
+  onOpenChange,
+}: {
+  groupId: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const api = useApi();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const people = useQuery({
+    queryKey: ["all-users"],
+    queryFn: async () => {
+      const users = await fetchAll<UserRecord>(api, "/admin/users");
+      return users.map(
+        (user): PickerOption => ({
+          id: user.id,
+          label: user.displayName ?? user.username,
+          hint: user.email,
+        }),
+      );
+    },
+    enabled: open,
+  });
+
+  const add = useWrite<string[], void>(
+    [`/admin/groups/${groupId}`, `/admin/groups/${groupId}/members`, "/admin/groups"],
+    async (userIds) => {
+      await api.post(`/admin/groups/${groupId}/members`, { userIds });
+    },
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content>
+        <Dialog.Title className="text-display-sm font-display text-ink">Add people</Dialog.Title>
+        <Dialog.Description className="mt-2 text-body-sm text-body">
+          Anyone already in the group is left as they are.
+        </Dialog.Description>
+
+        <div className="mt-6">
+          {people.data ? (
+            <SetPicker
+              legend="People"
+              options={people.data}
+              selected={selected}
+              onChange={setSelected}
+              emptyLabel="No users to add."
+            />
+          ) : (
+            <Spinner label="Loading people" />
+          )}
+        </div>
+
+        <div className="mt-8 flex justify-end gap-3">
+          <Dialog.Close asChild>
+            <Button variant="secondary">Cancel</Button>
+          </Dialog.Close>
+          <Button
+            variant="primary"
+            disabled={selected.size === 0 || add.isPending}
+            onClick={() =>
+              add.mutate([...selected], {
+                onSuccess: () => {
+                  setSelected(new Set());
+                  onOpenChange(false);
+                },
+              })
+            }
+          >
+            {add.isPending ? "Adding…" : `Add ${selected.size || ""}`.trim()}
+          </Button>
+        </div>
+      </Dialog.Content>
+    </Dialog>
+  );
+}

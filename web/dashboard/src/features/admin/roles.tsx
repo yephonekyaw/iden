@@ -1,0 +1,299 @@
+import {
+  Button,
+  ConfirmDialog,
+  DataTable,
+  Dialog,
+  ErrorState,
+  Field,
+  IdenError,
+  Input,
+  Pagination,
+  ScopeChip,
+  Spinner,
+  type Column,
+} from "@iden/shared";
+import { useState } from "react";
+import { useForm } from "react-hook-form";
+import { Link, useNavigate, useParams } from "react-router";
+import { useApi } from "../../app/api";
+import { PageHeader } from "../../app/shell";
+import { useList, useRecord, useWrite, type RoleRecord } from "./api";
+import { SetPicker } from "./picker";
+import { useScopeOptions } from "./options";
+
+const columns: Column<RoleRecord>[] = [
+  {
+    key: "name",
+    header: "Role",
+    cell: (role) => (
+      <span className="text-body-sm text-ink">
+        {role.name}
+        {role.isSystem ? <SystemTag /> : null}
+      </span>
+    ),
+  },
+  { key: "description", header: "What it is for", cell: (role) => role.description ?? "—" },
+  {
+    key: "scopes",
+    header: "Permissions",
+    secondary: true,
+    cell: (role) => `${role.scopes.length}`,
+  },
+];
+
+/** System records cannot be renamed or deleted — say so before anyone tries. */
+export function SystemTag() {
+  return (
+    <span className="ml-2 rounded-full bg-surface-card px-2 py-0.5 text-caption text-muted">
+      built in
+    </span>
+  );
+}
+
+export function RolesRoute() {
+  const api = useApi();
+  const navigate = useNavigate();
+  const [offset, setOffset] = useState(0);
+  const [creating, setCreating] = useState(false);
+  const roles = useList<RoleRecord>(api, "/admin/roles", { offset });
+
+  return (
+    <>
+      <PageHeader
+        title="Roles"
+        lede="Named bundles of permissions — a job function like attendance-officer. One role can span several APIs."
+      />
+
+      <div className="mb-6">
+        <Button variant="primary" onClick={() => setCreating(true)}>
+          Create role
+        </Button>
+      </div>
+
+      {roles.isPending ? (
+        <Spinner label="Loading roles" />
+      ) : roles.isError ? (
+        <ErrorState error={roles.error} onRetry={() => void roles.refetch()} />
+      ) : (
+        <>
+          <DataTable
+            caption="Roles"
+            columns={columns}
+            rows={roles.data.items}
+            rowKey={(role) => role.id}
+            onRowClick={(role) => void navigate(`/admin/roles/${role.id}`)}
+          />
+          <Pagination meta={roles.data.meta} onOffsetChange={setOffset} />
+        </>
+      )}
+
+      <CreateRoleDialog open={creating} onOpenChange={setCreating} />
+    </>
+  );
+}
+
+function CreateRoleDialog({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const api = useApi();
+  const navigate = useNavigate();
+  const form = useForm({ defaultValues: { name: "", description: "" } });
+
+  const create = useWrite<{ name: string; description: string }, RoleRecord>(
+    ["/admin/roles", "all-roles"],
+    async (body) => {
+      const response = await api.post<RoleRecord>("/admin/roles", {
+        ...body,
+        description: body.description || null,
+        scopeIds: [],
+      });
+      return response.data;
+    },
+  );
+
+  const problem = create.error instanceof IdenError ? create.error : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <Dialog.Content>
+        <form
+          noValidate
+          onSubmit={form.handleSubmit((values) =>
+            create.mutate(values, {
+              onSuccess: (role) => {
+                onOpenChange(false);
+                form.reset();
+                void navigate(`/admin/roles/${role.id}`);
+              },
+            }),
+          )}
+        >
+          <Dialog.Title className="text-display-sm font-display text-ink">
+            Create a role
+          </Dialog.Title>
+          <Dialog.Description className="mt-2 text-body-sm text-body">
+            Name it after the job it describes. You'll choose its permissions next.
+          </Dialog.Description>
+
+          <div className="mt-6 flex flex-col gap-5">
+            <Field
+              label="Name"
+              required
+              error={
+                problem?.code === "role_name_taken" ? "A role with this name already exists." : undefined
+              }
+            >
+              {(props) => <Input {...props} {...form.register("name")} />}
+            </Field>
+            <Field label="What it is for" hint="Shown to whoever assigns this role later.">
+              {(props) => <Input {...props} {...form.register("description")} />}
+            </Field>
+          </div>
+
+          <div className="mt-8 flex justify-end gap-3">
+            <Dialog.Close asChild>
+              <Button type="button" variant="secondary">
+                Cancel
+              </Button>
+            </Dialog.Close>
+            <Button type="submit" variant="primary" disabled={create.isPending}>
+              {create.isPending ? "Creating…" : "Create role"}
+            </Button>
+          </div>
+        </form>
+      </Dialog.Content>
+    </Dialog>
+  );
+}
+
+export function RoleDetailRoute() {
+  const { roleId = "" } = useParams();
+  const api = useApi();
+  const navigate = useNavigate();
+
+  const role = useRecord<RoleRecord>(api, `/admin/roles/${roleId}`);
+  const scopeOptions = useScopeOptions();
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  const [deleting, setDeleting] = useState(false);
+
+  const save = useWrite<string[], void>([`/admin/roles/${roleId}`, "/admin/roles"], async (ids) => {
+    await api.put(`/admin/roles/${roleId}/scopes`, { scopeIds: ids });
+  });
+
+  const remove = useWrite<void, void>(["/admin/roles", "all-roles"], async () => {
+    await api.delete(`/admin/roles/${roleId}`);
+  });
+
+  if (role.isPending) return <Spinner label="Loading this role" />;
+  if (role.isError) return <ErrorState error={role.error} onRetry={() => void role.refetch()} />;
+
+  const record = role.data;
+  const current = new Set(record.scopes.map((scope) => scope.id));
+  const chosen = selected ?? current;
+  const changed = chosen.size !== current.size || [...chosen].some((id) => !current.has(id));
+
+  const saveProblem = save.error instanceof IdenError ? save.error : null;
+  const removeProblem = remove.error instanceof IdenError ? remove.error : null;
+
+  return (
+    <>
+      <Link to="/admin/roles" className="text-caption text-muted hover:text-ink">
+        ← Roles
+      </Link>
+
+      <PageHeader
+        title={record.name}
+        lede={record.description ?? "No description."}
+      />
+
+      {record.isSystem ? (
+        <p className="mb-8 rounded-lg border border-hairline bg-surface-soft px-5 py-4 text-body-sm text-body">
+          This role is part of IDEN itself. Its name and permissions are fixed, because removing
+          them could lock this organization out of its own deployment.
+        </p>
+      ) : null}
+
+      <section className="mb-12">
+        <h2 className="mb-3 text-title-lg text-ink">Permissions</h2>
+        {record.isSystem ? (
+          <ul className="m-0 list-none border-t border-hairline p-0">
+            {record.scopes.map((scope) => (
+              <li
+                key={scope.id}
+                className="flex flex-wrap items-baseline gap-3 border-b border-hairline-soft py-2.5"
+              >
+                <ScopeChip value={scope.value} />
+                <span className="text-body-sm text-body">{scope.description}</span>
+              </li>
+            ))}
+          </ul>
+        ) : scopeOptions.data ? (
+          <>
+            <SetPicker
+              legend="Scopes"
+              options={scopeOptions.data}
+              selected={chosen}
+              onChange={setSelected}
+              emptyLabel="No scopes are defined yet. Register an API and define its scopes first."
+            />
+            {saveProblem ? (
+              <p role="alert" className="mt-3 text-body-sm text-error">
+                {saveProblem.message}
+              </p>
+            ) : null}
+            <div className="mt-3 flex items-center gap-3">
+              <Button
+                variant="primary"
+                disabled={!changed || save.isPending}
+                onClick={() => save.mutate([...chosen], { onSuccess: () => setSelected(null) })}
+              >
+                {save.isPending ? "Saving…" : "Save permissions"}
+              </Button>
+              {changed ? (
+                <Button variant="ghost" onClick={() => setSelected(null)}>
+                  Discard
+                </Button>
+              ) : null}
+            </div>
+          </>
+        ) : (
+          <Spinner label="Loading scopes" />
+        )}
+      </section>
+
+      {record.isSystem ? null : (
+        <section className="border-t border-hairline pt-8">
+          {removeProblem ? (
+            <p role="alert" className="mb-4 max-w-prose text-body-sm text-error">
+              {removeProblem.code === "role_in_use"
+                ? "This role is still assigned to people or groups. Remove those assignments first."
+                : removeProblem.message}
+            </p>
+          ) : null}
+          <Button variant="danger" onClick={() => setDeleting(true)}>
+            Delete role
+          </Button>
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={deleting}
+        onOpenChange={setDeleting}
+        title={`Delete ${record.name}?`}
+        body="Anyone holding this role loses the permissions it bundles the next time they receive a token."
+        confirmLabel="Delete role"
+        pending={remove.isPending}
+        onConfirm={() =>
+          remove.mutate(undefined, {
+            onSuccess: () => void navigate("/admin/roles"),
+            onError: () => setDeleting(false),
+          })
+        }
+      />
+    </>
+  );
+}
