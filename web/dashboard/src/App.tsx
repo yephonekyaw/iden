@@ -41,7 +41,10 @@ const router = createBrowserRouter([
       { path: "admin/users", element: guarded("admin:users:read", <UsersRoute />) },
       { path: "admin/users/:userId", element: guarded("admin:users:read", <UserDetailRoute />) },
       { path: "admin/groups", element: guarded("admin:groups:read", <GroupsRoute />) },
-      { path: "admin/groups/:groupId", element: guarded("admin:groups:read", <GroupDetailRoute />) },
+      {
+        path: "admin/groups/:groupId",
+        element: guarded("admin:groups:read", <GroupDetailRoute />),
+      },
       { path: "admin/roles", element: guarded("admin:roles:read", <RolesRoute />) },
       { path: "admin/roles/:roleId", element: guarded("admin:roles:read", <RoleDetailRoute />) },
       { path: "admin/apis", element: guarded("admin:apis:read", <ApisRoute />) },

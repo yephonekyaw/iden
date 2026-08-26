@@ -97,7 +97,9 @@ export function toIdenError(error: unknown): IdenError {
 
     // `/oauth2/*` answers RFC 6749 `{ error, error_description }` instead.
     const oauth =
-      typeof body === "object" && body !== null && typeof (body as { error?: unknown }).error === "string"
+      typeof body === "object" &&
+      body !== null &&
+      typeof (body as { error?: unknown }).error === "string"
         ? (body as { error: string; error_description?: string })
         : null;
 
