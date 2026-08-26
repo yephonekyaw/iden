@@ -1,4 +1,4 @@
 export * from "./ui";
 export * from "./api";
 export * from "./scopes";
-export { readIssuer } from "./config";
+export { readIssuer, readBranding, type Branding } from "./config";
