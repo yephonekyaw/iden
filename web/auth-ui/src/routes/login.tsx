@@ -14,9 +14,7 @@ const credentials = z.object({
 });
 
 const totp = z.object({
-  code: z
-    .string()
-    .regex(/^\d{6}$/, "Enter the six digits from your authenticator app."),
+  code: z.string().regex(/^\d{6}$/, "Enter the six digits from your authenticator app."),
 });
 
 /** The provider hands control here; without a challenge there is nothing to resume. */
@@ -84,9 +82,7 @@ function LoginFlow({ challengeId, isStepUp }: { challengeId: string; isStepUp: b
   const client = challenge.data.clientName;
 
   if (step === "totp") {
-    return (
-      <TotpStep challengeId={challengeId} clientName={client} onDone={advance} />
-    );
+    return <TotpStep challengeId={challengeId} clientName={client} onDone={advance} />;
   }
 
   return (

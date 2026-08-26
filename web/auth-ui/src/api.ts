@@ -27,10 +27,7 @@ export async function signIn(body: {
   return response.data;
 }
 
-export async function submitTotp(body: {
-  challengeId: string;
-  code: string;
-}): Promise<AuthStep> {
+export async function submitTotp(body: { challengeId: string; code: string }): Promise<AuthStep> {
   const response = await client.post<AuthStep>("/api/v1/auth/totp", body);
   return response.data;
 }

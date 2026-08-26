@@ -1,4 +1,6 @@
+import { Brand, Mark } from "@iden/shared";
 import type { ReactNode } from "react";
+import { branding } from "./branding";
 
 /**
  * Every screen in this app is one card on the cream canvas. The card is narrow
@@ -23,11 +25,17 @@ export function AuthLayout({
   return (
     <div className="flex min-h-dvh flex-col items-center justify-center px-6 py-12">
       <div className="w-full max-w-[26rem]">
-        <p className="font-display text-title-lg tracking-[0.18em] text-ink">IDEN</p>
+        <Brand branding={branding} variant="page" className="text-ink" />
 
-        <div key={step} className="step-in mt-6 rounded-xl border border-hairline bg-canvas p-8">
+        <div
+          key={step}
+          className="step-in mt-6 rounded-xl border border-hairline bg-canvas p-8 shadow-[0_1px_3px_rgba(20,20,19,0.06)]"
+        >
           {eyebrow ? (
-            <p className="text-caption-upper uppercase text-muted">{eyebrow}</p>
+            <p className="flex items-center gap-2 text-caption-upper uppercase text-muted">
+              <Mark className="h-3 w-3 text-primary" />
+              {eyebrow}
+            </p>
           ) : null}
           <h1 className="mt-1 text-display-sm">{title}</h1>
           {lede ? <div className="mt-3 text-body-sm text-body">{lede}</div> : null}

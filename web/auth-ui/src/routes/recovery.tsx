@@ -53,7 +53,13 @@ export function ForgotRoute() {
       >
         <Field label="Email" error={form.formState.errors.email?.message}>
           {(props) => (
-            <Input {...props} {...form.register("email")} type="email" autoComplete="username" autoFocus />
+            <Input
+              {...props}
+              {...form.register("email")}
+              type="email"
+              autoComplete="username"
+              autoFocus
+            />
           )}
         </Field>
 
@@ -143,7 +149,12 @@ export function ResetRoute() {
 
         <Field label="Confirm new password" error={form.formState.errors.confirm?.message}>
           {(props) => (
-            <Input {...props} {...form.register("confirm")} type="password" autoComplete="new-password" />
+            <Input
+              {...props}
+              {...form.register("confirm")}
+              type="password"
+              autoComplete="new-password"
+            />
           )}
         </Field>
 
