@@ -1,0 +1,62 @@
+# Reference reverse-proxy configuration for a single-host IDEN deployment.
+#
+# Not wired into docker-compose.yml on purpose: certificates are site-specific
+# and the proxy is where flood protection belongs, so the proxy is the
+# operator's — see docs/operations/deployment.md. Copy this, point it at your
+# own upstreams, and terminate TLS in front of it.
+#
+# The routing below is what the architecture assumes: one origin for everything,
+# with the provider owning the protocol paths, auth-ui owning /auth/*, and the
+# dashboard owning whatever is left.
+#
+# One thing to get right: IDEN_ISSUER, IDEN_AUTH_UI_BASE_URL and the client's
+# registered redirect URIs must all name *this* origin. The issuer is compared
+# exactly, and a mismatch breaks the login round-trip in ways that look like a
+# cookie problem.
+
+upstream iden_provider  { server provider:8000; }
+upstream iden_auth_ui   { server auth-ui:4000; }
+upstream iden_dashboard { server dashboard:3000; }
+
+server {
+  listen 443 ssl;
+  server_name iden.example.org;
+
+  ssl_certificate     /etc/ssl/certs/iden.crt;
+  ssl_certificate_key /etc/ssl/private/iden.key;
+
+  # IDEN's own rate limits assume a proxy in front of it doing the coarse work.
+  limit_req_zone $binary_remote_addr zone=iden_auth:10m rate=10r/s;
+
+  # The provider: OIDC protocol, both resource servers, and health.
+  location ~ ^/(oauth2|\.well-known|admin|entity|biometric|health) {
+    proxy_pass http://iden_provider;
+    include /etc/nginx/proxy_params;
+  }
+
+  # The credential endpoints, where the coarse limit is worth having.
+  location /api/v1/auth/ {
+    limit_req zone=iden_auth burst=20 nodelay;
+    proxy_pass http://iden_provider;
+    include /etc/nginx/proxy_params;
+  }
+
+  # The hosted login. These three paths are fixed — the provider redirects to
+  # them by name.
+  location /auth/ {
+    proxy_pass http://iden_auth_ui;
+    include /etc/nginx/proxy_params;
+  }
+
+  # Everything else is the dashboard.
+  location / {
+    proxy_pass http://iden_dashboard;
+    include /etc/nginx/proxy_params;
+  }
+}
+
+server {
+  listen 80;
+  server_name iden.example.org;
+  return 301 https://$host$request_uri;
+}
