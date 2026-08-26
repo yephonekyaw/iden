@@ -1,0 +1,36 @@
+{
+  "name": "@iden/dashboard",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@iden/shared": "workspace:*",
+    "@tanstack/react-query": "^5.90.5",
+    "axios": "^1.13.1",
+    "oidc-client-ts": "^3.4.0",
+    "qrcode.react": "^4.2.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-hook-form": "^7.65.0",
+    "react-oidc-context": "^3.3.1",
+    "react-router": "^7.9.4",
+    "zod": "^4.1.12",
+    "zustand": "^5.0.8"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.1.16",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.2",
+    "@vitejs/plugin-react": "^5.1.0",
+    "tailwindcss": "^4.1.16",
+    "typescript": "^5.9.3",
+    "vite": "^7.2.2"
+  }
+}

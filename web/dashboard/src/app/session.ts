@@ -1,0 +1,54 @@
+import { parseScopes } from "@iden/shared";
+import { useMemo } from "react";
+import { useAuth } from "react-oidc-context";
+import { config } from "./config";
+
+/**
+ * The scopes actually granted, read from the token.
+ *
+ * The token is the only honest source: `/authorize` resolves
+ * `requested ∩ client.grantable ∩ effective_user_scopes` and drops the rest
+ * without complaint, so what was asked for says nothing about what was given.
+ */
+export function useGrantedScopes(): Set<string> {
+  const auth = useAuth();
+  const claim = auth.user?.scope;
+  return useMemo(() => parseScopes(claim), [claim]);
+}
+
+export function useHasScope(scope: string): boolean {
+  return useGrantedScopes().has(scope);
+}
+
+/**
+ * Ends the IDEN session as well as this app's.
+ *
+ * `/oauth2/logout` redirects only to a `post_logout_redirect_uri` registered on
+ * the client, and the seeded dashboard client has none — so it answers 204, and
+ * a top-level navigation there would leave the browser sitting where it was.
+ * A credentialed fetch clears `iden_session` just as well and lets the app
+ * decide where to go, which it can do because this origin is in the provider's
+ * CORS allowlist.
+ */
+export function useSignOut(): () => Promise<void> {
+  const auth = useAuth();
+  return async () => {
+    const idToken = auth.user?.id_token;
+    const url = new URL("/oauth2/logout", config.issuer);
+    if (idToken) url.searchParams.set("id_token_hint", idToken);
+    try {
+      await fetch(url, { credentials: "include", redirect: "manual" });
+    } finally {
+      await auth.removeUser();
+      window.location.assign("/");
+    }
+  };
+}
+
+/** Starts a step-up: RFC 9470 asks for a sign-in no older than `maxAge` seconds. */
+export function useStepUp(): (maxAge: number) => void {
+  const auth = useAuth();
+  return (maxAge: number) => {
+    void auth.signinRedirect({ max_age: maxAge, state: { returnTo: window.location.pathname } });
+  };
+}
