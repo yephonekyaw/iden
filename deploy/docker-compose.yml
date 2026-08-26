@@ -1,11 +1,12 @@
-# The IDEN provider and the two stores it needs.
+# The IDEN provider, the two stores it needs, and the two browser frontends.
 #
 # `docker compose -f deploy/docker-compose.yml up --build` brings up a working
 # deployment: migrations run to completion, then the provider starts.
 #
 # Not here: TLS and a reverse proxy. Certificates are site-specific and the
 # proxy is where flood protection belongs, so both are the operator's — see
-# docs/operations/deployment.md. MinIO arrives with the biometric module.
+# docs/operations/deployment.md and the reference config in
+# nginx/iden.conf.example. MinIO arrives with the biometric module.
 
 name: iden-dev
 
@@ -50,6 +51,8 @@ services:
       IDEN_DATABASE_URL: postgresql+asyncpg://iden:iden@postgres:5432/iden
       IDEN_REDIS_URL: redis://redis:6379/0
       IDEN_ISSUER: http://localhost:8000
+      IDEN_AUTH_UI_BASE_URL: http://localhost:4000
+      IDEN_ALLOWED_ADMIN_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
       IDEN_SIGNING_KEY_DIR: /keys
     volumes: &provider-volumes
       # Generated on the host with `uv run python -m scripts.gen_keys`, and
@@ -71,6 +74,32 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # The two browser applications. Both are static builds: the issuer is written
+  # into /config.js at container start, so the same image serves any deployment.
+  auth-ui:
+    build:
+      context: ../web
+      dockerfile: auth-ui/Dockerfile
+    environment:
+      IDEN_ISSUER: http://localhost:8000
+    ports:
+      - "4000:4000"
+    depends_on:
+      provider:
+        condition: service_started
+
+  dashboard:
+    build:
+      context: ../web
+      dockerfile: dashboard/Dockerfile
+    environment:
+      IDEN_ISSUER: http://localhost:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      provider:
+        condition: service_started
 
 volumes:
   postgres-data:
