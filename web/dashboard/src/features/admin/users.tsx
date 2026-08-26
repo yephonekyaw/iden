@@ -8,12 +8,15 @@ import {
   Field,
   IdenError,
   Input,
+  SearchInput,
+  StatusDot,
   Pagination,
   ProvenanceTrace,
   SecretRevealOnce,
   Spinner,
   type Column,
 } from "@iden/shared";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
@@ -34,9 +37,7 @@ const columns: Column<UserRecord>[] = [
   {
     key: "name",
     header: "Person",
-    cell: (user) => (
-      <span className="text-body-sm text-ink">{user.displayName ?? user.username}</span>
-    ),
+    cell: (user) => user.displayName ?? user.username,
   },
   { key: "email", header: "Email", cell: (user) => user.email },
   {
@@ -50,9 +51,9 @@ const columns: Column<UserRecord>[] = [
     header: "Status",
     cell: (user) =>
       user.isActive ? (
-        <span className="text-body-sm text-body">Active</span>
+        <StatusDot tone="success" label="Active" />
       ) : (
-        <span className="text-body-sm text-muted">Deactivated</span>
+        <StatusDot tone="muted" label="Deactivated" />
       ),
   },
 ];
@@ -74,12 +75,18 @@ export function UsersRoute() {
       <PageHeader
         title="Users"
         lede="Everyone with an account in this organization, and what each of them can do."
+        count={users.data?.meta.total}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
+            Add user
+          </Button>
+        }
       />
 
-      <div className="mb-6 flex flex-wrap items-center gap-3">
-        <Input
-          type="search"
-          className="max-w-xs"
+      <div className="mb-6">
+        <SearchInput
+          className="max-w-sm"
           placeholder="Search by name, username or email"
           value={search}
           onChange={(event) => {
@@ -87,9 +94,6 @@ export function UsersRoute() {
             setOffset(0);
           }}
         />
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Add user
-        </Button>
       </div>
 
       {users.isPending ? (
@@ -141,16 +145,16 @@ function CreateUserDialog({
   const form = useForm({ defaultValues: { email: "", username: "", displayName: "" } });
   const [created, setCreated] = useState<UserCreated | null>(null);
 
-  const create = useWrite<
-    { email: string; username: string; displayName: string },
-    UserCreated
-  >(["/admin/users"], async (body) => {
-    const response = await api.post<UserCreated>("/admin/users", {
-      ...body,
-      displayName: body.displayName || null,
-    });
-    return response.data;
-  });
+  const create = useWrite<{ email: string; username: string; displayName: string }, UserCreated>(
+    ["/admin/users"],
+    async (body) => {
+      const response = await api.post<UserCreated>("/admin/users", {
+        ...body,
+        displayName: body.displayName || null,
+      });
+      return response.data;
+    },
+  );
 
   const problem = create.error instanceof IdenError ? create.error : null;
 
@@ -191,7 +195,9 @@ function CreateUserDialog({
               create.mutate(values, { onSuccess: setCreated }),
             )}
           >
-            <Dialog.Title className="text-display-sm font-display text-ink">Add a user</Dialog.Title>
+            <Dialog.Title className="text-display-sm font-display text-ink">
+              Add a user
+            </Dialog.Title>
             <Dialog.Description className="mt-2 text-body-sm text-body">
               A one-time password is generated for them. Roles can be assigned afterwards.
             </Dialog.Description>
@@ -422,8 +428,7 @@ function RoleEditor({
   legend?: string;
 }) {
   const [selected, setSelected] = useState(initial);
-  const changed =
-    selected.size !== initial.size || [...selected].some((id) => !initial.has(id));
+  const changed = selected.size !== initial.size || [...selected].some((id) => !initial.has(id));
 
   return (
     <>
@@ -460,7 +465,6 @@ function fieldMessage(problem: IdenError | null, field: string): string | undefi
   if (!problem) return undefined;
   if (problem.code === "email_taken" && field === "email")
     return "That address already belongs to an account.";
-  if (problem.code === "username_taken" && field === "username")
-    return "That username is taken.";
+  if (problem.code === "username_taken" && field === "username") return "That username is taken.";
   return problem.fieldErrors.find((entry) => entry.field === field)?.message;
 }

@@ -13,6 +13,7 @@ import {
   Spinner,
   type Column,
 } from "@iden/shared";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
@@ -55,13 +56,14 @@ export function ClientsRoute() {
       <PageHeader
         title="Clients"
         lede="The applications allowed to ask IDEN for tokens — browser apps, mobile apps, and backend services."
+        count={clients.data?.meta.total}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
+            Register client
+          </Button>
+        }
       />
-
-      <div className="mb-6">
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Register client
-        </Button>
-      </div>
 
       {clients.isPending ? (
         <Spinner label="Loading clients" />
@@ -182,11 +184,7 @@ function CreateClientDialog({
             </Dialog.Title>
 
             <div className="mt-6 flex flex-col gap-5">
-              <Field
-                label="Name"
-                required
-                hint="Shown to people on the consent screen."
-              >
+              <Field label="Name" required hint="Shown to people on the consent screen.">
                 {(props) => <Input {...props} {...form.register("name")} />}
               </Field>
 
@@ -365,7 +363,9 @@ export function ClientDetailRoute() {
         <>
           <section className="mb-12">
             <h2 className="mb-1 text-title-lg text-ink">
-              {isConfidential ? "Permissions it may request for a user" : "Permissions it may request"}
+              {isConfidential
+                ? "Permissions it may request for a user"
+                : "Permissions it may request"}
             </h2>
             <p className="mb-4 max-w-prose text-body-sm text-muted">
               The ceiling for what a person can delegate to this app. What they actually get is this
@@ -384,8 +384,8 @@ export function ClientDetailRoute() {
             <section className="mb-12">
               <h2 className="mb-1 text-title-lg text-ink">Permissions it holds itself</h2>
               <p className="mb-4 max-w-prose text-body-sm text-muted">
-                Used with the client credentials grant, where there is no person — the application is
-                the identity.
+                Used with the client credentials grant, where there is no person — the application
+                is the identity.
               </p>
               <SetPicker
                 legend="Granted scopes"
@@ -442,9 +442,7 @@ export function ClientDetailRoute() {
           </div>
         ) : null}
         <div className="flex flex-wrap gap-3">
-          {isConfidential ? (
-            <Button onClick={() => setRotating(true)}>Rotate secret</Button>
-          ) : null}
+          {isConfidential ? <Button onClick={() => setRotating(true)}>Rotate secret</Button> : null}
           {record.isSystem ? null : (
             <Button variant="danger" onClick={() => setDeleting(true)}>
               Delete client
@@ -453,8 +451,8 @@ export function ClientDetailRoute() {
         </div>
         {record.isSystem ? (
           <p className="mt-4 max-w-prose text-body-sm text-muted">
-            This client ships with IDEN and cannot be deleted — the dashboard you are reading this in
-            is registered through it.
+            This client ships with IDEN and cannot be deleted — the dashboard you are reading this
+            in is registered through it.
           </p>
         ) : null}
       </section>

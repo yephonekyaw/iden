@@ -20,14 +20,12 @@ export function useScopeOptions() {
         })),
       );
       return perApi.flatMap(({ apiName, scopes }) =>
-        scopes.map(
-          (scope): PickerOption => ({
-            id: scope.id,
-            label: scope.description,
-            identifier: scope.value,
-            hint: apiName,
-          }),
-        ),
+        scopes.map((scope): PickerOption => ({
+          id: scope.id,
+          label: scope.description,
+          identifier: scope.value,
+          hint: apiName,
+        })),
       );
     },
   });
@@ -42,13 +40,11 @@ export function useRoleOptions() {
         api,
         "/admin/roles",
       );
-      return roles.map(
-        (role): PickerOption => ({
-          id: role.id,
-          label: role.name,
-          hint: role.description ?? undefined,
-        }),
-      );
+      return roles.map((role): PickerOption => ({
+        id: role.id,
+        label: role.name,
+        hint: role.description ?? undefined,
+      }));
     },
   });
 }

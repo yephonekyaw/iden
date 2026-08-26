@@ -13,6 +13,7 @@ import {
   Spinner,
   type Column,
 } from "@iden/shared";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { useApi } from "../../app/api";
@@ -80,13 +81,14 @@ export function ProfileFieldsRoute() {
       <PageHeader
         title="Profile fields"
         lede="What this organization records about people, beyond name and email. The self-service profile form is built from this."
+        count={fields.data?.meta.total}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
+            Add field
+          </Button>
+        }
       />
-
-      <div className="mb-6">
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Add field
-        </Button>
-      </div>
 
       {problem ? (
         <p role="alert" className="mb-4 max-w-prose text-body-sm text-error">
@@ -209,7 +211,8 @@ function CreateFieldDialog({
             Add a profile field
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-body-sm text-body">
-            The key and type are fixed once created, because existing values are stored against them.
+            The key and type are fixed once created, because existing values are stored against
+            them.
           </Dialog.Description>
 
           <div className="mt-6 flex flex-col gap-5">
@@ -256,7 +259,9 @@ function CreateFieldDialog({
                 required
                 hint="One per line."
                 error={
-                  problem?.code === "enum_needs_options" ? "A list field needs its choices." : undefined
+                  problem?.code === "enum_needs_options"
+                    ? "A list field needs its choices."
+                    : undefined
                 }
               >
                 {(props) => (

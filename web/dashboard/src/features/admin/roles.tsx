@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   ConfirmDialog,
   DataTable,
@@ -12,6 +13,7 @@ import {
   Spinner,
   type Column,
 } from "@iden/shared";
+import { Lock, Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
@@ -26,7 +28,7 @@ const columns: Column<RoleRecord>[] = [
     key: "name",
     header: "Role",
     cell: (role) => (
-      <span className="text-body-sm text-ink">
+      <span className="inline-flex items-center gap-2">
         {role.name}
         {role.isSystem ? <SystemTag /> : null}
       </span>
@@ -44,9 +46,10 @@ const columns: Column<RoleRecord>[] = [
 /** System records cannot be renamed or deleted — say so before anyone tries. */
 export function SystemTag() {
   return (
-    <span className="ml-2 rounded-full bg-surface-card px-2 py-0.5 text-caption text-muted">
+    <Badge tone="outline">
+      <Lock aria-hidden="true" className="h-3 w-3" />
       built in
-    </span>
+    </Badge>
   );
 }
 
@@ -62,13 +65,14 @@ export function RolesRoute() {
       <PageHeader
         title="Roles"
         lede="Named bundles of permissions — a job function like attendance-officer. One role can span several APIs."
+        count={roles.data?.meta.total}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
+            Create role
+          </Button>
+        }
       />
-
-      <div className="mb-6">
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Create role
-        </Button>
-      </div>
 
       {roles.isPending ? (
         <Spinner label="Loading roles" />
@@ -144,7 +148,9 @@ function CreateRoleDialog({
               label="Name"
               required
               error={
-                problem?.code === "role_name_taken" ? "A role with this name already exists." : undefined
+                problem?.code === "role_name_taken"
+                  ? "A role with this name already exists."
+                  : undefined
               }
             >
               {(props) => <Input {...props} {...form.register("name")} />}
@@ -205,10 +211,7 @@ export function RoleDetailRoute() {
         ← Roles
       </Link>
 
-      <PageHeader
-        title={record.name}
-        lede={record.description ?? "No description."}
-      />
+      <PageHeader title={record.name} lede={record.description ?? "No description."} />
 
       {record.isSystem ? (
         <p className="mb-8 rounded-lg border border-hairline bg-surface-soft px-5 py-4 text-body-sm text-body">

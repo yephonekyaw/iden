@@ -101,7 +101,11 @@ function PasswordSection() {
         <Field
           label="New password"
           hint="At least 12 characters."
-          error={problem?.code === "same_password" ? "Choose a password you haven't used here." : undefined}
+          error={
+            problem?.code === "same_password"
+              ? "Choose a password you haven't used here."
+              : undefined
+          }
         >
           {(props) => (
             <Input
@@ -173,7 +177,11 @@ function EmailSection() {
       >
         <Field
           label="New email address"
-          error={problem?.code === "email_taken" ? "That address already belongs to an account." : undefined}
+          error={
+            problem?.code === "email_taken"
+              ? "That address already belongs to an account."
+              : undefined
+          }
         >
           {(props) => (
             <Input
@@ -254,7 +262,8 @@ function TotpSection() {
   });
 
   if (status.isPending) return <Spinner label="Checking your authenticator" />;
-  if (status.isError) return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
+  if (status.isError)
+    return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
 
   const removeProblem = remove.error instanceof IdenError ? remove.error : null;
   const confirmProblem = confirm.error instanceof IdenError ? confirm.error : null;

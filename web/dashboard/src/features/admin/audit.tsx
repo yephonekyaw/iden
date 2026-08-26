@@ -1,12 +1,5 @@
-import {
-  EmptyState,
-  ErrorState,
-  Input,
-  Pagination,
-  ScopeChip,
-  Spinner,
-  cn,
-} from "@iden/shared";
+import { EmptyState, ErrorState, Input, Pagination, SearchInput, Spinner, cn } from "@iden/shared";
+import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
@@ -34,12 +27,12 @@ export function AuditRoute() {
       <PageHeader
         title="Audit log"
         lede="Every request that changed something, with who made it and what came back."
+        count={events.data?.meta.total}
       />
 
       <div className="mb-6 flex flex-wrap gap-3">
-        <Input
-          type="search"
-          className="max-w-xs font-identity"
+        <SearchInput
+          className="w-full max-w-sm"
           placeholder="Filter by path, e.g. /admin/roles"
           value={action}
           onChange={(event) => {
@@ -74,7 +67,7 @@ export function AuditRoute() {
         />
       ) : (
         <>
-          <ul className="m-0 list-none border-t border-hairline p-0">
+          <ul className="m-0 list-none rounded-lg border border-hairline bg-canvas p-2">
             {events.data.items.map((event) => (
               <EventRow key={event.id} event={event} />
             ))}
@@ -91,17 +84,25 @@ function EventRow({ event }: { event: AuditEvent }) {
   const detail = Object.keys(event.detail ?? {}).length > 0;
 
   return (
-    <li className="border-b border-hairline py-3">
+    <li className="border-b border-hairline-soft py-2.5">
       <details className="group">
         <summary
           className={cn(
-            "flex cursor-pointer flex-wrap items-baseline gap-x-3 gap-y-1",
-            detail ? "" : "cursor-default list-none",
+            "flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-md px-2 py-1",
+            detail ? "cursor-pointer hover:bg-row-hover" : "cursor-default list-none",
           )}
         >
+          {detail ? (
+            <ChevronRight
+              aria-hidden="true"
+              className="mt-1 h-3.5 w-3.5 shrink-0 text-muted-soft transition-transform duration-100 group-open:rotate-90"
+            />
+          ) : (
+            <span aria-hidden="true" className="w-3.5 shrink-0" />
+          )}
           <time
             dateTime={event.occurredAt}
-            className="w-44 shrink-0 text-caption text-muted tabular-nums"
+            className="w-44 shrink-0 text-caption tabular-nums text-muted"
           >
             {new Date(event.occurredAt).toLocaleString(undefined, {
               dateStyle: "short",
@@ -116,14 +117,16 @@ function EventRow({ event }: { event: AuditEvent }) {
           >
             {event.statusCode}
           </span>
-          <ScopeChip value={event.action} />
-          <span className="text-body-sm text-body">
+          <span className="font-identity min-w-0 flex-1 truncate text-body-strong">
+            {event.action}
+          </span>
+          <span className="text-body-sm text-muted">
             {event.actorLabel ?? event.actorClient ?? "anonymous"}
           </span>
         </summary>
 
         {detail ? (
-          <pre className="mt-3 overflow-x-auto rounded-lg bg-surface-dark p-4 text-code text-on-dark">
+          <pre className="ml-7 mt-3 overflow-x-auto rounded-lg bg-surface-dark p-4 text-code text-on-dark">
             {JSON.stringify(event.detail, null, 2)}
           </pre>
         ) : null}

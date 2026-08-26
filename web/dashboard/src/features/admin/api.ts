@@ -18,11 +18,7 @@ export type ProfileFieldRecord = Schemas["ProfileFieldResponse"];
 export type AuditEvent = Schemas["AuditEventResponse"];
 
 /** Lists share one hook; the resource is the URL and nothing else differs. */
-export function useList<T>(
-  api: AxiosInstance,
-  url: string,
-  params: Record<string, unknown> = {},
-) {
+export function useList<T>(api: AxiosInstance, url: string, params: Record<string, unknown> = {}) {
   return usePage<T>(api, url, params);
 }
 

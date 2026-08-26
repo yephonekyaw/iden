@@ -129,10 +129,7 @@ export function ConnectionsRoute() {
 
   return (
     <>
-      <PageHeader
-        title="Connections"
-        lede="Applications you have allowed to act on your behalf."
-      />
+      <PageHeader title="Connections" lede="Applications you have allowed to act on your behalf." />
 
       {connections.data.connections.length === 0 ? (
         <EmptyState

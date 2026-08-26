@@ -13,6 +13,7 @@ import {
   Spinner,
   type Column,
 } from "@iden/shared";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
@@ -52,13 +53,14 @@ export function ApisRoute() {
       <PageHeader
         title="APIs"
         lede="The backends that trust IDEN. Each one defines its own permissions and the audience its tokens carry."
+        count={apis.data?.meta.total}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
+            Register API
+          </Button>
+        }
       />
-
-      <div className="mb-6">
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Register API
-        </Button>
-      </div>
 
       {apis.isPending ? (
         <Spinner label="Loading APIs" />
@@ -125,8 +127,8 @@ function CreateApiDialog({
             Register an API
           </Dialog.Title>
           <Dialog.Description className="mt-2 text-body-sm text-body">
-            The audience is fixed once set — every token minted for this API carries it, and changing
-            it later would invalidate tokens already in flight.
+            The audience is fixed once set — every token minted for this API carries it, and
+            changing it later would invalidate tokens already in flight.
           </Dialog.Description>
 
           <div className="mt-6 flex flex-col gap-5">
@@ -380,7 +382,9 @@ function CreateScopeDialog({
                   : problem?.fieldErrors.find((entry) => entry.field === "value")?.message
               }
             >
-              {(props) => <Input {...props} {...form.register("value")} className="font-identity" />}
+              {(props) => (
+                <Input {...props} {...form.register("value")} className="font-identity" />
+              )}
             </Field>
             <Field
               label="What it allows"

@@ -12,6 +12,7 @@ import {
   Spinner,
   type Column,
 } from "@iden/shared";
+import { Plus } from "lucide-react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
@@ -54,13 +55,14 @@ export function GroupsRoute() {
       <PageHeader
         title="Groups"
         lede="Departments, teams, cohorts. A group holds roles, and everyone in it inherits them."
+        count={groups.data?.meta.total}
+        actions={
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus aria-hidden="true" />
+            Create group
+          </Button>
+        }
       />
-
-      <div className="mb-6">
-        <Button variant="primary" onClick={() => setCreating(true)}>
-          Create group
-        </Button>
-      </div>
 
       {groups.isPending ? (
         <Spinner label="Loading groups" />
@@ -347,13 +349,11 @@ function AddMembersDialog({
     queryKey: ["all-users"],
     queryFn: async () => {
       const users = await fetchAll<UserRecord>(api, "/admin/users");
-      return users.map(
-        (user): PickerOption => ({
-          id: user.id,
-          label: user.displayName ?? user.username,
-          hint: user.email,
-        }),
-      );
+      return users.map((user): PickerOption => ({
+        id: user.id,
+        label: user.displayName ?? user.username,
+        hint: user.email,
+      }));
     },
     enabled: open,
   });

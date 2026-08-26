@@ -1,4 +1,5 @@
-import { Button, ErrorState, Field, IdenError, Input, Spinner } from "@iden/shared";
+import { Button, Card, ErrorState, Field, IdenError, Input, Spinner } from "@iden/shared";
+import { Lock } from "lucide-react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
@@ -27,8 +28,10 @@ export function ProfileRoute() {
   });
 
   if (profile.isPending || schema.isPending) return <Spinner label="Loading your profile" />;
-  if (profile.isError) return <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />;
-  if (schema.isError) return <ErrorState error={schema.error} onRetry={() => void schema.refetch()} />;
+  if (profile.isError)
+    return <ErrorState error={profile.error} onRetry={() => void profile.refetch()} />;
+  if (schema.isError)
+    return <ErrorState error={schema.error} onRetry={() => void schema.refetch()} />;
 
   const writable = schema.data.fields.filter((field) => field.writable);
   const readOnly = schema.data.fields.filter((field) => !field.writable);
@@ -50,50 +53,62 @@ export function ProfileRoute() {
         lede="What this organization records about you, and the parts you can change yourself."
       />
 
-      <form noValidate className="flex max-w-xl flex-col gap-6" onSubmit={form.handleSubmit(submit)}>
-        <Field label="Display name" hint="How your name appears to applications you sign in to.">
-          {(props) => <Input {...props} {...form.register("displayName")} />}
-        </Field>
-
-        {writable.map((field) => (
-          <Field
-            key={field.key}
-            label={field.label}
-            hint={field.description ?? undefined}
-            required={field.required}
-            error={fieldError(problem, field.key)}
-          >
-            {(props) => (
-              <FieldInput {...props} field={field} register={form.register(`fields.${field.key}`)} />
-            )}
+      <form noValidate className="max-w-xl" onSubmit={form.handleSubmit(submit)}>
+        <Card className="flex flex-col gap-6">
+          <Field label="Display name" hint="How your name appears to applications you sign in to.">
+            {(props) => <Input {...props} {...form.register("displayName")} />}
           </Field>
-        ))}
 
-        {problem && problem.fieldErrors.length === 0 ? (
-          <p role="alert" className="text-body-sm text-error">
-            {problem.message}
-          </p>
-        ) : null}
+          {writable.map((field) => (
+            <Field
+              key={field.key}
+              label={field.label}
+              hint={field.description ?? undefined}
+              required={field.required}
+              error={fieldError(problem, field.key)}
+            >
+              {(props) => (
+                <FieldInput
+                  {...props}
+                  field={field}
+                  register={form.register(`fields.${field.key}`)}
+                />
+              )}
+            </Field>
+          ))}
 
-        <div className="flex items-center gap-4">
-          <Button type="submit" variant="primary" disabled={update.isPending}>
-            {update.isPending ? "Saving…" : "Save changes"}
-          </Button>
-          <span aria-live="polite" className="text-caption text-muted">
-            {update.isSuccess && !update.isPending ? "Saved." : ""}
-          </span>
-        </div>
+          {problem && problem.fieldErrors.length === 0 ? (
+            <p role="alert" className="text-body-sm text-error">
+              {problem.message}
+            </p>
+          ) : null}
+
+          <div className="flex items-center gap-4 border-t border-hairline-soft pt-6">
+            <Button type="submit" variant="primary" disabled={update.isPending}>
+              {update.isPending ? "Saving…" : "Save changes"}
+            </Button>
+            <span aria-live="polite" className="text-caption text-muted">
+              {update.isSuccess && !update.isPending ? "Saved." : ""}
+            </span>
+          </div>
+        </Card>
       </form>
 
       {readOnly.length > 0 ? (
-        <section className="mt-12 max-w-xl">
-          <h2 className="text-title-md text-ink">Set by your organization</h2>
+        <section className="mt-8 max-w-xl rounded-lg bg-surface-card p-8">
+          <h2 className="flex items-center gap-2 text-title-md text-ink">
+            <Lock aria-hidden="true" className="h-4 w-4 text-muted" />
+            Set by your organization
+          </h2>
           <p className="mt-1 text-body-sm text-muted">
             An administrator maintains these. Ask them if something here is wrong.
           </p>
-          <dl className="mt-4 border-t border-hairline-soft">
+          <dl className="mt-4 border-t border-hairline">
             {readOnly.map((field) => (
-              <div key={field.key} className="flex justify-between gap-6 border-b border-hairline-soft py-2.5">
+              <div
+                key={field.key}
+                className="flex justify-between gap-6 border-b border-hairline py-2.5 last:border-b-0"
+              >
                 <dt className="text-body-sm text-muted">{field.label}</dt>
                 <dd className="text-body-sm text-body-strong">
                   {stringify(profile.data.fields[field.key]) || "—"}
