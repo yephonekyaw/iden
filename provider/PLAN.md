@@ -8,8 +8,8 @@ Each phase states its goal, the files it creates, the endpoints it delivers, and
 check you can run by hand. Build phases in order: each one is runnable and verifiable before the next
 begins.
 
-> Scope note: this plan covers the backend only. The `auth-ui` and `dashboard` frontends, and the
-> kiosk devices, are separate efforts that consume what is built here.
+> Scope note: this plan covers the backend only. The `auth-ui` and `dashboard` frontends are planned
+> in [web/PLAN.md](../web/PLAN.md), and the kiosk devices separately; both consume what is built here.
 
 ---
 
@@ -1095,5 +1095,5 @@ The dependency between phases is not arbitrary, and it is worth understanding be
 5. **Hardening last** for migrations specifically: Alembic against a schema that is still moving
    costs more than it saves.
 
-Phases 6 (frontends) and 7 (kiosk) from the root [README](../README.md) consume this backend and are
-planned separately.
+Phases 7 (frontends) and 8 (kiosk) from the root [README](../README.md) consume this backend and are
+planned separately — the frontends in [web/PLAN.md](../web/PLAN.md).
