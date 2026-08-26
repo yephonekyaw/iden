@@ -146,8 +146,8 @@ flowchart TB
 |-----------|-----------|------|---------|
 | **provider** | Python 3.14, FastAPI, SQLAlchemy, asyncpg | 8000 | Single FastAPI app hosting four logical modules: AuthZ Server (`/oauth2/*`, `/.well-known/*`), Admin RS (`/admin/*`), Entity RS (`/entity/*`), Biometric RS (`/biometric/*`) |
 | **engine** | Python 3.14, FastAPI, InsightFace, ONNX | 8000 | Internal biometric engine — face detection, embedding, liveness (no external access) |
-| **dashboard** | Next.js 15, React, Tailwind CSS | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client) |
-| **auth-ui** | Next.js 15, React, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
+| **dashboard** | React 19, TypeScript, Vite, Tailwind CSS, TanStack Query | 3000 | Single-page app for both admin and end-user activities (bootstrapped OIDC client). Navigation renders from the token's scopes, so one build serves administrators and ordinary users. |
+| **auth-ui** | React 19, TypeScript, Vite, Tailwind CSS | 4000 | Login + consent pages — supports password, TOTP, and **biometric (face)** login paths. Hosted UI invoked by `/authorize`. |
 | **kiosk** | Hardware + Next.js / native | n/a | Biometric kiosk device — uses `client_credentials` to call the Biometric RS |
 | **postgres** | PostgreSQL 18 + pgvector | 5432 | Users, groups, roles, scopes, APIs, clients, tokens, embeddings |
 | **redis** | Redis 8 | 6379 | Sessions, login/consent challenges, token denylist, rate limits |
@@ -627,24 +627,42 @@ network.
 ```bash
 git clone https://github.com/iden-project/iden.git
 cd iden
-docker compose up --build
 
-# Services available at:
-#   http://localhost                     — Dashboard SPA
-#   http://localhost/auth/login          — Login UI
-#   http://localhost/oauth2/authorize    — OIDC authorize endpoint
-#   http://localhost/.well-known/openid-configuration
+# IDEN signs tokens with a key you own, and refuses to start without one.
+docker compose -f deploy/docker-compose.yml build provider
+docker run --rm -v "$PWD/provider/keys:/keys" -e IDEN_SIGNING_KEY_DIR=/keys \
+  --entrypoint python iden-dev-provider:latest -m scripts.gen_keys
+
+docker compose -f deploy/docker-compose.yml up -d --build
+
+# Permissions, the two starting roles, the bootstrap administrator, two clients.
+docker compose -f deploy/docker-compose.yml exec provider python -m scripts.seed
 ```
+
+```text
+#   http://localhost:3000                       — Dashboard SPA
+#   http://localhost:4000/auth/login            — Login UI
+#   http://localhost:8000/oauth2/authorize      — OIDC authorize endpoint
+#   http://localhost:8000/.well-known/openid-configuration
+```
+
+Each service publishes its own port; putting them behind one origin is the reverse proxy's job, and
+the proxy is yours — see `deploy/nginx/iden.conf.example`.
 
 ### Verify the Setup
 
 ```bash
-curl http://localhost/.well-known/openid-configuration
-curl http://localhost/.well-known/jwks.json
+curl http://localhost:8000/.well-known/openid-configuration
+curl http://localhost:8000/.well-known/jwks.json
 ```
 
-The seed script prints the bootstrap administrator's one-time password on first run. Change it
-immediately after logging in.
+Then open the dashboard at <http://localhost:3000> and sign in.
+
+The seed prints the bootstrap administrator's password **once** — it is hashed on the way into the
+database and cannot be recovered. Change it immediately after signing in.
+
+For a full walkthrough, including a check on every part of the system before anyone else is let in,
+see [Install IDEN for your organization](docs/guides/install.md).
 
 For backend development without Docker, see [provider/README.md](provider/README.md) and the phased
 build plan in [provider/PLAN.md](provider/PLAN.md).
@@ -662,10 +680,11 @@ build plan in [provider/PLAN.md](provider/PLAN.md).
 | **Phase 4** | Provider Entity RS — self-service profile, org-defined fields, credentials, TOTP, recovery | Done |
 | **Phase 5** | Biometric module + Engine — enrollment, verification, liveness (feature-flagged) | Next |
 | **Phase 6** | Hardening — tests, Docker Compose, TLS (migrations, the audit log and rate limiting landed early) | Planned |
-| **Phase 7** | Frontends — auth-ui and dashboard SPAs | Planned |
+| **Phase 7** | Frontends — auth-ui and dashboard SPAs | In progress |
 | **Phase 8** | Kiosk systems — device registration, `client_credentials` enrollment flow | Planned |
 
-Phases 0–6 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md). Tests ship with the
+Phases 0–6 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md), and Phase 7 in
+[web/PLAN.md](web/PLAN.md). Tests ship with the
 phase that introduces the code — `uv run pytest` from `provider/` runs the suite.
 
 Issues found in review are tracked in
