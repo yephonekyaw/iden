@@ -1,7 +1,11 @@
 export { cn } from "./cn";
 export { Button, type ButtonProps } from "./button";
-export { Input, Label, Field } from "./field";
+export { Badge, StatusDot, type BadgeProps } from "./badge";
+export { Input, Label, Field, SearchInput } from "./field";
 export { Card, EmptyState, ErrorState, Spinner } from "./feedback";
 export { Dialog, ConfirmDialog, SecretRevealOnce } from "./dialog";
+export { Mark } from "./mark";
+export { Brand } from "./brand";
+export { Menu } from "./menu";
 export { DataTable, Pagination, type Column } from "./table";
 export { ScopeChip, ProvenanceRow, ProvenanceTrace, type ResolvedScope } from "./provenance";

@@ -1,4 +1,5 @@
 import * as LabelPrimitive from "@radix-ui/react-label";
+import { Search } from "lucide-react";
 import { useId, type ComponentProps, type ReactNode } from "react";
 import { cn } from "./cn";
 
@@ -43,7 +44,11 @@ export function Field({
   hint?: string;
   error?: string;
   required?: boolean;
-  children: (props: { id: string; "aria-describedby": string | undefined; "aria-invalid": boolean }) => ReactNode;
+  children: (props: {
+    id: string;
+    "aria-describedby": string | undefined;
+    "aria-invalid": boolean;
+  }) => ReactNode;
   className?: string;
 }) {
   const id = useId();
@@ -67,6 +72,22 @@ export function Field({
           {hint}
         </p>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * A filter over a list. The icon is what makes it read as a filter rather than
+ * another field to fill in; `type="search"` gives browsers their clear button.
+ */
+export function SearchInput({ className, ...props }: ComponentProps<"input">) {
+  return (
+    <div className={cn("relative", className)}>
+      <Search
+        aria-hidden="true"
+        className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-soft"
+      />
+      <Input type="search" className="pl-10" {...props} />
     </div>
   );
 }
