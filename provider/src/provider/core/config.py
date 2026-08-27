@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     iden_signing_algorithm: str = "RS256"
 
     # Lifetimes (seconds)
+    # This one is quoted to the user: revoking a session cannot reach an access
+    # token already issued, so the dashboard's sessions screen tells them the
+    # revoked device stops working "within ten minutes". Change this and that
+    # sentence is wrong.
     iden_access_token_ttl: int = 600
     iden_id_token_ttl: int = 600
     iden_refresh_token_ttl: int = 2_592_000

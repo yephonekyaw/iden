@@ -165,15 +165,16 @@ export function SessionsRoute() {
       )}
 
       <p className="mt-4 text-caption text-muted">
-        Revoking a session signs that device out immediately, invalidates its refresh tokens, and
-        tells every application it opened.
+        Revoking a session ends it here and revokes its refresh tokens, so that device cannot reach
+        anything again without signing in. Applications that registered for sign-out notices are
+        told straight away; the rest find out when they next ask for a token.
       </p>
 
       <ConfirmDialog
         open={pending !== null}
         onOpenChange={(open) => !open && setPending(null)}
         title="Sign out this session?"
-        body="That browser will have to sign in again. Applications it opened lose their refresh tokens."
+        body="That browser will have to sign in again. Applications it opened lose their refresh tokens, and stop working within ten minutes."
         confirmLabel="Sign it out"
         pending={revoke.isPending}
         onConfirm={() => pending && revoke.mutate(pending)}
