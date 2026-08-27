@@ -1,7 +1,8 @@
 import { Button, ErrorState, Spinner } from "@iden/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { useAuth } from "react-oidc-context";
+import { ErrorResponse } from "oidc-client-ts";
+import { useAuth, type ErrorContext } from "react-oidc-context";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { IdenAuthProvider } from "./app/auth";
 import { Shell } from "./app/shell";
@@ -76,7 +77,9 @@ function RequireSignIn({ children }: { children: ReactNode }) {
     return <Centered>{<Spinner label="Signing you in" />}</Centered>;
   }
 
-  if (auth.error) {
+  const signedOut = wasSignedOut(auth.error);
+
+  if (auth.error && !signedOut) {
     return (
       <Centered>
         <div className="max-w-md flex flex-col justify-center items-center">
@@ -89,12 +92,29 @@ function RequireSignIn({ children }: { children: ReactNode }) {
     );
   }
 
-  if (!auth.isAuthenticated) {
+  if (signedOut || !auth.isAuthenticated) {
     void auth.signinRedirect();
     return <Centered>{<Spinner label="Redirecting to sign in" />}</Centered>;
   }
 
   return <>{children}</>;
+}
+
+/**
+ * Whether a renewal failed because the session is over rather than because
+ * something broke.
+ *
+ * The refresh token dies with its session, so `invalid_grant` here means the
+ * person was signed out somewhere else — another device, or this one revoked
+ * from the sessions screen. That is not an error to show them; it is a
+ * sign-out, and the honest screen is the sign-in one.
+ */
+function wasSignedOut(error: ErrorContext | undefined): boolean {
+  return (
+    error?.source === "renewSilent" &&
+    error.innerError instanceof ErrorResponse &&
+    error.innerError.error === "invalid_grant"
+  );
 }
 
 function Centered({ children }: { children: ReactNode }) {
