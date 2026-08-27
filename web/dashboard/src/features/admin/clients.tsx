@@ -29,7 +29,7 @@ const columns: Column<ClientRecord>[] = [
     key: "name",
     header: "Application",
     cell: (client) => (
-      <span className="text-body-sm text-ink">
+      <span className="inline-flex items-center gap-2">
         {client.name}
         {client.isSystem ? <SystemTag /> : null}
       </span>
