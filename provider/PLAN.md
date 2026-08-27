@@ -24,6 +24,7 @@ begins.
 - [Phase 4 — Entity RS (self-service)](#phase-4--entity-rs-self-service)
 - [Phase 5 — Biometric module](#phase-5--biometric-module)
 - [Phase 6 — Hardening](#phase-6--hardening)
+- [Session provenance — last seen, device, address](#session-provenance--last-seen-device-address)
 - [Known issues](#known-issues)
 - [Why this order](#why-this-order)
 
@@ -969,6 +970,167 @@ verified: migrations ran to completion, the container reported healthy as uid `i
 `/health/ready` answered `{"status":"ok"}` with the security headers attached. The suite passes at
 388 tests, and the OWASP-relevant checks — rate limits engaged, no secrets in logs, headers present —
 all hold.
+
+---
+
+## Session provenance — last seen, device, address
+
+**Status: built.** `shared/user_agent.py`, the three fields on `session_store.Session`, and the
+four new fields on `SessionSummary`. Pinned by `tests/test_session_store.py` and
+`tests/test_user_agent.py`; three of the store tests fail without the change.
+
+**Goal:** make `GET /entity/sessions` answer the question the screen actually asks — *is this one
+mine?* Today it returns `authenticatedAt`, `amr`, and `clients`, which distinguishes sessions by how
+and when they were created but not by **where from** or **whether still in use**. A person looking
+for the session they do not recognise has nothing to recognise it by.
+
+Everything here lives in Redis alongside the session. No migration, no new table: a session is
+ephemeral, and this is a property of one.
+
+### S.1 What a session records — `authz/services/session_store.py`
+
+The `Session` dataclass and its JSON payload gain three fields:
+
+| Field | Type | Written | Notes |
+|---|---|---|---|
+| `last_seen_at` | `datetime` | On read, throttled — see S.3 | Initialised to `authenticated_at` at creation. |
+| `ip` | `str \| None` | At creation and at re-authentication | The socket peer. `None` when the peer is unknown. |
+| `user_agent` | `str \| None` | At creation and at re-authentication | The raw header, stored as sent. |
+
+**All three must be optional on read.** A deployment upgrading in place has live sessions whose
+payload predates this change, and `json.loads` on the old shape must not raise. Read them with
+`data.get(...)`, defaulting `last_seen_at` to `authenticated_at`. Getting this wrong signs out
+everyone who was signed in at deploy time, which is the kind of upgrade people remember.
+
+Re-authentication (`reauthenticate`) refreshes all three: it is a new sign-in on the same session id,
+and the whole point of keeping the id is that the *session* continues — but the person may well be on
+a different machine.
+
+### S.2 Where the values come from — `authz/login/routes.py`
+
+`session_store.create` currently takes `(redis, user_id, method)`. It gains keyword arguments:
+
+```python
+async def create(
+    redis: Redis,
+    user_id: UUID,
+    method: str,
+    *,
+    ip: str | None = None,
+    user_agent: str | None = None,
+) -> Session: ...
+```
+
+The login route already has `Request`. Reuse `ratelimit.client_ip(request)` rather than reading
+`X-Forwarded-For` — the same rule the audit log and the rate limiter already follow, and for the same
+reason: a header the caller sets is a claim, not an observation. Trusting it here would let anyone
+write whatever address they liked into their own session list, which is a strange thing to be able to
+do to a security screen.
+
+The honest consequence, and it belongs in the docs rather than being discovered: **behind a reverse
+proxy every session reads as the proxy's address.** Making that useful is one decision — trusting
+`X-Forwarded-For` from a configured set of proxy addresses — and it should be taken once, for the
+audit log, the rate limiter, and this, not three times separately. Out of scope here; noted so it is
+not silently wrong.
+
+### S.3 The write-amplification problem
+
+`session_store.get` runs on **every** request that carries the cookie — `/authorize`, every login
+step, consent, logout. Writing `last_seen_at` on each one turns every session read into a session
+write, which is a real cost for a field whose entire purpose is to be shown to a human, rounded to
+the minute.
+
+Throttle it: re-save only when the stored value is older than `SEEN_RESOLUTION` (60s).
+
+```python
+if (now - session.last_seen_at).total_seconds() > SEEN_RESOLUTION:
+    session.last_seen_at = now
+    await _save(redis, session)
+```
+
+The sliding `expire` stays unconditional — that one is correctness, not display. The cost of the
+throttle is that "last active" can be up to a minute stale, which is invisible at the granularity
+the screen renders ("3 hrs ago").
+
+### S.4 Turning a user-agent into something readable
+
+Store the header raw; derive the label for display. A new pure module, `shared/user_agent.py`:
+
+```python
+def describe(raw: str | None) -> tuple[str | None, str | None]:
+    """(device_label, browser_label) — best effort, e.g. ("Mac · macOS", "Chrome 142")."""
+```
+
+An ordered list of `(pattern, label)` pairs and a version capture. Roughly thirty lines, no
+dependency, and testable without a database — which is where the value is.
+
+Three things to be deliberate about:
+
+- **No library.** `ua-parser` and friends carry a regex database that goes stale, and updating it
+  becomes a reason to redeploy the provider. A short list that degrades to `None` is better than a
+  long one that is confidently wrong.
+- **Best effort is the contract.** Every field is nullable and the UI must render without them. A
+  browser IDEN has never heard of shows as an unnamed session, not as a broken row.
+- **The raw string is already kept.** `AuditEvent.user_agent` records it per request, so nothing is
+  lost by storing only labels for display. Do not add the raw header to the API response — it is
+  fingerprinting material and the labels are what the screen needs.
+
+Client Hints (`Sec-CH-UA-*`) are the modern replacement for UA sniffing and would be more accurate,
+but they require opting in with `Accept-CH` and are not sent cross-origin by default. Worth revisiting
+if the labels prove poor; not worth the protocol surface first time through.
+
+### S.5 The API — `entity/sessions/schemas.py`
+
+`SessionSummary` gains four nullable fields:
+
+```python
+last_seen_at: datetime = Field(description="When this session last made a request.")
+ip: str | None = Field(
+    default=None, description="Address the session was created from."
+)
+device_label: str | None = Field(
+    default=None, description='Best effort, e.g. "Mac · macOS".'
+)
+browser_label: str | None = Field(
+    default=None, description='Best effort, e.g. "Chrome 142".'
+)
+```
+
+`last_seen_at` is non-null because a session always has one, even if it equals `authenticatedAt`.
+`list_for_user` keeps sorting by `authenticated_at` — the order is *when this sign-in began*, which
+is the stable thing; sorting by activity would make the list jump around while it is being read.
+
+Then `pnpm gen:api` from `web/`, and commit the regenerated `schema.d.ts`.
+
+### Deliberately not in scope
+
+**Geolocation.** The mockup this came from shows "Bangkok, TH" beside each address, and that is the
+one item here with a real dependency behind it: either a MaxMind database shipped and updated with
+the deployment, or a third-party lookup, which means sending a person's address to someone else on
+every render of their own security page. Show the address; let the person recognise it. Revisit as a
+deployment-optional enrichment if it is genuinely wanted.
+
+### Testing
+
+| Test | Why |
+|---|---|
+| A session created without the new arguments still lists | The signature stays back-compatible. |
+| A payload written in the old shape loads and lists | The upgrade case. Write the old JSON into Redis directly rather than constructing it through `create`, or the test proves nothing. |
+| `get` twice inside `SEEN_RESOLUTION` writes once | The throttle. Fails without it — count `SET` calls. |
+| `get` after `SEEN_RESOLUTION` advances `last_seen_at` | The other half; freeze time rather than sleeping. |
+| `reauthenticate` replaces address and agent | A new sign-in on a kept id. |
+| `describe()` unit cases, including an unknown agent → `(None, None)` | No database, no fixtures. |
+
+### Done when
+
+```bash
+uv run pytest
+curl -H "Authorization: Bearer $TOKEN" localhost:8000/entity/sessions | jq '.sessions[0]'
+```
+
+returns `lastSeenAt`, `ip`, `deviceLabel` and `browserLabel`; a second call a minute later shows
+`lastSeenAt` advanced; and a session that predates the change appears in the list with the new fields
+null rather than causing a `500`.
 
 ---
 
