@@ -45,6 +45,7 @@ stays as the system-level overview; the server's own reference is
 - [Key Design Decisions](#key-design-decisions)
 - [Quick Start](#quick-start)
 - [Development Phases](#development-phases)
+- [Future Improvements — Standards Compliance](#future-improvements--standards-compliance)
 - [Open Design Questions](#open-design-questions)
 
 ---
@@ -691,6 +692,69 @@ Issues found in review are tracked in
 [provider/PLAN.md § Known issues](provider/PLAN.md#known-issues); six are fixed, the rest are
 scheduled. **IDEN is not yet ready for a deployment reachable by anyone but its developers** — there
 are no rate limits at the reverse proxy yet, and IDEN's own limits assume one in front of it.
+
+---
+
+## Future Improvements — Standards Compliance
+
+IDEN implements OIDC and OAuth 2.0 by hand rather than through a framework, which is what makes the
+protocol readable end to end — and also what makes it possible to be *almost* right in places nobody
+notices until an unfamiliar client library shows up. This section is the running list of where the
+implementation departs from the specifications it claims, so the departures are choices rather than
+discoveries.
+
+Nothing here blocks the current deployment model, where every client is one this repository ships.
+They start to matter the moment a third-party OIDC library talks to IDEN.
+
+### Tier 1 — Conformance gaps
+
+Small, specific, and each one currently observable by pointing a conforming client at the provider.
+
+| | Specification | What is missing | Why it matters |
+|---|---|---|---|
+| **C-1** | RFC 9068 §2.1 | Access tokens carry no `typ: at+jwt` JOSE header, and `verify_jwt` does not check one | This is the one with a bug behind it. Nothing distinguishes an access token from an ID token or a logout token by *type*, so token confusion is caught only incidentally — by `aud` at `/admin/*`, and not at all at `/oauth2/userinfo` and `/oauth2/introspect`, which do not check audience. Both read `claims["jti"]` unconditionally, and an ID token has no `jti`, so presenting one there raises `KeyError` and answers **500** where it should answer 401. Setting `typ` on mint and requiring it on verify closes the class, not just the instance. |
+| **C-2** | OIDC Core §5.3.1 | `/oauth2/userinfo` accepts `GET` only; the spec requires `GET` **and** `POST` with a form-encoded `access_token` | Conformance suites test both, and some RP libraries POST by default. The handler is already written; it needs a second route decorator and a form parameter. |
+| **C-3** | RP-Initiated Logout 1.0 §2 | `/oauth2/logout` accepts `GET` only; the spec requires both methods | A `POST` sign-out is how an RP keeps `id_token_hint` out of browser history and the `Referer` header. Same handler, second decorator. |
+| **C-4** | RFC 6749 §2.3.1 | Basic credentials are base64-decoded but never form-urldecoded | The spec requires `client_id` and `client_secret` to be URL-encoded *before* base64. IDEN's own generated secrets are URL-safe base64 and unaffected, so this is latent — it bites the first time an operator imports a client secret containing a reserved character, and it fails as `invalid_client` with nothing to suggest why. One `unquote()` per half. |
+| **C-5** | RFC 6750 §3.1 | The `403` from `require_scope` carries no `WWW-Authenticate` header | A compliant client cannot tell "you lack this scope" from any other 403 without parsing prose. The header should be `Bearer error="insufficient_scope", scope="…"`. The `401` path already gets this right, and `require_fresh_auth` already does the RFC 9470 version of it. |
+| **C-6** | RFC 6750 §3 | A `401` from `/oauth2/userinfo` answers `WWW-Authenticate: Basic realm="iden"` | The generic `OAuthError` handler in `core/app.py` attaches `Basic` to every 401, which is right for the token endpoint and wrong for a protected resource: it tells the client to retry with client credentials instead of re-authenticating the user. The scheme should follow the endpoint. |
+| **C-7** | OIDC Discovery 1.0 §3 | `request_uri_parameter_supported` is omitted from the metadata — **and its default is `true`** | Discovery currently advertises support for request objects by reference that IDEN does not implement. Declare it `false`, and while there, declare `request_parameter_supported: false`, `claims_parameter_supported: false`, and `response_modes_supported: ["query"]` so the omissions are statements rather than defaults. |
+| **C-8** | OIDC Core §11 | Refresh tokens are issued whenever `refresh_token` is in the client's `allowed_grants`, not when `offline_access` is requested | Standard OIDC ties long-lived refresh to the `offline_access` scope, and to consent for it. IDEN's rule is per-client rather than per-request, which is defensible for first-party apps and surprising to a library that asks for `offline_access` and never sees it acknowledged. Decide and document, or implement the scope. |
+
+### Tier 2 — Standards not yet implemented
+
+Each is a real specification IDEN could adopt, listed with what it would buy.
+
+| Specification | What it adds | Worth it when |
+|---|---|---|
+| **RFC 8414** — Authorization Server Metadata | `/.well-known/oauth-authorization-server`, alongside the OIDC document | A pure OAuth 2.0 client with no OIDC layer looks *only* there. The document is nearly identical to the one already served, so this is close to an alias. |
+| **RFC 9207** — Authorization Response `iss` | The `iss` parameter on every authorization response, plus `authorization_response_iss_parameter_supported` in metadata | Defends against mix-up attacks where a client is talking to more than one provider. OAuth 2.1 recommends it, and it is a query parameter plus a metadata field. |
+| **RFC 8707** — Resource Indicators | A `resource` parameter narrowing a token to one audience | This is [KI-9](provider/PLAN.md#known-issues) with a specification attached: today a token requesting `admin:` and `entity:` scopes carries both audiences, and a compromised resource server can replay it at the other. |
+| **RFC 7662** §4 | Restricting introspection to tokens the caller is entitled to see | Any confidential client may currently introspect any token IDEN issued, including one minted for a different client. The security considerations call this out explicitly. |
+| **RFC 7009** §2.1 | Honouring `token_type_hint` | Accepted and ignored today. Harmless — the endpoint tries both — but the parameter exists to avoid exactly that double lookup. |
+| **RFC 8628** — Device Authorization Grant | A third grant for input-constrained devices | The natural fit for Phase 8. A kiosk with a keyboard is fine on `client_credentials`; one without is what this grant is for. |
+| OIDC Core §5.4 — `address`, `phone` | The two standard claim scopes IDEN does not release | Both map onto organization-defined profile fields already; this is a matter of reserving the scope names and wiring `claim_scope`. |
+
+### Tier 3 — Deliberate non-goals
+
+Recorded so nobody has to re-derive why they are absent.
+
+| Specification | Position |
+|---|---|
+| **RFC 9449** (DPoP), **RFC 8705** (mTLS) | Sender-constrained tokens. Real value, real operational cost — certificate distribution or per-request proof signing. Bearer tokens with a ten-minute life are the right trade for a single organization; these are what to reach for if IDEN ever fronts something regulated. |
+| **RFC 9126** (PAR), **RFC 9101** (JAR) | Pushed and signed authorization requests. They exist because query-string requests can be tampered with in the browser; PKCE plus exact `redirect_uri` matching covers what IDEN is exposed to. Prerequisites for FAPI 2.0, and only worth it as part of that. |
+| **FAPI 2.0** | The financial-grade profile — PAR, sender-constrained tokens, and more. A destination, not a fix; adopt the pieces above first if it ever becomes the goal. |
+| **OIDC Front-Channel Logout**, **Session Management** | Both depend on hidden iframes and third-party cookies, which browsers are removing. Back-channel logout is the replacement and is implemented. |
+| **OIDC Federation**, **CIBA** | Out of scope for the same reason as federation generally — see [Open Design Questions](#open-design-questions). |
+
+### The forcing function
+
+The highest-leverage item is not on any of the lists above: run the
+[OpenID Foundation conformance suite](https://openid.net/certification/) against a local deployment.
+It tests the *Basic OP* and *Config OP* profiles by driving real flows, and it finds the class of
+problem this section is made of — the ones where the code is reasonable, the tests pass, and a
+sentence in a specification says otherwise. Everything in Tier 1 is the kind of finding it produces
+in an afternoon.
 
 ---
 
