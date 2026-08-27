@@ -10,7 +10,7 @@ import {
   Spinner,
 } from "@iden/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { MonitorSmartphone } from "lucide-react";
+import { KeyRound, MonitorSmartphone } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../app/api";
 import { useStepUp } from "../../app/session";
@@ -282,9 +282,15 @@ export function PermissionsRoute() {
         <EmptyState
           title="No permissions yet"
           body="An administrator assigns permissions through roles and groups. Ask yours if you expected access to something."
+          icon={KeyRound}
         />
       ) : (
-        <ProvenanceTrace scopes={scopes} className="border-t border-hairline" />
+        <div className="overflow-hidden rounded-lg border border-hairline bg-canvas">
+          {/* The rows carry their own dividers; the padding is pushed onto them
+              rather than onto the list so those dividers run the full width of
+              the card, as they do on Sessions. */}
+          <ProvenanceTrace scopes={scopes} className="py-1 [&>li]:px-5" />
+        </div>
       )}
     </>
   );
