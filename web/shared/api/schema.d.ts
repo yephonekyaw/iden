@@ -2709,6 +2709,12 @@ export interface components {
              */
             authenticatedAt: string;
             /**
+             * Lastseenat
+             * Format: date-time
+             * @description When this session last made a request. Equal to `authenticatedAt` for a session that predates this being recorded, and accurate to within a minute.
+             */
+            lastSeenAt: string;
+            /**
              * Amr
              * @description How this session was authenticated.
              */
@@ -2718,6 +2724,21 @@ export interface components {
              * @description Applications signed into during it.
              */
             clients: string[];
+            /**
+             * Ip
+             * @description The address this session signed in from. Behind a reverse proxy this is the proxy's address — the socket peer is what IDEN can observe, and a forwarding header is a claim the caller makes.
+             */
+            ip?: string | null;
+            /**
+             * Device
+             * @description Best effort, from the User-Agent — e.g. `"Mac"`, `"iPhone"`.
+             */
+            device?: string | null;
+            /**
+             * Browser
+             * @description Best effort, from the User-Agent — e.g. `"Chrome 142"`.
+             */
+            browser?: string | null;
         };
         /**
          * TokenResponse

@@ -239,6 +239,38 @@ class TestSessions:
         assert body["sessions"][0]["current"] is True
         assert body["sessions"][0]["clients"] == ["dashboard"]
 
+    async def test_a_session_says_where_it_came_from(self, client, self_headers):
+        """The list has to answer "is this one mine?", which needs more than
+        when it started."""
+        await get_tokens(client)
+
+        session = (await client.get("/entity/sessions", headers=self_headers)).json()[
+            "sessions"
+        ][0]
+
+        assert session["ip"] == "127.0.0.1"
+        assert session["lastSeenAt"] >= session["authenticatedAt"]
+        # The test client sends `python-httpx/…`, which is not a browser IDEN
+        # can name — and an unnamed session is the correct answer, not an error.
+        assert session["device"] is None
+        assert session["browser"] is None
+
+    async def test_the_user_agent_becomes_a_label(self, client, self_headers):
+        # Set on the client rather than passed to the helper: the session is
+        # created by the login POST, so that is the request whose header counts.
+        client.headers["user-agent"] = (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+            "(KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36"
+        )
+        await get_tokens(client)
+
+        session = (await client.get("/entity/sessions", headers=self_headers)).json()[
+            "sessions"
+        ][0]
+
+        assert session["device"] == "Mac"
+        assert session["browser"] == "Chrome 142"
+
     async def test_the_listed_id_is_not_a_cookie(self, client, self_headers):
         """It names a session; it must not be usable as one."""
         await get_tokens(client)

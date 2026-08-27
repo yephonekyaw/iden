@@ -9,6 +9,7 @@ from provider.core.redis import RedisDep
 from provider.core.schemas import ErrorResponse
 from provider.entity.deps import CurrentUserDep
 from provider.entity.sessions.schemas import SessionListResponse, SessionSummary
+from provider.shared import user_agent
 
 router = APIRouter(prefix="/entity/sessions", tags=["entity: sessions"])
 
@@ -37,20 +38,31 @@ async def list_sessions(
     current = session_store.public_id_of(cookie) if cookie else None
 
     sessions = await session_store.list_for_user(redis, user.id)
-    return SessionListResponse(
-        sessions=[
+
+    summaries = []
+    for session in sessions:
+        # Derived here rather than stored: the labels are presentation, and the
+        # header they come from is already kept verbatim in the audit log. The
+        # raw string is deliberately not returned — it is fingerprinting
+        # material, and the labels are what the screen needs.
+        device, browser = user_agent.describe(session.user_agent)
+        summaries.append(
             SessionSummary(
                 id=session.id,
                 current=session.id == current,
                 authenticated_at=session.authenticated_at,
+                last_seen_at=session.last_seen_at,
                 amr=session.amr,
                 clients=sorted(
                     await session_store.clients_for_public_id(redis, session.id)
                 ),
+                ip=session.ip,
+                device=device,
+                browser=browser,
             )
-            for session in sessions
-        ]
-    )
+        )
+
+    return SessionListResponse(sessions=summaries)
 
 
 @router.delete(
