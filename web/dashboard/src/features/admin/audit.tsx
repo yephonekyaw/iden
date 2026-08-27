@@ -1,17 +1,25 @@
 import {
-  DatePicker,
+  DateRangePicker,
   EmptyState,
   ErrorState,
   Pagination,
   SearchInput,
   Spinner,
   cn,
+  type DateRange,
 } from "@iden/shared";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
 import { useList, type AuditEvent } from "./api";
+
+/** The picked day runs to its last moment — `until` on the API is inclusive. */
+function endOfDay(date: Date): Date {
+  const end = new Date(date);
+  end.setHours(23, 59, 59, 999);
+  return end;
+}
 
 /**
  * Read-only by design: the log is written by the requests it records, and there
@@ -21,13 +29,18 @@ import { useList, type AuditEvent } from "./api";
 export function AuditRoute() {
   const api = useApi();
   const [action, setAction] = useState("");
-  const [since, setSince] = useState<Date | undefined>();
+  const [span, setSpan] = useState<DateRange | undefined>();
   const [offset, setOffset] = useState(0);
 
   const events = useList<AuditEvent>(api, "/admin/audit", {
     offset,
     ...(action ? { action } : {}),
-    ...(since ? { since: since.toISOString() } : {}),
+    ...(span?.from
+      ? {
+          since: span.from.toISOString(),
+          until: endOfDay(span.to ?? span.from).toISOString(),
+        }
+      : {}),
   });
 
   return (
@@ -48,13 +61,12 @@ export function AuditRoute() {
             setOffset(0);
           }}
         />
-        <DatePicker
-          label="Only events after"
-          placeholder="Any time"
-          value={since}
+        <DateRangePicker
+          label="Limit to these days"
+          value={span}
           disabled={{ after: new Date() }}
-          onChange={(date) => {
-            setSince(date);
+          onChange={(range) => {
+            setSpan(range);
             setOffset(0);
           }}
         />
@@ -68,8 +80,8 @@ export function AuditRoute() {
         <EmptyState
           title="Nothing recorded here"
           body={
-            action || since
-              ? "No requests match these filters. Widen the path or move the date back."
+            action || span
+              ? "No requests match these filters. Widen the path or the dates."
               : "State-changing requests appear here as they happen."
           }
         />
