@@ -2,6 +2,7 @@ export { cn } from "./cn";
 export { Button, type ButtonProps } from "./button";
 export { Badge, StatusDot, type BadgeProps } from "./badge";
 export { Input, Label, Field, SearchInput } from "./field";
+export { Calendar, DatePicker } from "./calendar";
 export { Card, EmptyState, ErrorState, Spinner } from "./feedback";
 export { Dialog, ConfirmDialog, SecretRevealOnce } from "./dialog";
 export { Mark } from "./mark";
