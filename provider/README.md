@@ -71,6 +71,20 @@ Then:
 - Discovery — <http://localhost:8000/.well-known/openid-configuration>
 - Health — <http://localhost:8000/health>
 
+### Starting over
+
+When development has left the database in a state not worth reasoning about:
+
+```bash
+uv run python -m scripts.reset         # asks before it does anything
+uv run python -m scripts.reset --yes   # for when you are sure
+```
+
+It drops the schema, flushes Redis, migrates, and seeds — printing a new bootstrap password and
+kiosk secret, because those are created fresh with everything else. Redis is the step people miss
+doing this by hand: sessions outlive the rows they name, so a database-only reset leaves live
+cookies pointing at users who no longer exist. It refuses outright when `IDEN_ENV=prod`.
+
 ### Running it in a container
 
 The same stack, with the provider built and wired in rather than run from your shell:
