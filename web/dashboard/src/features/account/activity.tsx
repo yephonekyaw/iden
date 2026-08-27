@@ -152,8 +152,12 @@ export function SessionsRoute() {
                 </p>
               </div>
 
-              <div className="shrink-0">
-                {session.current ? null : (
+              <div className="flex h-8 shrink-0 items-center">
+                {session.current ? (
+                  // Revoking this one is what Sign out already does, minus the
+                  // step-up it would demand first.
+                  <p className="text-caption text-muted-soft">Sign out from the account menu</p>
+                ) : (
                   <Button size="sm" onClick={() => setPending(session.id)}>
                     Revoke
                   </Button>
