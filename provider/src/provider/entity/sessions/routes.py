@@ -77,6 +77,8 @@ async def list_sessions(
         "out, so it must not be available to the intruder.\n\n"
         "Returns `204` whether or not the session existed: a different answer "
         "would tell a caller which session ids are real.\n\n"
+        "Ending your *own* session clears the session cookie with it, so the "
+        "browser is not left holding one that names nothing.\n\n"
         "**Required scope:** `entity:sessions:revoke`"
     ),
     responses={403: {"model": ErrorResponse, "description": "Sign-in is not recent"}},
@@ -84,6 +86,7 @@ async def list_sessions(
 )
 async def revoke_session(
     session_id: str,
+    request: Request,
     user: CurrentUserDep,
     session: DBSessionDep,
     redis: RedisDep,
@@ -97,4 +100,10 @@ async def revoke_session(
         )
         await session.commit()
 
-    return Response(status_code=204)
+    response = Response(status_code=204)
+
+    cookie = request.cookies.get(session_cookie.NAME)
+    if cookie and session_store.public_id_of(cookie) == session_id:
+        session_cookie.clear_session(response)
+
+    return response

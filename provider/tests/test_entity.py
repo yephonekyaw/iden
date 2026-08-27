@@ -303,6 +303,31 @@ class TestSessions:
         )
         assert refreshed.status_code == 400
 
+    async def test_signing_out_your_own_session_clears_the_cookie(
+        self, client, self_headers
+    ):
+        """Otherwise the browser keeps a cookie naming a session that is gone."""
+        await get_tokens(client)
+        listed = (await client.get("/entity/sessions", headers=self_headers)).json()
+        current = next(s for s in listed["sessions"] if s["current"])
+
+        await client.delete(f"/entity/sessions/{current['id']}", headers=self_headers)
+
+        assert "iden_session" not in client.cookies
+
+    async def test_signing_out_another_session_leaves_your_cookie(
+        self, client, self_headers
+    ):
+        await get_tokens(client)
+        client.cookies.clear()
+        await get_tokens(client)
+        listed = (await client.get("/entity/sessions", headers=self_headers)).json()
+        other = next(s for s in listed["sessions"] if not s["current"])
+
+        await client.delete(f"/entity/sessions/{other['id']}", headers=self_headers)
+
+        assert "iden_session" in client.cookies
+
     async def test_you_cannot_sign_out_someone_elses_session(
         self, client, self_headers, entity_headers
     ):
