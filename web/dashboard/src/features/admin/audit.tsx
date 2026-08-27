@@ -63,6 +63,7 @@ export function AuditRoute() {
         />
         <DateRangePicker
           label="Limit to these days"
+          placeholder="Limit to these days"
           value={span}
           disabled={{ after: new Date() }}
           onChange={(range) => {

@@ -15,7 +15,7 @@ export function DateRangePicker({
   value,
   onChange,
   label,
-  placeholder = "Any time",
+  placeholder,
   className,
   ...calendar
 }: {
