@@ -1,4 +1,12 @@
-import { EmptyState, ErrorState, Input, Pagination, SearchInput, Spinner, cn } from "@iden/shared";
+import {
+  DatePicker,
+  EmptyState,
+  ErrorState,
+  Pagination,
+  SearchInput,
+  Spinner,
+  cn,
+} from "@iden/shared";
 import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../app/api";
@@ -13,13 +21,13 @@ import { useList, type AuditEvent } from "./api";
 export function AuditRoute() {
   const api = useApi();
   const [action, setAction] = useState("");
-  const [since, setSince] = useState("");
+  const [since, setSince] = useState<Date | undefined>();
   const [offset, setOffset] = useState(0);
 
   const events = useList<AuditEvent>(api, "/admin/audit", {
     offset,
     ...(action ? { action } : {}),
-    ...(since ? { since: new Date(since).toISOString() } : {}),
+    ...(since ? { since: since.toISOString() } : {}),
   });
 
   return (
@@ -40,13 +48,13 @@ export function AuditRoute() {
             setOffset(0);
           }}
         />
-        <Input
-          type="datetime-local"
-          className="max-w-56"
-          aria-label="Only events after"
+        <DatePicker
+          label="Only events after"
+          placeholder="Any time"
           value={since}
-          onChange={(event) => {
-            setSince(event.target.value);
+          disabled={{ after: new Date() }}
+          onChange={(date) => {
+            setSince(date);
             setOffset(0);
           }}
         />
@@ -68,8 +76,12 @@ export function AuditRoute() {
       ) : (
         <>
           <ul className="m-0 list-none rounded-lg border border-hairline bg-canvas p-2">
-            {events.data.items.map((event) => (
-              <EventRow key={event.id} event={event} />
+            {events.data.items.map((event, index) => (
+              <EventRow
+                key={event.id}
+                event={event}
+                isLast={index === events.data.items.length - 1}
+              />
             ))}
           </ul>
           <Pagination meta={events.data.meta} onOffsetChange={setOffset} />
@@ -79,12 +91,12 @@ export function AuditRoute() {
   );
 }
 
-function EventRow({ event }: { event: AuditEvent }) {
+function EventRow({ event, isLast }: { event: AuditEvent; isLast?: boolean }) {
   const failed = event.statusCode >= 400;
   const detail = Object.keys(event.detail ?? {}).length > 0;
 
   return (
-    <li className="border-b border-hairline-soft py-2.5">
+    <li className={cn("border-hairline-soft py-2.5", isLast ? "" : "border-b")}>
       <details className="group">
         <summary
           className={cn(
