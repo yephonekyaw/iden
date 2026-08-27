@@ -79,7 +79,7 @@ function RequireSignIn({ children }: { children: ReactNode }) {
   if (auth.error) {
     return (
       <Centered>
-        <div className="max-w-md">
+        <div className="max-w-md flex flex-col justify-center items-center">
           <ErrorState error={auth.error} />
           <Button className="mt-4" variant="primary" onClick={() => void auth.signinRedirect()}>
             Try signing in again
