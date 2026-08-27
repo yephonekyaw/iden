@@ -161,20 +161,31 @@ async def login(
     # in the entry's detail, and it is a claim, not an identity.
     set_actor(request, user_id=user.id)
 
+    # Recorded so a person can recognise their own sessions later. The address
+    # is the socket peer, the same source the rate limiter and the audit log
+    # use — an `X-Forwarded-For` the caller sets is a claim, and honouring it
+    # here would let anyone write any address into their own security page.
+    origin = {
+        "ip": ratelimit.client_ip(request),
+        "user_agent": request.headers.get("user-agent"),
+    }
+
     if login_session is not None and login_session.user_id == user.id:
         # Re-authenticating an existing session — `prompt=login`, or a `max_age`
         # it had outgrown. The id is kept: minting a new one would strand the
         # old session in Redis with no cookie pointing at it, and every client
         # already holding the old `sid` would never be signed out.
         login_session = await session_store.reauthenticate(
-            redis, login_session, AmrMethod.PWD
+            redis, login_session, AmrMethod.PWD, **origin
         )
     else:
         # A different person on the same browser. The previous session ends
         # here rather than lingering until its TTL.
         if login_session is not None:
             await session_store.delete(redis, login_session.id)
-        login_session = await session_store.create(redis, user.id, AmrMethod.PWD)
+        login_session = await session_store.create(
+            redis, user.id, AmrMethod.PWD, **origin
+        )
 
     session_cookie.set_session(response, login_session.id)
 
