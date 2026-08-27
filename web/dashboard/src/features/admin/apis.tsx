@@ -9,6 +9,8 @@ import {
   IdenError,
   Input,
   Pagination,
+  Row,
+  RowCard,
   ScopeChip,
   Spinner,
   type Column,
@@ -27,7 +29,7 @@ const columns: Column<ApiRecord>[] = [
     key: "name",
     header: "API",
     cell: (record) => (
-      <span className="text-body-sm text-ink">
+      <span className="inline-flex items-center gap-2">
         {record.name}
         {record.isSystem ? <SystemTag /> : null}
       </span>
@@ -257,11 +259,11 @@ export function ApiDetailRoute() {
             action={<Button onClick={() => setCreating(true)}>Define scope</Button>}
           />
         ) : (
-          <ul className="m-0 list-none border-t border-hairline p-0">
+          <RowCard>
             {scopes.data.items.map((scope) => (
-              <li
+              <Row
                 key={scope.id}
-                className="flex flex-wrap items-center justify-between gap-3 border-b border-hairline py-3"
+                className="flex flex-wrap items-center justify-between gap-3 py-3"
               >
                 <span className="flex min-w-0 flex-wrap items-baseline gap-3">
                   <ScopeChip value={scope.value} />
@@ -274,9 +276,9 @@ export function ApiDetailRoute() {
                     Delete
                   </Button>
                 )}
-              </li>
+              </Row>
             ))}
-          </ul>
+          </RowCard>
         )}
       </section>
 

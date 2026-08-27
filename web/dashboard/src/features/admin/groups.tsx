@@ -9,6 +9,8 @@ import {
   IdenError,
   Input,
   Pagination,
+  Row,
+  RowCard,
   Spinner,
   type Column,
 } from "@iden/shared";
@@ -273,12 +275,9 @@ export function GroupDetailRoute() {
             action={<Button onClick={() => setAdding(true)}>Add people</Button>}
           />
         ) : (
-          <ul className="m-0 list-none border-t border-hairline p-0">
+          <RowCard>
             {members.data.items.map((member) => (
-              <li
-                key={member.id}
-                className="flex items-center justify-between gap-4 border-b border-hairline py-3"
-              >
+              <Row key={member.id} className="flex items-center justify-between gap-4 py-3">
                 <span className="min-w-0">
                   <Link
                     to={`/admin/users/${member.id}`}
@@ -291,9 +290,9 @@ export function GroupDetailRoute() {
                 <Button size="sm" onClick={() => setRemovingMember(member)}>
                   Remove
                 </Button>
-              </li>
+              </Row>
             ))}
-          </ul>
+          </RowCard>
         )}
       </section>
 

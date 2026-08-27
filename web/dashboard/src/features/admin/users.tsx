@@ -361,7 +361,7 @@ export function UserDetailRoute() {
         ) : scopes.data.scopes.length === 0 ? (
           <p className="text-body-sm text-muted">No permissions yet.</p>
         ) : (
-          <ProvenanceTrace scopes={scopes.data.scopes} className="border-t border-hairline" />
+          <ProvenanceTrace scopes={scopes.data.scopes} />
         )}
       </section>
 

@@ -6,6 +6,8 @@ import {
   ErrorState,
   IdenError,
   ProvenanceTrace,
+  Row,
+  RowCard,
   ScopeChip,
   Spinner,
 } from "@iden/shared";
@@ -109,62 +111,57 @@ export function SessionsRoute() {
           icon={MonitorSmartphone}
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-hairline bg-canvas">
-          <ul className="m-0 list-none p-0">
-            {sessions.data.sessions.map((session) => (
-              <li
-                key={session.id}
-                className="flex flex-wrap items-start gap-x-5 gap-y-4 border-b border-hairline-soft px-5 py-5 last:border-b-0"
-              >
-                <MonitorSmartphone
-                  aria-hidden="true"
-                  className="mt-0.5 h-5 w-5 shrink-0 text-muted-soft"
-                />
+        <RowCard>
+          {sessions.data.sessions.map((session) => (
+            <Row key={session.id} className="flex flex-wrap items-start gap-x-5 gap-y-4 py-5">
+              <MonitorSmartphone
+                aria-hidden="true"
+                className="mt-0.5 h-5 w-5 shrink-0 text-muted-soft"
+              />
 
-                <div className="min-w-0 flex-1">
-                  <p className="flex flex-wrap items-center gap-2 text-title-sm text-ink">
-                    {title(session)}
-                    {session.current ? <Badge tone="coral">this device</Badge> : null}
+              <div className="min-w-0 flex-1">
+                <p className="flex flex-wrap items-center gap-2 text-title-sm text-ink">
+                  {title(session)}
+                  {session.current ? <Badge tone="coral">this device</Badge> : null}
+                </p>
+                <p className="mt-1 text-caption text-muted">
+                  {[session.browser, session.ip]
+                    .filter(Boolean)
+                    .concat(session.amr.map((method) => AMR_LABELS[method] ?? method))
+                    .join(" · ")}
+                </p>
+                {session.clients.length > 0 ? (
+                  <p className="mt-0.5 text-caption text-muted-soft">
+                    Used by {session.clients.join(", ")}
                   </p>
-                  <p className="mt-1 text-caption text-muted">
-                    {[session.browser, session.ip]
-                      .filter(Boolean)
-                      .concat(session.amr.map((method) => AMR_LABELS[method] ?? method))
-                      .join(" · ")}
-                  </p>
-                  {session.clients.length > 0 ? (
-                    <p className="mt-0.5 text-caption text-muted-soft">
-                      Used by {session.clients.join(", ")}
-                    </p>
-                  ) : null}
-                </div>
+                ) : null}
+              </div>
 
-                <div className="shrink-0 text-caption text-muted tabular-nums">
-                  <p>
-                    Last active{" "}
-                    <time dateTime={session.lastSeenAt} title={when(session.lastSeenAt)}>
-                      {ago(session.lastSeenAt)}
-                    </time>
-                  </p>
-                  <p className="mt-0.5 text-muted-soft">
-                    signed in{" "}
-                    <time dateTime={session.authenticatedAt} title={when(session.authenticatedAt)}>
-                      {ago(session.authenticatedAt)}
-                    </time>
-                  </p>
-                </div>
+              <div className="shrink-0 text-caption text-muted tabular-nums">
+                <p>
+                  Last active{" "}
+                  <time dateTime={session.lastSeenAt} title={when(session.lastSeenAt)}>
+                    {ago(session.lastSeenAt)}
+                  </time>
+                </p>
+                <p className="mt-0.5 text-muted-soft">
+                  signed in{" "}
+                  <time dateTime={session.authenticatedAt} title={when(session.authenticatedAt)}>
+                    {ago(session.authenticatedAt)}
+                  </time>
+                </p>
+              </div>
 
-                <div className="shrink-0">
-                  {session.current ? null : (
-                    <Button size="sm" onClick={() => setPending(session.id)}>
-                      Revoke
-                    </Button>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </div>
+              <div className="shrink-0">
+                {session.current ? null : (
+                  <Button size="sm" onClick={() => setPending(session.id)}>
+                    Revoke
+                  </Button>
+                )}
+              </div>
+            </Row>
+          ))}
+        </RowCard>
       )}
 
       <p className="mt-4 text-caption text-muted">
@@ -213,9 +210,9 @@ export function ConnectionsRoute() {
           body="Applications appear here after you allow them on the consent screen. Your organization's own tools don't ask, so they aren't listed."
         />
       ) : (
-        <ul className="m-0 list-none border-t border-hairline p-0">
+        <RowCard>
           {connections.data.connections.map((connection) => (
-            <li key={connection.clientId} className="border-b border-hairline py-5">
+            <Row key={connection.clientId} className="py-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-title-sm text-ink">{connection.name}</p>
@@ -232,9 +229,9 @@ export function ConnectionsRoute() {
                   <ScopeChip key={scope} value={scope} />
                 ))}
               </div>
-            </li>
+            </Row>
           ))}
-        </ul>
+        </RowCard>
       )}
 
       <ConfirmDialog
@@ -285,12 +282,7 @@ export function PermissionsRoute() {
           icon={KeyRound}
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-hairline bg-canvas">
-          {/* The rows carry their own dividers; the padding is pushed onto them
-              rather than onto the list so those dividers run the full width of
-              the card, as they do on Sessions. */}
-          <ProvenanceTrace scopes={scopes} className="py-1 [&>li]:px-5" />
-        </div>
+        <ProvenanceTrace scopes={scopes} />
       )}
     </>
   );

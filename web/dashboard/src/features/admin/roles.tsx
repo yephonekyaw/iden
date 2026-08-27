@@ -9,6 +9,8 @@ import {
   IdenError,
   Input,
   Pagination,
+  Row,
+  RowCard,
   ScopeChip,
   Spinner,
   type Column,
@@ -223,17 +225,14 @@ export function RoleDetailRoute() {
       <section className="mb-12">
         <h2 className="mb-3 text-title-lg text-ink">Permissions</h2>
         {record.isSystem ? (
-          <ul className="m-0 list-none border-t border-hairline p-0">
+          <RowCard>
             {record.scopes.map((scope) => (
-              <li
-                key={scope.id}
-                className="flex flex-wrap items-baseline gap-3 border-b border-hairline-soft py-2.5"
-              >
+              <Row key={scope.id} className="flex flex-wrap items-baseline gap-3 py-2.5">
                 <ScopeChip value={scope.value} />
                 <span className="text-body-sm text-body">{scope.description}</span>
-              </li>
+              </Row>
             ))}
-          </ul>
+          </RowCard>
         ) : scopeOptions.data ? (
           <>
             <SetPicker

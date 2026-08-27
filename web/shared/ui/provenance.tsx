@@ -1,6 +1,7 @@
 import { KeyRound, ShieldCheck, UsersRound } from "lucide-react";
 import { Fragment } from "react";
 import { cn } from "./cn";
+import { ROW_CARD } from "./rows";
 
 /**
  * The shape both `/admin/users/{id}/effective-scopes` and `/entity/permissions`
@@ -115,7 +116,11 @@ export function ProvenanceTrace({
   className?: string;
 }) {
   return (
-    <ul className={cn("m-0 list-none p-0", className)}>
+    // Framed like any other list of rows. It cannot use `RowCard` — that is a
+    // `<ul>` and this renders its own — so it takes the chrome from the same
+    // constant instead. The horizontal padding goes on the rows, so the
+    // dividers they already carry run the full width of the card.
+    <ul className={cn("m-0 list-none p-0 py-1", ROW_CARD, "[&>li]:px-5", className)}>
       {scopes.map((scope) => (
         <ProvenanceRow key={scope.value} scope={scope} description={descriptions?.[scope.value]} />
       ))}
