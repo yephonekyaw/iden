@@ -1,4 +1,5 @@
 import {
+  Badge,
   Button,
   ConfirmDialog,
   EmptyState,
@@ -9,11 +10,12 @@ import {
   Spinner,
 } from "@iden/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { MonitorSmartphone } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../app/api";
 import { useStepUp } from "../../app/session";
 import { PageHeader } from "../../app/shell";
-import { useConnections, usePermissions, useSessions } from "./api";
+import { useConnections, usePermissions, useSessions, type Sessions } from "./api";
 
 const AMR_LABELS: Record<string, string> = {
   pwd: "Password",
@@ -24,6 +26,42 @@ const AMR_LABELS: Record<string, string> = {
 
 function when(iso: string): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+}
+
+const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
+  ["year", 31_536_000],
+  ["month", 2_592_000],
+  ["day", 86_400],
+  ["hour", 3_600],
+  ["minute", 60],
+];
+
+const RELATIVE = new Intl.RelativeTimeFormat(undefined, { numeric: "auto", style: "short" });
+
+/**
+ * "3 hr ago" rather than a timestamp. On this screen the question is *how long
+ * ago*, and a date makes the reader do the subtraction themselves.
+ */
+function ago(iso: string): string {
+  const seconds = (Date.parse(iso) - Date.now()) / 1000;
+  for (const [unit, size] of UNITS) {
+    if (Math.abs(seconds) >= size) return RELATIVE.format(Math.round(seconds / size), unit);
+  }
+  return "just now";
+}
+
+type SessionSummary = Sessions["sessions"][number];
+
+/**
+ * What to call a session in the list.
+ *
+ * `device` is best effort — the provider names what it recognises in the
+ * User-Agent and returns null otherwise — so an unidentified session gets a
+ * label that says only what is actually known rather than a guess.
+ */
+function title(session: SessionSummary): string {
+  if (session.device) return session.device;
+  return session.current ? "This browser" : "Another browser";
 }
 
 export function SessionsRoute() {
@@ -50,10 +88,7 @@ export function SessionsRoute() {
 
   return (
     <>
-      <PageHeader
-        title="Sessions"
-        lede="Every browser you are currently signed in from. Sign out the ones you don't recognize."
-      />
+      <PageHeader title="Sessions" lede="Devices and browsers currently signed in." />
 
       {maxAge ? (
         <div className="mb-6 rounded-lg border border-hairline bg-surface-soft p-5">
@@ -67,34 +102,75 @@ export function SessionsRoute() {
         </div>
       ) : null}
 
-      <ul className="m-0 list-none border-t border-hairline p-0">
-        {sessions.data.sessions.map((session) => (
-          <li
-            key={session.id}
-            className="flex flex-wrap items-center justify-between gap-4 border-b border-hairline py-4"
-          >
-            <div className="min-w-0">
-              <p className="text-body-sm text-ink">
-                {session.current ? "This browser" : "Another browser"}
-                <span className="ml-2 text-caption text-muted">
-                  signed in {when(session.authenticatedAt)}
-                </span>
-              </p>
-              <p className="mt-1 text-caption text-muted">
-                {session.amr.map((method) => AMR_LABELS[method] ?? method).join(" + ")}
-                {session.clients.length > 0 ? ` · used by ${session.clients.join(", ")}` : ""}
-              </p>
-            </div>
-            {session.current ? (
-              <span className="text-caption text-muted">Current</span>
-            ) : (
-              <Button size="sm" onClick={() => setPending(session.id)}>
-                Sign out
-              </Button>
-            )}
-          </li>
-        ))}
-      </ul>
+      {sessions.data.sessions.length === 0 ? (
+        <EmptyState
+          title="No other sessions"
+          body="You are signed in from this browser only. Other devices appear here as you use them."
+          icon={MonitorSmartphone}
+        />
+      ) : (
+        <div className="overflow-hidden rounded-lg border border-hairline bg-canvas">
+          <ul className="m-0 list-none p-0">
+            {sessions.data.sessions.map((session) => (
+              <li
+                key={session.id}
+                className="flex flex-wrap items-start gap-x-5 gap-y-4 border-b border-hairline-soft px-5 py-5 last:border-b-0"
+              >
+                <MonitorSmartphone
+                  aria-hidden="true"
+                  className="mt-0.5 h-5 w-5 shrink-0 text-muted-soft"
+                />
+
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-2 text-title-sm text-ink">
+                    {title(session)}
+                    {session.current ? <Badge tone="coral">this device</Badge> : null}
+                  </p>
+                  <p className="mt-1 text-caption text-muted">
+                    {[session.browser, session.ip]
+                      .filter(Boolean)
+                      .concat(session.amr.map((method) => AMR_LABELS[method] ?? method))
+                      .join(" · ")}
+                  </p>
+                  {session.clients.length > 0 ? (
+                    <p className="mt-0.5 text-caption text-muted-soft">
+                      Used by {session.clients.join(", ")}
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="shrink-0 text-caption text-muted tabular-nums">
+                  <p>
+                    Last active{" "}
+                    <time dateTime={session.lastSeenAt} title={when(session.lastSeenAt)}>
+                      {ago(session.lastSeenAt)}
+                    </time>
+                  </p>
+                  <p className="mt-0.5 text-muted-soft">
+                    signed in{" "}
+                    <time dateTime={session.authenticatedAt} title={when(session.authenticatedAt)}>
+                      {ago(session.authenticatedAt)}
+                    </time>
+                  </p>
+                </div>
+
+                <div className="shrink-0">
+                  {session.current ? null : (
+                    <Button size="sm" onClick={() => setPending(session.id)}>
+                      Revoke
+                    </Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      <p className="mt-4 text-caption text-muted">
+        Revoking a session signs that device out immediately, invalidates its refresh tokens, and
+        tells every application it opened.
+      </p>
 
       <ConfirmDialog
         open={pending !== null}
