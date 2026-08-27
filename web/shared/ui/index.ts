@@ -8,4 +8,5 @@ export { Mark } from "./mark";
 export { Brand } from "./brand";
 export { Menu } from "./menu";
 export { DataTable, Pagination, type Column } from "./table";
+export { RowCard, Row, ROW_CARD } from "./rows";
 export { ScopeChip, ProvenanceRow, ProvenanceTrace, type ResolvedScope } from "./provenance";
