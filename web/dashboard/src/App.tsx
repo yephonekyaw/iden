@@ -21,6 +21,8 @@ import { GroupCreateRoute } from "./features/admin/groups-new";
 import { RoleCreateRoute } from "./features/admin/roles-new";
 import { ApiCreateRoute } from "./features/admin/apis-new";
 import { ProfileFieldsRoute } from "./features/admin/profile-fields";
+import { ProfileFieldCreateRoute } from "./features/admin/profile-fields-new";
+import { ProfileFieldEditRoute } from "./features/admin/profile-fields-edit";
 import { AuditRoute } from "./features/admin/audit";
 
 /** Every admin route is gated on the read scope its endpoints require. */
@@ -83,6 +85,14 @@ const router = createBrowserRouter([
       {
         path: "admin/profile-fields",
         element: guarded("admin:profile-fields:read", <ProfileFieldsRoute />),
+      },
+      {
+        path: "admin/profile-fields/new",
+        element: guarded("admin:profile-fields:write", <ProfileFieldCreateRoute />),
+      },
+      {
+        path: "admin/profile-fields/:fieldId",
+        element: guarded("admin:profile-fields:write", <ProfileFieldEditRoute />),
       },
       { path: "admin/audit", element: guarded("admin:audit:read", <AuditRoute />) },
       { path: "*", element: <Navigate to="/account/profile" replace /> },

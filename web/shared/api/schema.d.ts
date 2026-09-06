@@ -1086,6 +1086,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/profile-fields/presets": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ready-made field definitions to start from
+         * @description A catalogue of the fields most organizations end up defining, each with its type, validators and permissions already decided.
+         *
+         *     **Nothing here exists until you create it.** These are templates: pick one, change whatever you like, and post it to `POST /admin/profile-fields` like any other definition.
+         *
+         *     The value in them is `userWritable`. Who owns a piece of data is the question people get wrong — a preferred name belongs to its owner, a student number belongs to the registrar — so every preset answers it and says why in `rationale`.
+         *
+         *     **Required scope:** `admin:profile-fields:read`
+         */
+        get: operations["list_presets_admin_profile_fields_presets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/profile-fields/{field_id}": {
         parameters: {
             query?: never;
@@ -1997,6 +2023,56 @@ export interface components {
             details?: {
                 [key: string]: unknown;
             };
+        };
+        /** FieldPresetList */
+        FieldPresetList: {
+            /** Presets */
+            presets: components["schemas"]["FieldPresetResponse"][];
+        };
+        /**
+         * FieldPresetResponse
+         * @description A ready-made field definition, not a stored one.
+         *
+         *     Every value here can be edited before it is created; the response is shaped
+         *     to be posted straight back to `POST /admin/profile-fields` once the
+         *     administrator is happy with it.
+         */
+        FieldPresetResponse: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
+            /** Description */
+            description: string;
+            /**
+             * Datatype
+             * @enum {string}
+             */
+            dataType: "string" | "integer" | "boolean" | "date" | "enum" | "email" | "phone" | "url";
+            /** Options */
+            options: string[];
+            /** Required */
+            required: boolean;
+            /** Unique */
+            unique: boolean;
+            /** Validators */
+            validators: {
+                [key: string]: unknown;
+            };
+            /** Userreadable */
+            userReadable: boolean;
+            /** Userwritable */
+            userWritable: boolean;
+            /**
+             * Rationale
+             * @description Why this field is shaped the way it is — written for the administrator choosing it.
+             */
+            rationale: string;
+            /**
+             * Category
+             * @description How the catalogue groups this preset.
+             */
+            category: string;
         };
         /**
          * FieldSchema
@@ -5893,6 +5969,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    list_presets_admin_profile_fields_presets_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FieldPresetList"];
                 };
             };
         };
