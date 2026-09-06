@@ -334,3 +334,66 @@ class TestClaimRelease:
         body = (await client.get("/oauth2/userinfo", headers=headers)).json()
 
         assert "department" not in body
+
+
+class TestPresets:
+    """The catalogue an administrator starts from.
+
+    Templates, not rows: nothing here exists until it is posted back.
+    """
+
+    async def test_presets_are_listed(self, client, admin_headers):
+        body = (
+            await client.get("/admin/profile-fields/presets", headers=admin_headers)
+        ).json()
+
+        keys = [preset["key"] for preset in body["presets"]]
+        assert "student_id" in keys and "preferred_name" in keys
+
+    async def test_nothing_is_created_by_reading_them(self, client, admin_headers):
+        await client.get("/admin/profile-fields/presets", headers=admin_headers)
+
+        listed = (
+            await client.get("/admin/profile-fields", headers=admin_headers)
+        ).json()
+        assert listed["meta"]["total"] == 0
+
+    async def test_a_preset_can_be_posted_back_unchanged(self, client, admin_headers):
+        """The response shape is the request shape — that is what makes the
+        catalogue usable rather than merely informative."""
+        presets = (
+            await client.get("/admin/profile-fields/presets", headers=admin_headers)
+        ).json()["presets"]
+        preset = next(p for p in presets if p["key"] == "student_id")
+
+        body = {k: v for k, v in preset.items() if k not in ("rationale", "category")}
+        response = await client.post(
+            "/admin/profile-fields", json=body, headers=admin_headers
+        )
+
+        assert response.status_code == 201
+        assert response.json()["key"] == "student_id"
+        assert response.json()["unique"] is True
+
+    async def test_ownership_is_the_opinion_they_carry(self, client, admin_headers):
+        """A preferred name belongs to its owner; a student number does not."""
+        presets = (
+            await client.get("/admin/profile-fields/presets", headers=admin_headers)
+        ).json()["presets"]
+        by_key = {preset["key"]: preset for preset in presets}
+
+        assert by_key["preferred_name"]["userWritable"] is True
+        assert by_key["student_id"]["userWritable"] is False
+
+    async def test_the_route_is_not_read_as_a_field_id(self, client, admin_headers):
+        """`/presets` is a literal path sharing a prefix with `/{field_id}`. If
+        the parameter wins, this answers 422 for a malformed UUID."""
+        response = await client.get(
+            "/admin/profile-fields/presets", headers=admin_headers
+        )
+        assert response.status_code == 200
+
+    async def test_reading_them_needs_the_scope(self, client, token_for):
+        headers = await token_for("admin:users:read")
+        response = await client.get("/admin/profile-fields/presets", headers=headers)
+        assert response.status_code == 403

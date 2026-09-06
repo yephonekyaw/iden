@@ -4,6 +4,8 @@ from fastapi import APIRouter, Depends, Response
 
 from provider.admin.profile_fields import service
 from provider.admin.profile_fields.schemas import (
+    FieldPresetList,
+    FieldPresetResponse,
     ProfileFieldCreate,
     ProfileFieldResponse,
     ProfileFieldUpdate,
@@ -12,6 +14,7 @@ from provider.core.auth import require_scope
 from provider.core.db import DBSessionDep
 from provider.core.schemas import ErrorResponse, Page, PageMeta, PaginationDep
 from provider.shared.models import ProfileField
+from provider.shared.profile_presets import PRESETS
 
 router = APIRouter(prefix="/admin/profile-fields", tags=["admin: profile fields"])
 
@@ -98,6 +101,46 @@ async def create_field(
     body: ProfileFieldCreate, session: DBSessionDep
 ) -> ProfileFieldResponse:
     return to_response(await service.create_field(session, body))
+
+
+@router.get(
+    "/presets",
+    response_model=FieldPresetList,
+    summary="Ready-made field definitions to start from",
+    description=(
+        "A catalogue of the fields most organizations end up defining, each with "
+        "its type, validators and permissions already decided.\n\n"
+        "**Nothing here exists until you create it.** These are templates: pick "
+        "one, change whatever you like, and post it to `POST /admin/profile-fields` "
+        "like any other definition.\n\n"
+        "The value in them is `userWritable`. Who owns a piece of data is the "
+        "question people get wrong — a preferred name belongs to its owner, a "
+        "student number belongs to the registrar — so every preset answers it and "
+        "says why in `rationale`.\n\n"
+        "**Required scope:** `admin:profile-fields:read`"
+    ),
+    dependencies=[READ],
+)
+async def list_presets() -> FieldPresetList:
+    return FieldPresetList(
+        presets=[
+            FieldPresetResponse(
+                key=preset.key,
+                label=preset.label,
+                description=preset.description,
+                data_type=preset.data_type.value,
+                options=list(preset.options),
+                required=preset.required,
+                unique=preset.unique,
+                validators=preset.validators,
+                user_readable=preset.user_readable,
+                user_writable=preset.user_writable,
+                rationale=preset.rationale,
+                category=preset.category,
+            )
+            for preset in PRESETS
+        ]
+    )
 
 
 @router.get(

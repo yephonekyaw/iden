@@ -53,6 +53,7 @@ Every `/admin/*` and `/entity/*` route is gated by a permission named in its des
 |---|---|---|
 | `GET` | `/admin/profile-fields` | List profile fields |
 | `POST` | `/admin/profile-fields` | Define a profile field |
+| `GET` | `/admin/profile-fields/presets` | Ready-made definitions to start from. Templates — nothing exists until you post one back |
 | `DELETE` | `/admin/profile-fields/{field_id}` | Delete a profile field |
 | `GET` | `/admin/profile-fields/{field_id}` | Read a profile field |
 | `PATCH` | `/admin/profile-fields/{field_id}` | Update a profile field |

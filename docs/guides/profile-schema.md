@@ -3,6 +3,25 @@
 The fields your organization actually collects. See [Profile fields](../concepts/profile-fields.md)
 for why this is defined at runtime rather than shipped.
 
+## Start from a preset
+
+IDEN ships no profile fields, but it does ship a catalogue of the ones most
+organizations end up defining — with the type, validators and permissions already
+decided.
+
+```bash
+curl http://localhost:8000/admin/profile-fields/presets \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+Nothing there exists until you create it. Each entry is shaped so it can be posted
+straight back to `POST /admin/profile-fields`, with anything you like changed
+first.
+
+What they are actually for is `userWritable`. Who owns a piece of data is the
+question that is easy to get wrong, and each preset answers it and says why:
+`preferred_name` belongs to its owner, `student_id` belongs to the registrar.
+
 ## A field the organization owns
 
 A student number: set by the registrar, visible to the student, not editable by them, and unique.

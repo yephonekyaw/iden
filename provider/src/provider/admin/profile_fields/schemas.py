@@ -99,3 +99,31 @@ class ProfileFieldResponse(CamelCaseBaseModel):
     display_order: int
     is_system: bool
     created_at: datetime
+
+
+class FieldPresetResponse(CamelCaseBaseModel):
+    """A ready-made field definition, not a stored one.
+
+    Every value here can be edited before it is created; the response is shaped
+    to be posted straight back to `POST /admin/profile-fields` once the
+    administrator is happy with it.
+    """
+
+    key: str
+    label: str
+    description: str
+    data_type: DataType
+    options: list[str]
+    required: bool
+    unique: bool
+    validators: dict
+    user_readable: bool
+    user_writable: bool
+    rationale: str = Field(
+        description="Why this field is shaped the way it is — written for the administrator choosing it."
+    )
+    category: str = Field(description="How the catalogue groups this preset.")
+
+
+class FieldPresetList(CamelCaseBaseModel):
+    presets: list[FieldPresetResponse]
