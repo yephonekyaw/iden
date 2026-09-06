@@ -48,3 +48,22 @@ export function useRoleOptions() {
     },
   });
 }
+
+/** Every group in the deployment, for the user and profile-field pickers. */
+export function useGroupOptions() {
+  const api = useApi();
+  return useQuery({
+    queryKey: ["all-groups"],
+    queryFn: async () => {
+      const groups = await fetchAll<{ id: string; name: string; description: string | null }>(
+        api,
+        "/admin/groups",
+      );
+      return groups.map((group): PickerOption => ({
+        id: group.id,
+        label: group.name,
+        hint: group.description ?? undefined,
+      }));
+    },
+  });
+}

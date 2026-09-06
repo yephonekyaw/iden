@@ -2,15 +2,8 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
   EmptyState,
   ErrorState,
-  Field,
-  IdenError,
-  Input,
   SearchInput,
   StatusDot,
   Pagination,
@@ -21,18 +14,10 @@ import {
 } from "@iden/shared";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
-import {
-  useList,
-  useRecord,
-  useWrite,
-  type EffectiveScopes,
-  type UserCreated,
-  type UserRecord,
-} from "./api";
+import { useList, useRecord, useWrite, type EffectiveScopes, type UserRecord } from "./api";
 import { SetPicker } from "./picker";
 import { useRoleOptions, useScopeOptions } from "./options";
 
@@ -66,7 +51,6 @@ export function UsersRoute() {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
   const [offset, setOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
 
   const users = useList<UserRecord>(api, "/admin/users", {
     offset,
@@ -80,9 +64,11 @@ export function UsersRoute() {
         lede="Everyone with an account in this organization, and what each of them can do."
         count={users.data?.meta.total}
         actions={
-          <Button variant="default" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" />
-            Add user
+          <Button variant="default" asChild>
+            <Link to="/admin/users/new">
+              <Plus aria-hidden="true" />
+              Add user
+            </Link>
           </Button>
         }
       />
@@ -113,8 +99,8 @@ export function UsersRoute() {
           }
           action={
             search ? undefined : (
-              <Button variant="default" onClick={() => setCreating(true)}>
-                Add user
+              <Button variant="default" asChild>
+                <Link to="/admin/users/new">Add user</Link>
               </Button>
             )
           }
@@ -131,113 +117,7 @@ export function UsersRoute() {
           <Pagination meta={users.data.meta} onOffsetChange={setOffset} />
         </>
       )}
-
-      <CreateUserDialog open={creating} onOpenChange={setCreating} />
     </>
-  );
-}
-
-function CreateUserDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const api = useApi();
-  const form = useForm({ defaultValues: { email: "", username: "", displayName: "" } });
-  const [created, setCreated] = useState<UserCreated | null>(null);
-
-  const create = useWrite<{ email: string; username: string; displayName: string }, UserCreated>(
-    ["/admin/users"],
-    async (body) => {
-      const response = await api.post<UserCreated>("/admin/users", {
-        ...body,
-        displayName: body.displayName || null,
-      });
-      return response.data;
-    },
-  );
-
-  const problem = create.error instanceof IdenError ? create.error : null;
-
-  function close() {
-    onOpenChange(false);
-    setCreated(null);
-    create.reset();
-    form.reset();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <DialogContent>
-        {created ? (
-          <>
-            <DialogTitle className="text-display-sm font-display text-ink">
-              {created.displayName ?? created.username} added
-            </DialogTitle>
-            {created.generatedPassword ? (
-              <div className="mt-5">
-                <SecretRevealOnce
-                  label="One-time password"
-                  secret={created.generatedPassword}
-                  note="Give this to them directly. It is not stored and cannot be shown again — you can issue a new one from their page."
-                />
-              </div>
-            ) : null}
-            <div className="mt-8 flex justify-end">
-              <Button variant="default" onClick={close}>
-                Done
-              </Button>
-            </div>
-          </>
-        ) : (
-          <form
-            noValidate
-            onSubmit={form.handleSubmit((values) =>
-              create.mutate(values, { onSuccess: setCreated }),
-            )}
-          >
-            <DialogTitle className="text-display-sm font-display text-ink">Add a user</DialogTitle>
-            <DialogDescription className="mt-2 text-body-sm text-body">
-              A one-time password is generated for them. Roles can be assigned afterwards.
-            </DialogDescription>
-
-            <div className="mt-6 flex flex-col gap-5">
-              <Field label="Email" required error={fieldMessage(problem, "email")}>
-                {(props) => <Input {...props} {...form.register("email")} type="email" />}
-              </Field>
-              <Field
-                label="Username"
-                required
-                hint="Letters, numbers, dots, dashes and underscores."
-                error={fieldMessage(problem, "username")}
-              >
-                {(props) => <Input {...props} {...form.register("username")} />}
-              </Field>
-              <Field label="Display name" error={fieldMessage(problem, "displayName")}>
-                {(props) => <Input {...props} {...form.register("displayName")} />}
-              </Field>
-            </div>
-
-            {problem && problem.fieldErrors.length === 0 && !isTaken(problem) ? (
-              <p role="alert" className="mt-4 text-body-sm text-error">
-                {problem.message}
-              </p>
-            ) : null}
-
-            <div className="mt-8 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={close}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="default" disabled={create.isPending}>
-                {create.isPending ? "Adding…" : "Add user"}
-              </Button>
-            </div>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -454,20 +334,4 @@ function RoleEditor({
       </div>
     </>
   );
-}
-
-function isTaken(problem: IdenError): boolean {
-  return problem.code === "email_taken" || problem.code === "username_taken";
-}
-
-/**
- * Field-level messages, not a toast: `email_taken` belongs beside the email
- * input, where the person can fix it.
- */
-function fieldMessage(problem: IdenError | null, field: string): string | undefined {
-  if (!problem) return undefined;
-  if (problem.code === "email_taken" && field === "email")
-    return "That address already belongs to an account.";
-  if (problem.code === "username_taken" && field === "username") return "That username is taken.";
-  return problem.fieldErrors.find((entry) => entry.field === field)?.message;
 }

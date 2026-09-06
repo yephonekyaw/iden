@@ -16,6 +16,10 @@ import { RolesRoute, RoleDetailRoute } from "./features/admin/roles";
 import { ApisRoute, ApiDetailRoute } from "./features/admin/apis";
 import { ClientsRoute, ClientDetailRoute } from "./features/admin/clients";
 import { ClientCreateRoute } from "./features/admin/clients-new";
+import { UserCreateRoute } from "./features/admin/users-new";
+import { GroupCreateRoute } from "./features/admin/groups-new";
+import { RoleCreateRoute } from "./features/admin/roles-new";
+import { ApiCreateRoute } from "./features/admin/apis-new";
 import { ProfileFieldsRoute } from "./features/admin/profile-fields";
 import { AuditRoute } from "./features/admin/audit";
 
@@ -41,15 +45,31 @@ const router = createBrowserRouter([
       { path: "account/permissions", element: <PermissionsRoute /> },
 
       { path: "admin/users", element: guarded("admin:users:read", <UsersRoute />) },
+      {
+        path: "admin/users/new",
+        element: guarded("admin:users:write", <UserCreateRoute />),
+      },
       { path: "admin/users/:userId", element: guarded("admin:users:read", <UserDetailRoute />) },
       { path: "admin/groups", element: guarded("admin:groups:read", <GroupsRoute />) },
+      {
+        path: "admin/groups/new",
+        element: guarded("admin:groups:write", <GroupCreateRoute />),
+      },
       {
         path: "admin/groups/:groupId",
         element: guarded("admin:groups:read", <GroupDetailRoute />),
       },
       { path: "admin/roles", element: guarded("admin:roles:read", <RolesRoute />) },
+      {
+        path: "admin/roles/new",
+        element: guarded("admin:roles:write", <RoleCreateRoute />),
+      },
       { path: "admin/roles/:roleId", element: guarded("admin:roles:read", <RoleDetailRoute />) },
       { path: "admin/apis", element: guarded("admin:apis:read", <ApisRoute />) },
+      {
+        path: "admin/apis/new",
+        element: guarded("admin:apis:write", <ApiCreateRoute />),
+      },
       { path: "admin/apis/:apiId", element: guarded("admin:apis:read", <ApiDetailRoute />) },
       { path: "admin/clients", element: guarded("admin:clients:read", <ClientsRoute />) },
       {

@@ -9,9 +9,6 @@ import {
   DialogTitle,
   EmptyState,
   ErrorState,
-  Field,
-  IdenError,
-  Input,
   Pagination,
   Row,
   RowCard,
@@ -20,7 +17,6 @@ import {
 } from "@iden/shared";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
@@ -53,7 +49,6 @@ export function GroupsRoute() {
   const api = useApi();
   const navigate = useNavigate();
   const [offset, setOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
   const groups = useList<GroupRecord>(api, "/admin/groups", { offset });
 
   return (
@@ -63,9 +58,11 @@ export function GroupsRoute() {
         lede="Departments, teams, cohorts. A group holds roles, and everyone in it inherits them."
         count={groups.data?.meta.total}
         actions={
-          <Button variant="default" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" />
-            Create group
+          <Button variant="default" asChild>
+            <Link to="/admin/groups/new">
+              <Plus aria-hidden="true" />
+              Create group
+            </Link>
           </Button>
         }
       />
@@ -79,8 +76,8 @@ export function GroupsRoute() {
           title="No groups yet"
           body="Groups mirror how your organization is actually structured. Create one, give it roles, and add people to it."
           action={
-            <Button variant="default" onClick={() => setCreating(true)}>
-              Create group
+            <Button variant="default" asChild>
+              <Link to="/admin/groups/new">Create group</Link>
             </Button>
           }
         />
@@ -96,88 +93,7 @@ export function GroupsRoute() {
           <Pagination meta={groups.data.meta} onOffsetChange={setOffset} />
         </>
       )}
-
-      <CreateGroupDialog open={creating} onOpenChange={setCreating} />
     </>
-  );
-}
-
-function CreateGroupDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const api = useApi();
-  const navigate = useNavigate();
-  const form = useForm({ defaultValues: { name: "", description: "" } });
-
-  const create = useWrite<{ name: string; description: string }, GroupRecord>(
-    ["/admin/groups"],
-    async (body) => {
-      const response = await api.post<GroupRecord>("/admin/groups", {
-        ...body,
-        description: body.description || null,
-      });
-      return response.data;
-    },
-  );
-
-  const problem = create.error instanceof IdenError ? create.error : null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form
-          noValidate
-          onSubmit={form.handleSubmit((values) =>
-            create.mutate(values, {
-              onSuccess: (group) => {
-                onOpenChange(false);
-                form.reset();
-                void navigate(`/admin/groups/${group.id}`);
-              },
-            }),
-          )}
-        >
-          <DialogTitle className="text-display-sm font-display text-ink">
-            Create a group
-          </DialogTitle>
-          <DialogDescription className="mt-2 text-body-sm text-body">
-            Groups don't nest. One flat set of people, sharing the same roles.
-          </DialogDescription>
-
-          <div className="mt-6 flex flex-col gap-5">
-            <Field
-              label="Name"
-              required
-              error={
-                problem?.code === "group_name_taken"
-                  ? "A group with this name already exists."
-                  : undefined
-              }
-            >
-              {(props) => <Input {...props} {...form.register("name")} />}
-            </Field>
-            <Field label="What it is">
-              {(props) => <Input {...props} {...form.register("description")} />}
-            </Field>
-          </div>
-
-          <div className="mt-8 flex justify-end gap-3">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" variant="default" disabled={create.isPending}>
-              {create.isPending ? "Creating…" : "Create group"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 

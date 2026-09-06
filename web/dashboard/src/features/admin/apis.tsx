@@ -51,7 +51,6 @@ export function ApisRoute() {
   const api = useApi();
   const navigate = useNavigate();
   const [offset, setOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
   const apis = useList<ApiRecord>(api, "/admin/apis", { offset });
 
   return (
@@ -61,9 +60,11 @@ export function ApisRoute() {
         lede="The backends that trust IDEN. Each one defines its own permissions and the audience its tokens carry."
         count={apis.data?.meta.total}
         actions={
-          <Button variant="default" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" />
-            Register API
+          <Button variant="default" asChild>
+            <Link to="/admin/apis/new">
+              <Plus aria-hidden="true" />
+              Register API
+            </Link>
           </Button>
         }
       />
@@ -84,100 +85,7 @@ export function ApisRoute() {
           <Pagination meta={apis.data.meta} onOffsetChange={setOffset} />
         </>
       )}
-
-      <CreateApiDialog open={creating} onOpenChange={setCreating} />
     </>
-  );
-}
-
-function CreateApiDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const api = useApi();
-  const navigate = useNavigate();
-  const form = useForm({ defaultValues: { name: "", audience: "", description: "" } });
-
-  const create = useWrite<{ name: string; audience: string; description: string }, ApiRecord>(
-    ["/admin/apis", "all-scopes"],
-    async (body) => {
-      const response = await api.post<ApiRecord>("/admin/apis", {
-        ...body,
-        description: body.description || null,
-      });
-      return response.data;
-    },
-  );
-
-  const problem = create.error instanceof IdenError ? create.error : null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form
-          noValidate
-          onSubmit={form.handleSubmit((values) =>
-            create.mutate(values, {
-              onSuccess: (record) => {
-                onOpenChange(false);
-                form.reset();
-                void navigate(`/admin/apis/${record.id}`);
-              },
-            }),
-          )}
-        >
-          <DialogTitle className="text-display-sm font-display text-ink">
-            Register an API
-          </DialogTitle>
-          <DialogDescription className="mt-2 text-body-sm text-body">
-            The audience is fixed once set — every token minted for this API carries it, and
-            changing it later would invalidate tokens already in flight.
-          </DialogDescription>
-
-          <div className="mt-6 flex flex-col gap-5">
-            <Field
-              label="Name"
-              required
-              hint="Lowercase, dashes allowed."
-              error={problem?.code === "api_name_taken" ? "That name is taken." : undefined}
-            >
-              {(props) => <Input {...props} {...form.register("name")} />}
-            </Field>
-            <Field
-              label="Audience"
-              required
-              hint="An absolute URI, e.g. https://api.example.org/attendance"
-              error={
-                problem?.code === "audience_taken"
-                  ? "Another API already claims that audience."
-                  : problem?.fieldErrors.find((entry) => entry.field === "audience")?.message
-              }
-            >
-              {(props) => (
-                <Input {...props} {...form.register("audience")} className="font-identity" />
-              )}
-            </Field>
-            <Field label="What it is">
-              {(props) => <Input {...props} {...form.register("description")} />}
-            </Field>
-          </div>
-
-          <div className="mt-8 flex justify-end gap-3">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" variant="default" disabled={create.isPending}>
-              {create.isPending ? "Registering…" : "Register API"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
@@ -192,7 +100,6 @@ export function ApiDetailRoute() {
 
   const record = useRecord<ApiRecord>(api, `/admin/apis/${apiId}`);
   const scopes = useList<ScopeRecord>(api, `/admin/apis/${apiId}/scopes`, { limit: 200 });
-
   const [creating, setCreating] = useState(false);
   const [deletingScope, setDeletingScope] = useState<ScopeRecord | null>(null);
   const [deleting, setDeleting] = useState(false);

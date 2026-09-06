@@ -3,15 +3,8 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
-  Dialog,
-  DialogClose,
-  DialogContent,
-  DialogDescription,
-  DialogTitle,
   ErrorState,
-  Field,
   IdenError,
-  Input,
   Pagination,
   Row,
   RowCard,
@@ -21,7 +14,6 @@ import {
 } from "@iden/shared";
 import { Lock, Plus } from "lucide-react";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
@@ -63,7 +55,6 @@ export function RolesRoute() {
   const api = useApi();
   const navigate = useNavigate();
   const [offset, setOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
   const roles = useList<RoleRecord>(api, "/admin/roles", { offset });
 
   return (
@@ -73,9 +64,11 @@ export function RolesRoute() {
         lede="Named bundles of permissions — a job function like attendance-officer. One role can span several APIs."
         count={roles.data?.meta.total}
         actions={
-          <Button variant="default" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" />
-            Create role
+          <Button variant="default" asChild>
+            <Link to="/admin/roles/new">
+              <Plus aria-hidden="true" />
+              Create role
+            </Link>
           </Button>
         }
       />
@@ -96,87 +89,7 @@ export function RolesRoute() {
           <Pagination meta={roles.data.meta} onOffsetChange={setOffset} />
         </>
       )}
-
-      <CreateRoleDialog open={creating} onOpenChange={setCreating} />
     </>
-  );
-}
-
-function CreateRoleDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const api = useApi();
-  const navigate = useNavigate();
-  const form = useForm({ defaultValues: { name: "", description: "" } });
-
-  const create = useWrite<{ name: string; description: string }, RoleRecord>(
-    ["/admin/roles", "all-roles"],
-    async (body) => {
-      const response = await api.post<RoleRecord>("/admin/roles", {
-        ...body,
-        description: body.description || null,
-        scopeIds: [],
-      });
-      return response.data;
-    },
-  );
-
-  const problem = create.error instanceof IdenError ? create.error : null;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <form
-          noValidate
-          onSubmit={form.handleSubmit((values) =>
-            create.mutate(values, {
-              onSuccess: (role) => {
-                onOpenChange(false);
-                form.reset();
-                void navigate(`/admin/roles/${role.id}`);
-              },
-            }),
-          )}
-        >
-          <DialogTitle className="text-display-sm font-display text-ink">Create a role</DialogTitle>
-          <DialogDescription className="mt-2 text-body-sm text-body">
-            Name it after the job it describes. You'll choose its permissions next.
-          </DialogDescription>
-
-          <div className="mt-6 flex flex-col gap-5">
-            <Field
-              label="Name"
-              required
-              error={
-                problem?.code === "role_name_taken"
-                  ? "A role with this name already exists."
-                  : undefined
-              }
-            >
-              {(props) => <Input {...props} {...form.register("name")} />}
-            </Field>
-            <Field label="What it is for" hint="Shown to whoever assigns this role later.">
-              {(props) => <Input {...props} {...form.register("description")} />}
-            </Field>
-          </div>
-
-          <div className="mt-8 flex justify-end gap-3">
-            <DialogClose asChild>
-              <Button type="button" variant="outline">
-                Cancel
-              </Button>
-            </DialogClose>
-            <Button type="submit" variant="default" disabled={create.isPending}>
-              {create.isPending ? "Creating…" : "Create role"}
-            </Button>
-          </div>
-        </form>
-      </DialogContent>
-    </Dialog>
   );
 }
 
