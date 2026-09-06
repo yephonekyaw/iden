@@ -1,150 +1,218 @@
-/* IDEN's design tokens from DESIGN.md, transcribed. This file and the markup
-   are the only things making the sample look like IDEN; both are yours to
-   delete when you copy it. */
+/* Neo-brutalism: black rules, hard shadows, flat colour, nothing soft.
+   The whole look is this file plus the markup in `src/views.ts`; both are
+   yours to delete when you copy the sample. */
 
 :root {
-  --canvas: #faf9f5;
-  --surface-soft: #f5f0e8;
-  --surface-card: #efe9de;
-  --surface-dark: #181715;
-  --ink: #141413;
-  --body: #3d3d3a;
-  --body-strong: #252523;
-  --muted: #6c6a64;
-  --muted-soft: #8e8b82;
-  --hairline: #e6dfd8;
-  --hairline-soft: #ebe6df;
-  --primary: #cc785c;
-  --success: #5db872;
-  --error: #c64545;
-  --on-primary: #ffffff;
+  --paper: #f2eee3;
+  --card: #fffdf7;
+  --ink: #14110d;
+  --ink-soft: #4a443c;
+  --muted: #6f675c;
+  --yellow: #ffd23f;
+  --green: #2fbf71;
+  --red: #ff3b30;
+  --accent: #ff5c39; /* the running app overrides this */
+
+  --rule: 3px;
+  --drop: 6px 6px 0 var(--ink);
+  --drop-sm: 4px 4px 0 var(--ink);
+
+  --sans: "Helvetica Neue", Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  --serif: "EB Garamond", Garamond, "Times New Roman", serif;
 }
 
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  background: var(--canvas);
-  color: var(--body);
+  color: var(--ink);
   font-family: var(--sans);
-  font-size: 16px;
+  font-size: 17px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  background-color: var(--paper);
+  /* Graph paper. Brutalism shows the grid rather than hiding it. */
+  background-image:
+    linear-gradient(to right, rgba(20, 17, 13, 0.055) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(20, 17, 13, 0.055) 1px, transparent 1px);
+  background-size: 28px 28px;
 }
 
-.page { max-width: 44rem; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+.page { max-width: 46rem; margin: 0 auto; padding: 3.5rem 1.25rem 6rem; }
 
 /* Masthead ---------------------------------------------------------------- */
 
-.masthead { margin-bottom: 2.5rem; }
+/* The whole header is one colour block. Two of these side by side are told
+   apart across the room, which is the point when the demo is two windows. */
+.masthead {
+  background: var(--accent);
+  border: var(--rule) solid var(--ink); box-shadow: var(--drop);
+  padding: 1.5rem 1.75rem 1.75rem;
+}
 
 .eyebrow {
-  display: flex; align-items: center; gap: 0.5rem;
-  margin: 0 0 0.5rem; font-size: 0.75rem; font-weight: 500;
-  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  margin: 0 0 1rem; padding: 0.3rem 0.7rem;
+  background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 1.5px; text-transform: uppercase;
 }
 
-.dot {
-  width: 8px; height: 8px; border-radius: 999px;
-  background: var(--accent, var(--primary));
-}
+.dot { width: 9px; height: 9px; background: var(--accent); }
 
 h1 {
-  margin: 0; font-family: var(--serif); font-weight: 400;
-  font-size: 2.25rem; line-height: 1.15; letter-spacing: -0.5px; color: var(--ink);
+  margin: 0;
+  font-size: clamp(2.25rem, 8vw, 3.5rem); font-weight: 900; line-height: 0.92;
+  letter-spacing: -0.035em; text-transform: uppercase;
 }
+
+.lede { margin: 0.85rem 0 0; font-size: 1.0625rem; font-weight: 500; color: var(--ink); }
+
+/* What this process actually is. A demo is easier to follow when the
+   configuration is on the page rather than in somebody's terminal. */
+.meta {
+  display: flex; flex-wrap: wrap; gap: 0 1.5rem;
+  margin: 0 0 2rem; padding: 0.7rem 1rem;
+  border: var(--rule) solid var(--ink); border-top: 0;
+  background: var(--card);
+  font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+}
+.meta b { color: var(--ink); font-weight: 700; }
 
 h2 {
-  margin: 0 0 0.5rem; font-family: var(--serif); font-weight: 400;
-  font-size: 1.375rem; color: var(--ink);
+  margin: 0 0 0.75rem;
+  font-size: 1.25rem; font-weight: 900;
+  letter-spacing: -0.01em; text-transform: uppercase;
 }
 
-.lede { margin: 0.5rem 0 0; color: var(--body); }
+.lede { margin: 1rem 0 0; font-size: 1.0625rem; color: var(--ink-soft); }
 
 /* Cards ------------------------------------------------------------------- */
 
 .card {
-  border: 1px solid var(--hairline); border-radius: 12px;
-  background: var(--canvas); padding: 2rem; margin-bottom: 1.5rem;
+  border: var(--rule) solid var(--ink); box-shadow: var(--drop);
+  background: var(--card); padding: 1.75rem; margin-bottom: 2rem;
 }
 
-.card--in { border-color: color-mix(in srgb, var(--accent, var(--primary)) 40%, transparent); }
-.card--quiet { background: var(--surface-soft); border-color: var(--hairline-soft); }
-.card--quiet ol { margin: 0 0 1rem; padding-left: 1.25rem; }
-.card--quiet li { margin-bottom: 0.35rem; }
+.card--in { background: var(--card); }
+.card--quiet { background: var(--paper); box-shadow: var(--drop-sm); }
+.card--quiet ol { margin: 0 0 1rem; padding-left: 1.15rem; }
+.card--quiet li { margin-bottom: 0.4rem; }
+.card--quiet p { margin: 0; color: var(--ink-soft); }
 
 /* Identity ---------------------------------------------------------------- */
 
-.who { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+.who {
+  display: flex; align-items: center; gap: 1rem;
+  padding-bottom: 1.25rem; margin-bottom: 1.25rem;
+  border-bottom: var(--rule) solid var(--ink);
+}
 
 .avatar {
   display: flex; align-items: center; justify-content: center;
-  width: 44px; height: 44px; flex: none; border-radius: 999px;
-  background: var(--accent, var(--primary)); color: var(--on-primary);
-  font-size: 1.125rem; font-weight: 500;
+  width: 52px; height: 52px; flex: none;
+  background: var(--accent); color: var(--ink);
+  border: var(--rule) solid var(--ink); box-shadow: var(--drop-sm);
+  font-size: 1.5rem; font-weight: 900;
 }
 
-.name { margin: 0; font-size: 1.125rem; font-weight: 500; color: var(--ink); }
-.email { margin: 0; font-size: 0.875rem; color: var(--muted); }
+.name { margin: 0; font-size: 1.25rem; font-weight: 800; letter-spacing: -0.01em; }
+.email { margin: 0; font-family: var(--mono); font-size: 0.8125rem; color: var(--muted); }
 
 .badge {
-  margin-left: auto; padding: 0.2rem 0.7rem; border-radius: 999px;
-  font-size: 0.8125rem; font-weight: 500; white-space: nowrap;
+  margin-left: auto; padding: 0.35rem 0.6rem;
+  border: var(--rule) solid var(--ink); background: var(--green);
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 1px; text-transform: uppercase; white-space: nowrap;
 }
-.badge--live { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
-.badge--ended { background: color-mix(in srgb, var(--error) 12%, transparent); color: var(--error); }
+.badge--ended { background: var(--red); color: var(--card); }
 
 /* Claims ------------------------------------------------------------------ */
 
-.claims { margin: 0 0 1.5rem; }
+.claims { margin: 0 0 1.5rem; border: var(--rule) solid var(--ink); background: var(--paper); }
 .claims > div {
-  display: flex; gap: 1rem; align-items: baseline;
-  padding: 0.55rem 0; border-bottom: 1px solid var(--hairline-soft);
+  display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: baseline;
+  padding: 0.6rem 0.85rem; border-bottom: 1px solid var(--ink);
 }
 .claims > div:last-child { border-bottom: 0; }
+
+/* `sid` is what a logout token uses to find this session, so it gets the
+   colour and everything else stays quiet. */
+.claims > .star { background: var(--yellow); }
+.claims > .star dt, .claims > .star dd { color: var(--ink); font-weight: 700; }
+
 .claims dt {
-  min-width: 11rem; font-family: var(--mono); font-size: 0.8125rem; color: var(--muted);
+  min-width: 10rem; font-family: var(--mono); font-size: 0.75rem;
+  font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted);
 }
 .claims dd {
-  margin: 0; font-family: var(--mono); font-size: 0.8125rem;
-  color: var(--body-strong); word-break: break-all;
+  margin: 0; flex: 1; min-width: 0;
+  font-family: var(--mono); font-size: 0.8125rem; color: var(--ink); word-break: break-all;
 }
 
 /* Buttons ----------------------------------------------------------------- */
 
-.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.actions { display: flex; flex-wrap: wrap; gap: 1rem; }
 
 .button {
-  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
-  height: 40px; padding: 0 1.25rem; border-radius: 8px;
-  border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
-  font-family: inherit; font-size: 0.875rem; font-weight: 500; text-decoration: none;
-  transition: background-color 100ms, border-color 100ms;
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.6rem;
+  padding: 0.8rem 1.4rem;
+  border: var(--rule) solid var(--ink); box-shadow: var(--drop-sm);
+  background: var(--card); color: var(--ink);
+  font-family: var(--sans); font-size: 0.9375rem; font-weight: 800;
+  letter-spacing: 0.02em; text-transform: uppercase; text-decoration: none;
+  cursor: pointer;
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out;
 }
-.button:hover { background: var(--surface-soft); }
+/* The press. A brutalist button has somewhere to go. */
+.button:hover { transform: translate(2px, 2px); box-shadow: 2px 2px 0 var(--ink); }
+.button:active { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); }
 
-.button--primary {
-  background: var(--accent, var(--primary)); border-color: transparent; color: var(--on-primary);
-}
-.button--primary:hover { filter: brightness(0.94); background: var(--accent, var(--primary)); }
+.button--primary { background: var(--accent); }
 
-.mark { width: 16px; height: 16px; fill: currentColor; }
+.mark { width: 18px; height: 18px; fill: currentColor; }
 
 /* Banners ----------------------------------------------------------------- */
 
 .banner {
-  border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
-  font-size: 0.875rem; border-left: 3px solid;
+  padding: 1rem 1.25rem; margin-bottom: 2rem;
+  border: var(--rule) solid var(--ink); box-shadow: var(--drop);
+  background: var(--yellow); font-size: 0.9375rem;
 }
-.banner--ended { background: var(--surface-soft); border-color: var(--primary); color: var(--body); }
-.banner--error { background: color-mix(in srgb, var(--error) 8%, transparent); border-color: var(--error); color: var(--body-strong); }
+.banner strong { display: block; font-size: 1.0625rem; font-weight: 900; text-transform: uppercase; }
+.banner--error { background: var(--red); color: var(--card); }
 
 /* Odds and ends ----------------------------------------------------------- */
 
-.hint { margin: 1.25rem 0 0; font-size: 0.875rem; color: var(--muted); }
-.sibling { font-size: 0.875rem; color: var(--muted); }
-a { color: var(--primary); }
-:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+/* The two applications and the one session between them. */
+.wire {
+  margin: 0 0 1rem; padding: 1rem;
+  border: var(--rule) solid var(--ink); background: var(--card);
+  font-family: var(--mono); font-size: 0.8125rem; line-height: 1.7;
+  overflow-x: auto;
+}
+.wire b { background: var(--yellow); font-weight: 700; }
+
+.strip {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.85rem 1rem;
+  border: var(--rule) solid var(--ink); background: var(--card);
+  font-size: 0.875rem;
+}
+.strip .chip { width: 16px; height: 16px; flex: none; border: 2px solid var(--ink); }
+
+.hint {
+  margin: 1.25rem 0 0; padding-left: 0.85rem;
+  border-left: var(--rule) solid var(--ink);
+  font-size: 0.875rem; color: var(--ink-soft);
+}
+
+
+a { color: var(--ink); text-decoration-thickness: 2px; text-underline-offset: 3px; }
+a:hover { background: var(--yellow); }
+
+:focus-visible { outline: var(--rule) solid var(--ink); outline-offset: 3px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .button { transition: none; }
+}
