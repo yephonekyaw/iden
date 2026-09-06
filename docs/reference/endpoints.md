@@ -107,13 +107,6 @@ Every `/admin/*` and `/entity/*` route is gated by a permission named in its des
 | `POST` | `/api/v1/auth/password-reset/confirm` | Set a new password with a reset link |
 | `POST` | `/api/v1/auth/totp` | Verify a time-based one-time code |
 
-### Discovery
-
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/.well-known/jwks.json` | JSON Web Key Set |
-| `GET` | `/.well-known/openid-configuration` | OpenID provider metadata |
-
 ### Entity — connections
 
 | Method | Path | Purpose |
