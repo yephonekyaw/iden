@@ -9,6 +9,10 @@ claude/
 .claude/
 old-provider/
 verification/
+# Local biometric test fixtures — real face photos, never committed.
+/Face/
+# Task-splitting briefs for this repo's own contributors — not project docs.
+/claude_code_prompt/
 web/**/node_modules/
 web/**/dist/
 
