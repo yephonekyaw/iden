@@ -162,15 +162,9 @@ export function SessionsRoute() {
               </div>
 
               <div className="flex h-8 shrink-0 items-center">
-                {session.current ? (
-                  // Revoking this one is what Sign out already does, minus the
-                  // step-up it would demand first.
-                  <p className="text-caption text-muted-soft">Sign out from the account menu</p>
-                ) : (
-                  <Button size="sm" onClick={() => setPending(session.id)}>
-                    Revoke
-                  </Button>
-                )}
+                <Button size="sm" disabled={session.current} onClick={() => setPending(session.id)}>
+                  Revoke
+                </Button>
               </div>
             </Row>
           ))}
@@ -187,7 +181,7 @@ export function SessionsRoute() {
         open={pending !== null}
         onOpenChange={(open) => !open && setPending(null)}
         title="Sign out this session?"
-        body="That browser will have to sign in again. Applications it opened lose their refresh tokens, and stop working within ten minutes."
+        body="That browser will have to sign in again, and the applications it opened stop working within ten minutes."
         confirmLabel="Sign it out"
         pending={revoke.isPending}
         onConfirm={() => pending && revoke.mutate(pending)}
