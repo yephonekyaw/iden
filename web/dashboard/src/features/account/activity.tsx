@@ -15,7 +15,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { KeyRound, MonitorSmartphone } from "lucide-react";
 import { useState } from "react";
 import { useApi } from "../../app/api";
-import { useStepUp } from "../../app/session";
+import { useSessionId, useStepUp } from "../../app/session";
 import { PageHeader } from "../../app/shell";
 import { useConnections, usePermissions, useSessions, type Sessions } from "./api";
 
@@ -71,6 +71,7 @@ export function SessionsRoute() {
   const sessions = useSessions(api);
   const queryClient = useQueryClient();
   const stepUp = useStepUp();
+  const sessionId = useSessionId();
   const [pending, setPending] = useState<string | null>(null);
 
   const revoke = useMutation({
@@ -88,6 +89,14 @@ export function SessionsRoute() {
   if (sessions.isError)
     return <ErrorState error={sessions.error} onRetry={() => void sessions.refetch()} />;
 
+  // The provider fills in `current` from the session cookie, which this app
+  // never sends, so every row arrives as not-current. The token's `sid` names
+  // the same session.
+  const rows = sessions.data.sessions.map((session) => ({
+    ...session,
+    current: session.id === sessionId,
+  }));
+
   return (
     <>
       <PageHeader title="Sessions" lede="Devices and browsers currently signed in." />
@@ -104,7 +113,7 @@ export function SessionsRoute() {
         </div>
       ) : null}
 
-      {sessions.data.sessions.length === 0 ? (
+      {rows.length === 0 ? (
         <EmptyState
           title="No other sessions"
           body="You are signed in from this browser only. Other devices appear here as you use them."
@@ -112,7 +121,7 @@ export function SessionsRoute() {
         />
       ) : (
         <RowCard>
-          {sessions.data.sessions.map((session) => (
+          {rows.map((session) => (
             <Row key={session.id} className="flex flex-wrap items-start gap-x-5 gap-y-4 py-5">
               <MonitorSmartphone
                 aria-hidden="true"

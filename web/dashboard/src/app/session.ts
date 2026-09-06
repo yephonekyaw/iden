@@ -45,6 +45,18 @@ export function useSignOut(): () => Promise<void> {
   };
 }
 
+/**
+ * The browser session this app is signed in with, from the ID token's `sid`.
+ *
+ * `/entity/sessions` can only mark a row as current for a caller that sends the
+ * `iden_session` cookie, and this app deliberately sends none. `sid` is how a
+ * client recognises its own session without one — it is the same value, and the
+ * reason it is in the token.
+ */
+export function useSessionId(): string | undefined {
+  return useAuth().user?.profile.sid;
+}
+
 /** Starts a step-up: RFC 9470 asks for a sign-in no older than `maxAge` seconds. */
 export function useStepUp(): (maxAge: number) => void {
   const auth = useAuth();
