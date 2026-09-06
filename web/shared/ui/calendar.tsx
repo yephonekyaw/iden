@@ -46,7 +46,7 @@ export function DateRangePicker({
           align="start"
           sideOffset={8}
           className={cn(
-            "z-50 rounded-lg border border-hairline bg-canvas p-3",
+            "z-50 rounded-lg border border-border bg-background p-3",
             "shadow-[0_1px_3px_rgba(20,20,19,0.08)] data-[state=open]:step-in",
           )}
         >
@@ -140,7 +140,7 @@ function Calendar({ className, ...props }: DayPickerProps) {
 
 const NAV_BUTTON = cn(
   "inline-flex h-8 w-8 items-center justify-center rounded-md",
-  "text-muted hover:bg-surface-soft hover:text-ink disabled:text-muted-soft disabled:opacity-40",
+  "text-muted-foreground hover:bg-surface-soft hover:text-ink disabled:text-muted-soft disabled:opacity-40",
 );
 
 function CalendarChevron({

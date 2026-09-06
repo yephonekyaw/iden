@@ -62,7 +62,7 @@ export function SetPicker({
 
       <div className="max-h-80 overflow-y-auto">
         {shown.length === 0 ? (
-          <p className="p-5 text-body-sm text-muted">{emptyLabel}</p>
+          <p className="p-5 text-body-sm text-muted-foreground">{emptyLabel}</p>
         ) : (
           shown.map((option) => (
             <label
@@ -90,7 +90,9 @@ export function SetPicker({
                   ) : null}
                 </span>
                 {option.hint ? (
-                  <span className="mt-0.5 block text-caption text-muted">{option.hint}</span>
+                  <span className="mt-0.5 block text-caption text-muted-foreground">
+                    {option.hint}
+                  </span>
                 ) : null}
               </span>
             </label>
@@ -99,7 +101,7 @@ export function SetPicker({
       </div>
 
       <div className="flex items-center justify-between gap-3 border-t border-hairline px-4 py-2.5">
-        <p className="text-caption text-muted" aria-live="polite">
+        <p className="text-caption text-muted-foreground" aria-live="polite">
           {selected.size} selected
         </p>
         <Button size="sm" variant="ghost" onClick={() => onChange(new Set())} type="button">

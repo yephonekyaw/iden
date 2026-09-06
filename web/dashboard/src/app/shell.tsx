@@ -1,4 +1,15 @@
-import { Badge, Brand, cn, Mark, Menu } from "@iden/shared";
+import {
+  Badge,
+  Brand,
+  cn,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  Mark,
+} from "@iden/shared";
 import {
   AppWindow,
   Boxes,
@@ -140,8 +151,8 @@ function AccountMenu({ name, email }: { name: string; email: string }) {
   const signOut = useSignOut();
 
   return (
-    <Menu>
-      <Menu.Trigger
+    <DropdownMenu>
+      <DropdownMenuTrigger
         className={cn(
           "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left",
           "transition-colors duration-100 hover:bg-surface-dark-soft",
@@ -162,18 +173,18 @@ function AccountMenu({ name, email }: { name: string; email: string }) {
         </span>
         <ChevronsUpDown aria-hidden="true" className="h-4 w-4 shrink-0 text-on-dark-soft" />
         <span className="sr-only">Account menu</span>
-      </Menu.Trigger>
+      </DropdownMenuTrigger>
 
-      <Menu.Content side="top" align="start" className="w-56">
-        <Menu.Label>Signed in as</Menu.Label>
-        <p className="truncate px-2.5 pb-2 text-body-sm text-ink">{email || name}</p>
-        <Menu.Separator />
-        <Menu.Item onSelect={() => void signOut()}>
+      <DropdownMenuContent side="top" align="start" className="w-56">
+        <DropdownMenuLabel>Signed in as</DropdownMenuLabel>
+        <p className="truncate px-2.5 pb-2 text-body-sm text-foreground">{email || name}</p>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => void signOut()}>
           <LogOut aria-hidden="true" />
           Sign out
-        </Menu.Item>
-      </Menu.Content>
-    </Menu>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -289,7 +300,7 @@ export function PageHeader({
   return (
     <header className="mb-8 border-b border-hairline pb-6">
       {trail.length > 0 ? (
-        <p className="flex items-center gap-2 text-caption-upper uppercase text-muted">
+        <p className="flex items-center gap-2 text-caption-upper uppercase text-muted-foreground">
           <Mark className="h-3 w-3 text-primary" />
           {trail.join(" · ")}
         </p>
@@ -299,7 +310,7 @@ export function PageHeader({
         <div className="min-w-0">
           <h1 className="mt-2 flex flex-wrap items-center gap-3 text-display-md">
             {title}
-            {count !== undefined ? <Badge tone="outline">{count}</Badge> : null}
+            {count !== undefined ? <Badge variant="outline">{count}</Badge> : null}
           </h1>
           <p className="mt-2 max-w-prose text-body-md text-body">{lede}</p>
         </div>

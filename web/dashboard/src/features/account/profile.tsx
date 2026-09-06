@@ -1,4 +1,13 @@
-import { Button, Card, ErrorState, Field, IdenError, Input, Spinner } from "@iden/shared";
+import {
+  Button,
+  Card,
+  CardContent,
+  ErrorState,
+  Field,
+  IdenError,
+  Input,
+  Spinner,
+} from "@iden/shared";
 import { Lock } from "lucide-react";
 import { useForm, type UseFormRegisterReturn } from "react-hook-form";
 import { useApi } from "../../app/api";
@@ -54,53 +63,58 @@ export function ProfileRoute() {
       />
 
       <form noValidate className="max-w-xl" onSubmit={form.handleSubmit(submit)}>
-        <Card className="flex flex-col gap-6">
-          <Field label="Display name" hint="How your name appears to applications you sign in to.">
-            {(props) => <Input {...props} {...form.register("displayName")} />}
-          </Field>
-
-          {writable.map((field) => (
+        <Card>
+          <CardContent className="flex flex-col gap-6">
             <Field
-              key={field.key}
-              label={field.label}
-              hint={field.description ?? undefined}
-              required={field.required}
-              error={fieldError(problem, field.key)}
+              label="Display name"
+              hint="How your name appears to applications you sign in to."
             >
-              {(props) => (
-                <FieldInput
-                  {...props}
-                  field={field}
-                  register={form.register(`fields.${field.key}`)}
-                />
-              )}
+              {(props) => <Input {...props} {...form.register("displayName")} />}
             </Field>
-          ))}
 
-          {problem && problem.fieldErrors.length === 0 ? (
-            <p role="alert" className="text-body-sm text-error">
-              {problem.message}
-            </p>
-          ) : null}
+            {writable.map((field) => (
+              <Field
+                key={field.key}
+                label={field.label}
+                hint={field.description ?? undefined}
+                required={field.required}
+                error={fieldError(problem, field.key)}
+              >
+                {(props) => (
+                  <FieldInput
+                    {...props}
+                    field={field}
+                    register={form.register(`fields.${field.key}`)}
+                  />
+                )}
+              </Field>
+            ))}
 
-          <div className="flex items-center gap-4 border-t border-hairline-soft pt-6">
-            <Button type="submit" variant="primary" disabled={update.isPending}>
-              {update.isPending ? "Saving…" : "Save changes"}
-            </Button>
-            <span aria-live="polite" className="text-caption text-muted">
-              {update.isSuccess && !update.isPending ? "Saved." : ""}
-            </span>
-          </div>
+            {problem && problem.fieldErrors.length === 0 ? (
+              <p role="alert" className="text-body-sm text-error">
+                {problem.message}
+              </p>
+            ) : null}
+
+            <div className="flex items-center gap-4 border-t border-hairline-soft pt-6">
+              <Button type="submit" variant="default" disabled={update.isPending}>
+                {update.isPending ? "Saving…" : "Save changes"}
+              </Button>
+              <span aria-live="polite" className="text-caption text-muted-foreground">
+                {update.isSuccess && !update.isPending ? "Saved." : ""}
+              </span>
+            </div>
+          </CardContent>
         </Card>
       </form>
 
       {readOnly.length > 0 ? (
         <section className="mt-8 max-w-xl rounded-lg bg-surface-card p-8">
           <h2 className="flex items-center gap-2 text-title-md text-ink">
-            <Lock aria-hidden="true" className="h-4 w-4 text-muted" />
+            <Lock aria-hidden="true" className="h-4 w-4 text-muted-foreground" />
             Set by your organization
           </h2>
-          <p className="mt-1 text-body-sm text-muted">
+          <p className="mt-1 text-body-sm text-muted-foreground">
             An administrator maintains these. Ask them if something here is wrong.
           </p>
           <dl className="mt-4 border-t border-hairline">
@@ -109,7 +123,7 @@ export function ProfileRoute() {
                 key={field.key}
                 className="flex justify-between gap-6 border-b border-hairline py-2.5 last:border-b-0"
               >
-                <dt className="text-body-sm text-muted">{field.label}</dt>
+                <dt className="text-body-sm text-muted-foreground">{field.label}</dt>
                 <dd className="text-body-sm text-body-strong">
                   {stringify(profile.data.fields[field.key]) || "—"}
                 </dd>

@@ -1,155 +1,142 @@
-import * as DialogPrimitive from "@radix-ui/react-dialog";
-import { Check, Copy, KeyRound, TriangleAlert, X } from "lucide-react";
-import { useState, type ReactNode } from "react";
-import { Badge } from "./badge";
-import { Button } from "./button";
+import * as React from "react";
 import { cn } from "./cn";
+import { XIcon } from "lucide-react";
+import { Dialog as DialogPrimitive } from "radix-ui";
 
-function Overlay({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
+import { Button } from "./button";
+
+function Dialog({ ...props }: React.ComponentProps<typeof DialogPrimitive.Root>) {
+  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+}
+
+function DialogTrigger({ ...props }: React.ComponentProps<typeof DialogPrimitive.Trigger>) {
+  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
+}
+
+function DialogPortal({ ...props }: React.ComponentProps<typeof DialogPrimitive.Portal>) {
+  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
+}
+
+function DialogClose({ ...props }: React.ComponentProps<typeof DialogPrimitive.Close>) {
+  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
+}
+
+function DialogOverlay({
+  className,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Overlay>) {
   return (
     <DialogPrimitive.Overlay
-      className={cn("fixed inset-0 z-50 bg-surface-dark/40 backdrop-blur-[1px]", className)}
+      data-slot="dialog-overlay"
+      className={cn(
+        "fixed inset-0 z-50 bg-surface-dark/40 backdrop-blur-[1px] data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:animate-in data-[state=open]:fade-in-0",
+        className,
+      )}
       {...props}
     />
   );
 }
 
-function Content({
+function DialogContent({
   className,
   children,
+  showCloseButton = true,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Content>) {
+}: React.ComponentProps<typeof DialogPrimitive.Content> & {
+  showCloseButton?: boolean;
+}) {
   return (
-    <DialogPrimitive.Portal>
-      <Overlay />
+    <DialogPortal data-slot="dialog-portal">
+      <DialogOverlay />
       <DialogPrimitive.Content
+        data-slot="dialog-content"
         className={cn(
-          "fixed left-1/2 top-1/2 z-50 w-[calc(100vw-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2",
-          "rounded-xl border border-hairline bg-canvas p-8 shadow-[0_1px_3px_rgba(20,20,19,0.08)]",
-          "data-[state=open]:step-in",
+          "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-xl border border-border bg-background p-8 shadow-[0_1px_3px_rgba(20,20,19,0.08)] duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
           className,
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close
-          className="absolute right-4 top-4 rounded-md p-1.5 text-muted-soft hover:bg-surface-soft hover:text-ink"
-          aria-label="Close"
-        >
-          <X aria-hidden="true" className="h-4 w-4" />
-        </DialogPrimitive.Close>
+        {showCloseButton && (
+          <DialogPrimitive.Close
+            data-slot="dialog-close"
+            className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+          >
+            <XIcon />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        )}
       </DialogPrimitive.Content>
-    </DialogPrimitive.Portal>
+    </DialogPortal>
   );
 }
 
-export const Dialog = Object.assign(DialogPrimitive.Root, {
-  Trigger: DialogPrimitive.Trigger,
-  Close: DialogPrimitive.Close,
-  Content,
-  Title: DialogPrimitive.Title,
-  Description: DialogPrimitive.Description,
-});
-
-/**
- * Names what will happen before it happens, including the consequences the
- * server would otherwise deliver as a surprise — a `force=true` delete taking
- * dependants with it, a password reset ending every session.
- */
-export function ConfirmDialog({
-  open,
-  onOpenChange,
-  title,
-  body,
-  confirmLabel,
-  onConfirm,
-  destructive = true,
-  pending = false,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  body: ReactNode;
-  confirmLabel: string;
-  onConfirm: () => void;
-  destructive?: boolean;
-  pending?: boolean;
-}) {
+function DialogHeader({ className, ...props }: React.ComponentProps<"div">) {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
-        {destructive ? (
-          <span
-            aria-hidden="true"
-            className="mb-4 flex h-10 w-10 items-center justify-center rounded-full bg-error/10 text-error"
-          >
-            <TriangleAlert className="h-5 w-5" />
-          </span>
-        ) : null}
-        <Dialog.Title className="pr-8 font-display text-display-sm text-ink">{title}</Dialog.Title>
-        <Dialog.Description asChild>
-          <div className="mt-3 text-body-md text-body">{body}</div>
-        </Dialog.Description>
-        <div className="mt-8 flex justify-end gap-3">
-          <Dialog.Close asChild>
-            <Button variant="secondary">Cancel</Button>
-          </Dialog.Close>
-          <Button
-            variant={destructive ? "danger" : "primary"}
-            onClick={onConfirm}
-            disabled={pending}
-          >
-            {confirmLabel}
-          </Button>
-        </div>
-      </Dialog.Content>
-    </Dialog>
+    <div
+      data-slot="dialog-header"
+      className={cn("flex flex-col gap-2 text-center sm:text-left", className)}
+      {...props}
+    />
   );
 }
 
-/**
- * Client secrets and generated passwords are returned exactly once and never
- * stored. The screen has to say so before it is dismissed, not after.
- */
-export function SecretRevealOnce({
-  label,
-  secret,
-  note,
-}: {
-  label: string;
-  secret: string;
-  note?: string;
+function DialogFooter({
+  className,
+  showCloseButton = false,
+  children,
+  ...props
+}: React.ComponentProps<"div"> & {
+  showCloseButton?: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copy() {
-    await navigator.clipboard.writeText(secret);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 2000);
-  }
-
   return (
-    <div className="rounded-lg bg-surface-dark p-6">
-      <div className="flex items-center justify-between gap-4">
-        <p className="flex items-center gap-2 text-caption-upper uppercase text-on-dark-soft">
-          <KeyRound aria-hidden="true" className="h-3.5 w-3.5 text-primary" />
-          {label}
-        </p>
-        <Badge tone="coral">Shown once</Badge>
-      </div>
-      <div className="mt-3 flex items-center gap-3">
-        <code className="font-identity min-w-0 flex-1 break-all text-on-dark">{secret}</code>
-        <Button variant="onDark" size="sm" onClick={copy}>
-          {copied ? <Check aria-hidden="true" /> : <Copy aria-hidden="true" />}
-          {copied ? "Copied" : "Copy"}
-        </Button>
-      </div>
-      <p className="mt-4 text-body-sm text-on-dark-soft">
-        {note ?? "This is the only time it is shown. Store it now — it cannot be retrieved later."}
-      </p>
-      <span aria-live="polite" className="sr-only">
-        {copied ? `${label} copied to clipboard` : ""}
-      </span>
+    <div
+      data-slot="dialog-footer"
+      className={cn("flex flex-col-reverse gap-2 sm:flex-row sm:justify-end", className)}
+      {...props}
+    >
+      {children}
+      {showCloseButton && (
+        <DialogPrimitive.Close asChild>
+          <Button variant="outline">Close</Button>
+        </DialogPrimitive.Close>
+      )}
     </div>
   );
 }
+
+function DialogTitle({ className, ...props }: React.ComponentProps<typeof DialogPrimitive.Title>) {
+  return (
+    <DialogPrimitive.Title
+      data-slot="dialog-title"
+      className={cn("text-lg leading-none font-semibold", className)}
+      {...props}
+    />
+  );
+}
+
+function DialogDescription({
+  className,
+  ...props
+}: React.ComponentProps<typeof DialogPrimitive.Description>) {
+  return (
+    <DialogPrimitive.Description
+      data-slot="dialog-description"
+      className={cn("text-sm text-muted-foreground", className)}
+      {...props}
+    />
+  );
+}
+
+export {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogOverlay,
+  DialogPortal,
+  DialogTitle,
+  DialogTrigger,
+};

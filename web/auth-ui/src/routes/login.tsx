@@ -168,7 +168,7 @@ function CredentialsStep({
 
         <SignInProblem problem={problem} />
 
-        <Button type="submit" variant="primary" disabled={mutation.isPending}>
+        <Button type="submit" variant="default" disabled={mutation.isPending}>
           {mutation.isPending ? "Signing in…" : "Sign in"}
         </Button>
       </form>
@@ -260,7 +260,7 @@ function TotpStep({
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" disabled={mutation.isPending}>
+        <Button type="submit" variant="default" disabled={mutation.isPending}>
           {mutation.isPending ? "Checking…" : "Continue"}
         </Button>
       </form>

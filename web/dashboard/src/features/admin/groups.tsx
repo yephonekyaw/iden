@@ -3,6 +3,10 @@ import {
   ConfirmDialog,
   DataTable,
   Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   EmptyState,
   ErrorState,
   Field,
@@ -59,7 +63,7 @@ export function GroupsRoute() {
         lede="Departments, teams, cohorts. A group holds roles, and everyone in it inherits them."
         count={groups.data?.meta.total}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
+          <Button variant="default" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" />
             Create group
           </Button>
@@ -75,7 +79,7 @@ export function GroupsRoute() {
           title="No groups yet"
           body="Groups mirror how your organization is actually structured. Create one, give it roles, and add people to it."
           action={
-            <Button variant="primary" onClick={() => setCreating(true)}>
+            <Button variant="default" onClick={() => setCreating(true)}>
               Create group
             </Button>
           }
@@ -124,7 +128,7 @@ function CreateGroupDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
+      <DialogContent>
         <form
           noValidate
           onSubmit={form.handleSubmit((values) =>
@@ -137,12 +141,12 @@ function CreateGroupDialog({
             }),
           )}
         >
-          <Dialog.Title className="text-display-sm font-display text-ink">
+          <DialogTitle className="text-display-sm font-display text-ink">
             Create a group
-          </Dialog.Title>
-          <Dialog.Description className="mt-2 text-body-sm text-body">
+          </DialogTitle>
+          <DialogDescription className="mt-2 text-body-sm text-body">
             Groups don't nest. One flat set of people, sharing the same roles.
-          </Dialog.Description>
+          </DialogDescription>
 
           <div className="mt-6 flex flex-col gap-5">
             <Field
@@ -162,17 +166,17 @@ function CreateGroupDialog({
           </div>
 
           <div className="mt-8 flex justify-end gap-3">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
                 Cancel
               </Button>
-            </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={create.isPending}>
+            </DialogClose>
+            <Button type="submit" variant="default" disabled={create.isPending}>
               {create.isPending ? "Creating…" : "Create group"}
             </Button>
           </div>
         </form>
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -218,7 +222,7 @@ export function GroupDetailRoute() {
 
   return (
     <>
-      <Link to="/admin/groups" className="text-caption text-muted hover:text-ink">
+      <Link to="/admin/groups" className="text-caption text-muted-foreground hover:text-ink">
         ← Groups
       </Link>
 
@@ -226,7 +230,7 @@ export function GroupDetailRoute() {
 
       <section className="mb-12">
         <h2 className="mb-3 text-title-lg text-ink">Roles</h2>
-        <p className="mb-4 max-w-prose text-body-sm text-muted">
+        <p className="mb-4 max-w-prose text-body-sm text-muted-foreground">
           Everyone in this group inherits these. Saving replaces the whole set.
         </p>
         {roleOptions.data ? (
@@ -240,7 +244,7 @@ export function GroupDetailRoute() {
             />
             <div className="mt-3 flex items-center gap-3">
               <Button
-                variant="primary"
+                variant="default"
                 disabled={!changed || saveRoles.isPending}
                 onClick={() => saveRoles.mutate([...chosen], { onSuccess: () => setRoles(null) })}
               >
@@ -285,7 +289,7 @@ export function GroupDetailRoute() {
                   >
                     {member.displayName ?? member.username}
                   </Link>
-                  <span className="ml-2 text-caption text-muted">{member.email}</span>
+                  <span className="ml-2 text-caption text-muted-foreground">{member.email}</span>
                 </span>
                 <Button size="sm" onClick={() => setRemovingMember(member)}>
                   Remove
@@ -297,7 +301,7 @@ export function GroupDetailRoute() {
       </section>
 
       <section className="border-t border-hairline pt-8">
-        <Button variant="danger" onClick={() => setDeleting(true)}>
+        <Button variant="destructive" onClick={() => setDeleting(true)}>
           Delete group
         </Button>
       </section>
@@ -366,11 +370,11 @@ function AddMembersDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
-        <Dialog.Title className="text-display-sm font-display text-ink">Add people</Dialog.Title>
-        <Dialog.Description className="mt-2 text-body-sm text-body">
+      <DialogContent>
+        <DialogTitle className="text-display-sm font-display text-ink">Add people</DialogTitle>
+        <DialogDescription className="mt-2 text-body-sm text-body">
           Anyone already in the group is left as they are.
-        </Dialog.Description>
+        </DialogDescription>
 
         <div className="mt-6">
           {people.data ? (
@@ -387,11 +391,11 @@ function AddMembersDialog({
         </div>
 
         <div className="mt-8 flex justify-end gap-3">
-          <Dialog.Close asChild>
-            <Button variant="secondary">Cancel</Button>
-          </Dialog.Close>
+          <DialogClose asChild>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
           <Button
-            variant="primary"
+            variant="default"
             disabled={selected.size === 0 || add.isPending}
             onClick={() =>
               add.mutate([...selected], {
@@ -405,7 +409,7 @@ function AddMembersDialog({
             {add.isPending ? "Adding…" : `Add ${selected.size || ""}`.trim()}
           </Button>
         </div>
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }

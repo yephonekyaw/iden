@@ -3,6 +3,10 @@ import {
   ConfirmDialog,
   DataTable,
   Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   EmptyState,
   ErrorState,
   Field,
@@ -57,7 +61,7 @@ export function ApisRoute() {
         lede="The backends that trust IDEN. Each one defines its own permissions and the audience its tokens carry."
         count={apis.data?.meta.total}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
+          <Button variant="default" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" />
             Register API
           </Button>
@@ -112,7 +116,7 @@ function CreateApiDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
+      <DialogContent>
         <form
           noValidate
           onSubmit={form.handleSubmit((values) =>
@@ -125,13 +129,13 @@ function CreateApiDialog({
             }),
           )}
         >
-          <Dialog.Title className="text-display-sm font-display text-ink">
+          <DialogTitle className="text-display-sm font-display text-ink">
             Register an API
-          </Dialog.Title>
-          <Dialog.Description className="mt-2 text-body-sm text-body">
+          </DialogTitle>
+          <DialogDescription className="mt-2 text-body-sm text-body">
             The audience is fixed once set — every token minted for this API carries it, and
             changing it later would invalidate tokens already in flight.
-          </Dialog.Description>
+          </DialogDescription>
 
           <div className="mt-6 flex flex-col gap-5">
             <Field
@@ -162,17 +166,17 @@ function CreateApiDialog({
           </div>
 
           <div className="mt-8 flex justify-end gap-3">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
                 Cancel
               </Button>
-            </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={create.isPending}>
+            </DialogClose>
+            <Button type="submit" variant="default" disabled={create.isPending}>
               {create.isPending ? "Registering…" : "Register API"}
             </Button>
           </div>
         </form>
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -212,14 +216,14 @@ export function ApiDetailRoute() {
 
   return (
     <>
-      <Link to="/admin/apis" className="text-caption text-muted hover:text-ink">
+      <Link to="/admin/apis" className="text-caption text-muted-foreground hover:text-ink">
         ← APIs
       </Link>
 
       <PageHeader title={record.data.name} lede={record.data.description ?? "No description."} />
 
       <dl className="mb-10">
-        <dt className="text-caption-upper uppercase text-muted">Audience</dt>
+        <dt className="text-caption-upper uppercase text-muted-foreground">Audience</dt>
         <dd className="mt-1">
           <ScopeChip value={record.data.audience} />
         </dd>
@@ -291,7 +295,7 @@ export function ApiDetailRoute() {
                 : removeProblem.message}
             </p>
           ) : null}
-          <Button variant="danger" onClick={() => setDeleting(true)}>
+          <Button variant="destructive" onClick={() => setDeleting(true)}>
             Delete API
           </Button>
         </section>
@@ -353,7 +357,7 @@ function CreateScopeDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
+      <DialogContent>
         <form
           noValidate
           onSubmit={form.handleSubmit((values) =>
@@ -365,13 +369,13 @@ function CreateScopeDialog({
             }),
           )}
         >
-          <Dialog.Title className="text-display-sm font-display text-ink">
+          <DialogTitle className="text-display-sm font-display text-ink">
             Define a scope
-          </Dialog.Title>
-          <Dialog.Description className="mt-2 text-body-sm text-body">
+          </DialogTitle>
+          <DialogDescription className="mt-2 text-body-sm text-body">
             Scope values are unique across the whole deployment, so prefix them with what they
             belong to.
-          </Dialog.Description>
+          </DialogDescription>
 
           <div className="mt-6 flex flex-col gap-5">
             <Field
@@ -399,17 +403,17 @@ function CreateScopeDialog({
           </div>
 
           <div className="mt-8 flex justify-end gap-3">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
                 Cancel
               </Button>
-            </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={create.isPending}>
+            </DialogClose>
+            <Button type="submit" variant="default" disabled={create.isPending}>
               {create.isPending ? "Defining…" : "Define scope"}
             </Button>
           </div>
         </form>
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }

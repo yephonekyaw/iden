@@ -97,19 +97,15 @@ function ConsentFlow({ challengeId }: { challengeId: string }) {
       ) : null}
 
       <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-        <Button
-          variant="secondary"
-          disabled={decide.isPending}
-          onClick={() => decide.mutate(false)}
-        >
+        <Button variant="outline" disabled={decide.isPending} onClick={() => decide.mutate(false)}>
           Deny
         </Button>
-        <Button variant="primary" disabled={decide.isPending} onClick={() => decide.mutate(true)}>
+        <Button variant="default" disabled={decide.isPending} onClick={() => decide.mutate(true)}>
           {decide.isPending ? "Working…" : "Allow access"}
         </Button>
       </div>
 
-      <p className="mt-5 text-caption text-muted">
+      <p className="mt-5 text-caption text-muted-foreground">
         You can withdraw this at any time from Connections in your account.
       </p>
     </AuthLayout>

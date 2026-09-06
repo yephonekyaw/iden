@@ -4,6 +4,10 @@ import {
   ConfirmDialog,
   DataTable,
   Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   ErrorState,
   Field,
   IdenError,
@@ -48,7 +52,7 @@ const columns: Column<RoleRecord>[] = [
 /** System records cannot be renamed or deleted — say so before anyone tries. */
 export function SystemTag() {
   return (
-    <Badge tone="outline">
+    <Badge variant="outline">
       <Lock aria-hidden="true" className="h-3 w-3" />
       built in
     </Badge>
@@ -69,7 +73,7 @@ export function RolesRoute() {
         lede="Named bundles of permissions — a job function like attendance-officer. One role can span several APIs."
         count={roles.data?.meta.total}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
+          <Button variant="default" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" />
             Create role
           </Button>
@@ -125,7 +129,7 @@ function CreateRoleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content>
+      <DialogContent>
         <form
           noValidate
           onSubmit={form.handleSubmit((values) =>
@@ -138,12 +142,10 @@ function CreateRoleDialog({
             }),
           )}
         >
-          <Dialog.Title className="text-display-sm font-display text-ink">
-            Create a role
-          </Dialog.Title>
-          <Dialog.Description className="mt-2 text-body-sm text-body">
+          <DialogTitle className="text-display-sm font-display text-ink">Create a role</DialogTitle>
+          <DialogDescription className="mt-2 text-body-sm text-body">
             Name it after the job it describes. You'll choose its permissions next.
-          </Dialog.Description>
+          </DialogDescription>
 
           <div className="mt-6 flex flex-col gap-5">
             <Field
@@ -163,17 +165,17 @@ function CreateRoleDialog({
           </div>
 
           <div className="mt-8 flex justify-end gap-3">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
                 Cancel
               </Button>
-            </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={create.isPending}>
+            </DialogClose>
+            <Button type="submit" variant="default" disabled={create.isPending}>
               {create.isPending ? "Creating…" : "Create role"}
             </Button>
           </div>
         </form>
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -209,7 +211,7 @@ export function RoleDetailRoute() {
 
   return (
     <>
-      <Link to="/admin/roles" className="text-caption text-muted hover:text-ink">
+      <Link to="/admin/roles" className="text-caption text-muted-foreground hover:text-ink">
         ← Roles
       </Link>
 
@@ -249,7 +251,7 @@ export function RoleDetailRoute() {
             ) : null}
             <div className="mt-3 flex items-center gap-3">
               <Button
-                variant="primary"
+                variant="default"
                 disabled={!changed || save.isPending}
                 onClick={() => save.mutate([...chosen], { onSuccess: () => setSelected(null) })}
               >
@@ -276,7 +278,7 @@ export function RoleDetailRoute() {
                 : removeProblem.message}
             </p>
           ) : null}
-          <Button variant="danger" onClick={() => setDeleting(true)}>
+          <Button variant="destructive" onClick={() => setDeleting(true)}>
             Delete role
           </Button>
         </section>

@@ -98,7 +98,7 @@ export function SessionsRoute() {
           <p className="mt-1 text-body-sm text-body">
             Signing out a session needs a recent sign-in.
           </p>
-          <Button className="mt-4" size="sm" variant="primary" onClick={() => stepUp(maxAge)}>
+          <Button className="mt-4" size="sm" variant="default" onClick={() => stepUp(maxAge)}>
             Enter your password
           </Button>
         </div>
@@ -122,9 +122,9 @@ export function SessionsRoute() {
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2 text-title-sm text-ink">
                   {title(session)}
-                  {session.current ? <Badge tone="coral">this device</Badge> : null}
+                  {session.current ? <Badge variant="default">this device</Badge> : null}
                 </p>
-                <p className="mt-1 text-caption text-muted">
+                <p className="mt-1 text-caption text-muted-foreground">
                   {[session.browser, session.ip]
                     .filter(Boolean)
                     .concat(session.amr.map((method) => AMR_LABELS[method] ?? method))
@@ -137,7 +137,7 @@ export function SessionsRoute() {
                 ) : null}
               </div>
 
-              <div className="shrink-0 text-caption text-muted tabular-nums">
+              <div className="shrink-0 text-caption text-muted-foreground tabular-nums">
                 <p>
                   Last active{" "}
                   <time dateTime={session.lastSeenAt} title={when(session.lastSeenAt)}>
@@ -168,7 +168,7 @@ export function SessionsRoute() {
         </RowCard>
       )}
 
-      <p className="mt-4 text-caption text-muted">
+      <p className="mt-4 text-caption text-muted-foreground">
         Revoking a session ends it here and revokes its refresh tokens, so that device cannot reach
         anything again without signing in. Applications that registered for sign-out notices are
         told straight away; the rest find out when they next ask for a token.
@@ -221,7 +221,7 @@ export function ConnectionsRoute() {
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
                   <p className="text-title-sm text-ink">{connection.name}</p>
-                  <p className="mt-0.5 text-caption text-muted">
+                  <p className="mt-0.5 text-caption text-muted-foreground">
                     Allowed {when(connection.grantedAt)}
                   </p>
                 </div>
@@ -271,11 +271,11 @@ export function PermissionsRoute() {
 
       <dl className="mb-10 flex flex-wrap gap-x-12 gap-y-4">
         <div>
-          <dt className="text-caption-upper uppercase text-muted">Groups</dt>
+          <dt className="text-caption-upper uppercase text-muted-foreground">Groups</dt>
           <dd className="mt-1 text-body-md text-ink">{groups.join(", ") || "None"}</dd>
         </div>
         <div>
-          <dt className="text-caption-upper uppercase text-muted">Roles</dt>
+          <dt className="text-caption-upper uppercase text-muted-foreground">Roles</dt>
           <dd className="mt-1 text-body-md text-ink">{roles.join(", ") || "None"}</dd>
         </div>
       </dl>

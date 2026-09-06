@@ -9,7 +9,7 @@ import { cn } from "./cn";
  * inside another one. That component draws its frame from this constant, so
  * there is still exactly one definition of what the chrome is.
  */
-export const ROW_CARD = "overflow-hidden rounded-lg border border-hairline bg-canvas";
+export const ROW_CARD = "overflow-hidden rounded-lg border border-border bg-background";
 
 /**
  * A card containing a list of divided rows.
@@ -36,10 +36,7 @@ export function RowCard({ className, ...props }: ComponentProps<"ul">) {
 export function Row({ className, ...props }: ComponentProps<"li">) {
   return (
     <li
-      className={cn(
-        "border-b border-hairline-soft px-5 py-4 last:border-b-0",
-        className,
-      )}
+      className={cn("border-b border-hairline-soft px-5 py-4 last:border-b-0", className)}
       {...props}
     />
   );

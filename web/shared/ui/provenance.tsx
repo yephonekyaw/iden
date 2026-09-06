@@ -31,7 +31,7 @@ export function ScopeChip({ value, className }: { value: string; className?: str
     <code
       className={cn(
         "font-identity inline-flex items-baseline rounded-xs bg-surface-card px-1.5 py-0.5",
-        "whitespace-nowrap text-muted",
+        "whitespace-nowrap text-muted-foreground",
         className,
       )}
     >
@@ -91,7 +91,7 @@ export function ProvenanceRow({
       ) : sources.length === 0 ? (
         <span className="text-caption text-muted-soft">unattributed</span>
       ) : (
-        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted">
+        <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-muted-foreground">
           <span className="sr-only">granted through</span>
           {sources.map((source, index) => (
             <span key={index} className="inline-flex items-center gap-1.5">

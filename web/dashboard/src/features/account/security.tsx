@@ -48,7 +48,7 @@ function StepUpNotice({ problem }: { problem: IdenError | null }) {
       <p className="mt-1 text-body-sm text-body">
         Changing this needs a sign-in from the last {Math.round(maxAge / 60)} minutes.
       </p>
-      <Button className="mt-4" size="sm" variant="primary" onClick={() => stepUp(maxAge)}>
+      <Button className="mt-4" size="sm" variant="default" onClick={() => stepUp(maxAge)}>
         Enter your password
       </Button>
     </div>
@@ -129,10 +129,10 @@ function PasswordSection() {
         ) : null}
 
         <div className="flex items-center gap-4">
-          <Button type="submit" variant="primary" disabled={change.isPending}>
+          <Button type="submit" variant="default" disabled={change.isPending}>
             {change.isPending ? "Changing…" : "Change password"}
           </Button>
-          <span aria-live="polite" className="text-caption text-muted">
+          <span aria-live="polite" className="text-caption text-muted-foreground">
             {change.isSuccess
               ? `Password changed. ${change.data.sessionsEnded} other session${change.data.sessionsEnded === 1 ? "" : "s"} signed out.`
               : ""}
@@ -164,7 +164,7 @@ function EmailSection() {
   return (
     <section>
       <h2 className="text-title-lg text-ink">Sign-in address</h2>
-      <p className="mt-1 text-body-sm text-muted">
+      <p className="mt-1 text-body-sm text-muted-foreground">
         Changing this changes the address you sign in with, and signs out your other sessions.
       </p>
       <form
@@ -213,10 +213,10 @@ function EmailSection() {
         ) : null}
 
         <div className="flex items-center gap-4">
-          <Button type="submit" variant="primary" disabled={change.isPending}>
+          <Button type="submit" variant="default" disabled={change.isPending}>
             {change.isPending ? "Changing…" : "Change address"}
           </Button>
-          <span aria-live="polite" className="text-caption text-muted">
+          <span aria-live="polite" className="text-caption text-muted-foreground">
             {change.isSuccess ? "Address changed." : ""}
           </span>
         </div>
@@ -278,7 +278,7 @@ function TotpSection() {
             Set up and in use. You'll be asked for a code when an application requires two factors.
           </p>
           <StepUpNotice problem={removeProblem} />
-          <Button className="mt-4" variant="secondary" onClick={() => setRemoving(true)}>
+          <Button className="mt-4" variant="outline" onClick={() => setRemoving(true)}>
             Remove authenticator
           </Button>
           <ConfirmDialog
@@ -324,7 +324,7 @@ function TotpSection() {
             )}
           </Field>
           <div className="flex gap-3">
-            <Button variant="primary" disabled={confirm.isPending} onClick={() => confirm.mutate()}>
+            <Button variant="default" disabled={confirm.isPending} onClick={() => confirm.mutate()}>
               {confirm.isPending ? "Checking…" : "Turn on"}
             </Button>
             <Button variant="ghost" onClick={() => setEnrollment(null)}>
@@ -340,7 +340,7 @@ function TotpSection() {
           </p>
           <Button
             className="mt-4"
-            variant="primary"
+            variant="default"
             disabled={enroll.isPending}
             onClick={() => enroll.mutate()}
           >

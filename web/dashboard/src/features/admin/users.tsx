@@ -3,6 +3,9 @@ import {
   ConfirmDialog,
   DataTable,
   Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   EmptyState,
   ErrorState,
   Field,
@@ -77,7 +80,7 @@ export function UsersRoute() {
         lede="Everyone with an account in this organization, and what each of them can do."
         count={users.data?.meta.total}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
+          <Button variant="default" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" />
             Add user
           </Button>
@@ -110,7 +113,7 @@ export function UsersRoute() {
           }
           action={
             search ? undefined : (
-              <Button variant="primary" onClick={() => setCreating(true)}>
+              <Button variant="default" onClick={() => setCreating(true)}>
                 Add user
               </Button>
             )
@@ -167,12 +170,12 @@ function CreateUserDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <Dialog.Content>
+      <DialogContent>
         {created ? (
           <>
-            <Dialog.Title className="text-display-sm font-display text-ink">
+            <DialogTitle className="text-display-sm font-display text-ink">
               {created.displayName ?? created.username} added
-            </Dialog.Title>
+            </DialogTitle>
             {created.generatedPassword ? (
               <div className="mt-5">
                 <SecretRevealOnce
@@ -183,7 +186,7 @@ function CreateUserDialog({
               </div>
             ) : null}
             <div className="mt-8 flex justify-end">
-              <Button variant="primary" onClick={close}>
+              <Button variant="default" onClick={close}>
                 Done
               </Button>
             </div>
@@ -195,12 +198,10 @@ function CreateUserDialog({
               create.mutate(values, { onSuccess: setCreated }),
             )}
           >
-            <Dialog.Title className="text-display-sm font-display text-ink">
-              Add a user
-            </Dialog.Title>
-            <Dialog.Description className="mt-2 text-body-sm text-body">
+            <DialogTitle className="text-display-sm font-display text-ink">Add a user</DialogTitle>
+            <DialogDescription className="mt-2 text-body-sm text-body">
               A one-time password is generated for them. Roles can be assigned afterwards.
-            </Dialog.Description>
+            </DialogDescription>
 
             <div className="mt-6 flex flex-col gap-5">
               <Field label="Email" required error={fieldMessage(problem, "email")}>
@@ -226,16 +227,16 @@ function CreateUserDialog({
             ) : null}
 
             <div className="mt-8 flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={close}>
+              <Button type="button" variant="outline" onClick={close}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={create.isPending}>
+              <Button type="submit" variant="default" disabled={create.isPending}>
                 {create.isPending ? "Adding…" : "Add user"}
               </Button>
             </div>
           </form>
         )}
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -295,7 +296,7 @@ export function UserDetailRoute() {
 
   return (
     <>
-      <Link to="/admin/users" className="text-caption text-muted hover:text-ink">
+      <Link to="/admin/users" className="text-caption text-muted-foreground hover:text-ink">
         ← Users
       </Link>
 
@@ -306,7 +307,7 @@ export function UserDetailRoute() {
 
       <section className="mb-12">
         <h2 className="mb-3 text-title-lg text-ink">Roles</h2>
-        <p className="mb-4 max-w-prose text-body-sm text-muted">
+        <p className="mb-4 max-w-prose text-body-sm text-muted-foreground">
           Roles bundle permissions. Saving replaces the whole set.
         </p>
         {roleOptions.data ? (
@@ -324,7 +325,7 @@ export function UserDetailRoute() {
 
       <section className="mb-12">
         <h2 className="mb-3 text-title-lg text-ink">Direct grants</h2>
-        <p className="mb-4 max-w-prose text-body-sm text-muted">
+        <p className="mb-4 max-w-prose text-body-sm text-muted-foreground">
           One-off exceptions that bypass roles. Prefer a role when more than one person needs the
           same thing.
         </p>
@@ -349,7 +350,9 @@ export function UserDetailRoute() {
             ? record.groups.map((group) => group.name).join(", ")
             : "Not a member of any group."}
         </p>
-        <p className="mt-1 text-caption text-muted">Membership is managed from the group's page.</p>
+        <p className="mt-1 text-caption text-muted-foreground">
+          Membership is managed from the group's page.
+        </p>
       </section>
 
       <section className="mb-12">
@@ -359,7 +362,7 @@ export function UserDetailRoute() {
         ) : scopes.isError ? (
           <ErrorState error={scopes.error} />
         ) : scopes.data.scopes.length === 0 ? (
-          <p className="text-body-sm text-muted">No permissions yet.</p>
+          <p className="text-body-sm text-muted-foreground">No permissions yet.</p>
         ) : (
           <ProvenanceTrace scopes={scopes.data.scopes} />
         )}
@@ -374,7 +377,7 @@ export function UserDetailRoute() {
         ) : null}
         <div className="flex flex-wrap gap-3">
           <Button onClick={() => setResetting(true)}>Issue a new password</Button>
-          <Button variant="danger" onClick={() => setDeleting(true)}>
+          <Button variant="destructive" onClick={() => setDeleting(true)}>
             Delete user
           </Button>
         </div>
@@ -440,7 +443,7 @@ function RoleEditor({
         emptyLabel={`No ${legend.toLowerCase()} defined yet.`}
       />
       <div className="mt-3 flex items-center gap-3">
-        <Button variant="primary" disabled={!changed || pending} onClick={() => onSave(selected)}>
+        <Button variant="default" disabled={!changed || pending} onClick={() => onSave(selected)}>
           {pending ? "Saving…" : `Save ${legend.toLowerCase()}`}
         </Button>
         {changed ? (

@@ -1,60 +1,48 @@
+import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
-import type { ComponentProps } from "react";
 import { cn } from "./cn";
+import { Slot } from "radix-ui";
 
-const badge = cva(
-  [
-    "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 whitespace-nowrap",
-    // Badges sit inside serif headings; the face is the badge's own.
-    "font-sans text-caption tabular-nums",
-  ],
+const badgeVariants = cva(
+  "inline-flex w-fit shrink-0 items-center justify-center gap-1 overflow-hidden rounded-full border border-transparent px-3 py-0.5 text-caption font-medium tabular-nums whitespace-nowrap transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none [&>svg]:size-3",
   {
     variants: {
-      tone: {
-        neutral: "bg-surface-card text-body-strong",
-        outline: "border border-hairline text-muted",
-        // DESIGN.md: coral is scarce. One coral badge per view, and only when
-        // the thing it marks is genuinely the exception on the page.
-        coral: "bg-primary text-on-primary text-caption-upper uppercase",
-        error: "bg-error/10 text-error",
+      variant: {
+        default:
+          "bg-primary text-primary-foreground text-caption-upper uppercase [a&]:hover:bg-primary-active",
+        secondary: "bg-surface-card text-body-strong [a&]:hover:bg-surface-cream-strong",
+        destructive:
+          "bg-destructive text-white focus-visible:ring-destructive/20 dark:bg-destructive/60 dark:focus-visible:ring-destructive/40 [a&]:hover:bg-destructive/90",
+        outline:
+          "border-border text-foreground [a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        ghost: "[a&]:hover:bg-accent [a&]:hover:text-accent-foreground",
+        link: "text-primary underline-offset-4 [a&]:hover:underline",
+        // No shadcn equivalent: a badge sitting on DESIGN.md's dark rail.
         onDark: "bg-surface-dark-elevated text-on-dark-soft",
       },
     },
-    defaultVariants: { tone: "neutral" },
+    defaultVariants: {
+      variant: "default",
+    },
   },
 );
 
-export type BadgeProps = ComponentProps<"span"> & VariantProps<typeof badge>;
-
-export function Badge({ className, tone, ...props }: BadgeProps) {
-  return <span className={cn(badge({ tone }), className)} {...props} />;
-}
-
-/**
- * A state that is either on or off — enabled, active, revoked, expired. The dot
- * carries the colour so the label stays readable type rather than a coloured
- * pill people have to decode.
- */
-export function StatusDot({
-  tone,
-  label,
+function Badge({
   className,
-}: {
-  tone: "success" | "muted" | "error" | "warning";
-  label: string;
-  className?: string;
-}) {
-  const colour = {
-    success: "bg-success",
-    muted: "bg-muted-soft",
-    error: "bg-error",
-    warning: "bg-warning",
-  }[tone];
+  variant = "default",
+  asChild = false,
+  ...props
+}: React.ComponentProps<"span"> & VariantProps<typeof badgeVariants> & { asChild?: boolean }) {
+  const Comp = asChild ? Slot.Root : "span";
 
   return (
-    <span className={cn("inline-flex items-center gap-2 text-body-sm text-body", className)}>
-      <span aria-hidden="true" className={cn("h-1.5 w-1.5 shrink-0 rounded-full", colour)} />
-      {label}
-    </span>
+    <Comp
+      data-slot="badge"
+      data-variant={variant}
+      className={cn(badgeVariants({ variant }), className)}
+      {...props}
+    />
   );
 }
+
+export { Badge, badgeVariants };

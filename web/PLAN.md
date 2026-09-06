@@ -107,25 +107,25 @@ state — only the layer underneath them.
 The visual system is [DESIGN.md](../DESIGN.md), followed as written: cream canvas `#faf9f5`, coral
 `#cc785c` used scarcely, dark `#181715` surfaces, a serif display at weight 400 with negative
 tracking, humanist sans body, monospace for code. Fonts are self-hosted through `@fontsource` —
-EB Garamond, Inter, JetBrains Mono, the substitutes DESIGN.md's own *Known Gaps* section names for
+EB Garamond, Inter, JetBrains Mono, the substitutes DESIGN.md's own _Known Gaps_ section names for
 the licensed Copernicus and StyreneB. A CDN link is not an option: the provider's CSP is
 `default-src 'none'`, and IDEN is meant to deploy without internet egress.
 
 DESIGN.md documents a marketing surface. It has no table, no sidebar, and no form-heavy screen, so
 the product layer is **derived from its tokens** rather than invented beside them:
 
-| Added token | Value | Derived from |
-|---|---|---|
-| `--surface-row-hover` | `#f5f0e8` | the existing `surface-soft` |
-| `--focus-ring` | coral at 15% alpha, 3px, plus a 1px coral border | already specified for `text-input-focused`; promoted to everything interactive |
-| `--density-row` | 44px | the WCAG touch target, matching the 40px control height |
+| Added token           | Value                                            | Derived from                                                                   |
+| --------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------ |
+| `--surface-row-hover` | `#f5f0e8`                                        | the existing `surface-soft`                                                    |
+| `--focus-ring`        | coral at 15% alpha, 3px, plus a 1px coral border | already specified for `text-input-focused`; promoted to everything interactive |
+| `--density-row`       | 44px                                             | the WCAG touch target, matching the 40px control height                        |
 
 The trinity rule holds: cream, coral, dark. No fourth surface tone.
 
 ### The signature — the provenance trace
 
-The most characteristic thing in IDEN's world is not a statistic. It is the answer to *why can this
-person do that?* — and the server already returns it. `GET /admin/users/{id}/effective-scopes` and
+The most characteristic thing in IDEN's world is not a statistic. It is the answer to _why can this
+person do that?_ — and the server already returns it. `GET /admin/users/{id}/effective-scopes` and
 `GET /entity/permissions` annotate every scope with `viaDirect`, `viaRoles[]` and `viaGroups[]`,
 where a group entry reads `"Students → member"`.
 
@@ -225,12 +225,12 @@ consumes directly by stripping the `body.` prefix and calling `setError`.
 
 Three responses every screen must survive, handled once here:
 
-| Response | Handling |
-|---|---|
-| **401** | The token is gone or revoked. Re-authenticate; do not retry. |
-| **403** with `WWW-Authenticate: Bearer error="insufficient_user_authentication" … max_age=300` | RFC 9470 step-up. Restart `/authorize` with `max_age=300` and return the user to the same form. |
-| **429** | Surface the `Retry-After` seconds as a countdown. Never retry automatically — the limit is per-address and retrying deepens it. |
-| **503** with `Retry-After: 5` | Postgres or Redis is unreachable. Say so; this is not the user's fault. |
+| Response                                                                                       | Handling                                                                                                                        |
+| ---------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| **401**                                                                                        | The token is gone or revoked. Re-authenticate; do not retry.                                                                    |
+| **403** with `WWW-Authenticate: Bearer error="insufficient_user_authentication" … max_age=300` | RFC 9470 step-up. Restart `/authorize` with `max_age=300` and return the user to the same form.                                 |
+| **429**                                                                                        | Surface the `Retry-After` seconds as a countdown. Never retry automatically — the limit is per-address and retrying deepens it. |
+| **503** with `Retry-After: 5`                                                                  | Postgres or Redis is unreachable. Say so; this is not the user's fault.                                                         |
 
 ### 7.1.3 Pagination — `web/shared/api/page.ts`
 
@@ -250,13 +250,13 @@ record, never a role name.
 
 shadcn primitives re-skinned from the tokens, plus what the tokens do not cover:
 
-| Component | Purpose |
-|---|---|
-| `ScopeChip` / `ProvenanceTrace` | The signature. A scope and where it came from. |
-| `DataTable` | List rows at `--density-row`, sortable where the server sorts, stacked cards below 640px. |
-| `EmptyState` | An invitation to act, never "No data". |
-| `ConfirmDialog` | Names what will happen, including what else is affected on a `force=true` delete. |
-| `SecretRevealOnce` | Client secrets and generated passwords: shown once, copyable, with the fact that it will not be shown again stated before it is dismissed. |
+| Component                       | Purpose                                                                                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `ScopeChip` / `ProvenanceTrace` | The signature. A scope and where it came from.                                                                                             |
+| `DataTable`                     | List rows at `--density-row`, sortable where the server sorts, stacked cards below 640px.                                                  |
+| `EmptyState`                    | An invitation to act, never "No data".                                                                                                     |
+| `ConfirmDialog`                 | Names what will happen, including what else is affected on a `force=true` delete.                                                          |
+| `SecretRevealOnce`              | Client secrets and generated passwords: shown once, copyable, with the fact that it will not be shown again stated before it is dismissed. |
 
 ### Done when
 
@@ -286,10 +286,10 @@ app wants in and what it is asking for, before the password field.
 
 `POST /api/v1/auth/login { challengeId, email, password }`:
 
-| `status` | Next |
-|---|---|
-| `complete` | Navigate to `resumeUrl` — back into `/authorize`, which issues the code or bounces to consent. |
-| `totp_required` | The card morphs into the code step. Same challenge, same conversation. |
+| `status`        | Next                                                                                           |
+| --------------- | ---------------------------------------------------------------------------------------------- |
+| `complete`      | Navigate to `resumeUrl` — back into `/authorize`, which issues the code or bounces to consent. |
+| `totp_required` | The card morphs into the code step. Same challenge, same conversation.                         |
 
 `step_up=1` changes the copy: the app is asking them to confirm it is still them, not telling them
 they are signed out.
@@ -305,8 +305,8 @@ The same challenge read, scopes rendered as `ScopeChip`s carrying the admin-writ
 
 ### 7.2.3 Recovery — `routes/forgot.tsx`, `routes/reset.tsx`
 
-`POST /api/v1/auth/password-reset` always answers 202, so the copy confirms a mail was sent *if the
-address is registered* and never confirms an account exists. The link lands on
+`POST /api/v1/auth/password-reset` always answers 202, so the copy confirms a mail was sent _if the
+address is registered_ and never confirms an account exists. The link lands on
 `/auth/reset?token=…`; `POST /api/v1/auth/password-reset/confirm` answers 204, and the 422
 `invalid_reset_token` gets a real way forward rather than a dead end.
 
@@ -314,12 +314,12 @@ address is registered* and never confirms an account exists. The link lands on
 
 Written deliberately, because this app is where a stuck user has nowhere else to go:
 
-| Case | What the screen says |
-|---|---|
+| Case                               | What the screen says                                                 |
+| ---------------------------------- | -------------------------------------------------------------------- |
 | 404 — challenge expired or unknown | The sign-in link expired; return to the application and start again. |
-| 403 `inactive_user` | This account has been deactivated; who to contact. |
-| 429 | How many seconds until they can try again, counting down. |
-| 401 on TOTP | The session is gone; start the sign-in again. |
+| 403 `inactive_user`                | This account has been deactivated; who to contact.                   |
+| 429                                | How many seconds until they can try again, counting down.            |
+| 401 on TOTP                        | The session is gone; start the sign-in again.                        |
 
 ### Done when
 
@@ -362,14 +362,14 @@ section advertising what they cannot have.
 
 ### 7.3.3 Account — `src/features/account/`
 
-| Screen | Endpoints |
-|---|---|
-| Profile | `GET /entity/profile`, `PATCH`, and `GET /entity/profile/schema` — **the form is rendered from the schema**, never hardcoded. The zod schema is built at runtime from each field's `dataType`, `required` and `validators`. |
-| Credentials | `POST /entity/credentials/password`, `/email` — both behind the 300s fresh-auth step-up, which the shared interceptor already knows how to satisfy. |
-| Two-factor | `GET /entity/totp`, `POST /enroll` → QR rendered from the returned `uri` → `POST /confirm`; removal needs fresh auth. |
-| Sessions | `GET /entity/sessions` with the current one marked, `DELETE /{id}` behind fresh auth. Each row shows `amr` and which applications used it. |
-| Connections | `GET /entity/connections`, `DELETE /{clientId}` — withdrawing consent. First-party `skipConsent` clients never appear here, which is correct and worth a line of copy. |
-| Permissions | `GET /entity/permissions` as `ProvenanceTrace` — the signature, on the screen where a person asks what they are allowed to do. |
+| Screen      | Endpoints                                                                                                                                                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Profile     | `GET /entity/profile`, `PATCH`, and `GET /entity/profile/schema` — **the form is rendered from the schema**, never hardcoded. The zod schema is built at runtime from each field's `dataType`, `required` and `validators`. |
+| Credentials | `POST /entity/credentials/password`, `/email` — both behind the 300s fresh-auth step-up, which the shared interceptor already knows how to satisfy.                                                                         |
+| Two-factor  | `GET /entity/totp`, `POST /enroll` → QR rendered from the returned `uri` → `POST /confirm`; removal needs fresh auth.                                                                                                       |
+| Sessions    | `GET /entity/sessions` with the current one marked, `DELETE /{id}` behind fresh auth. Each row shows `amr` and which applications used it.                                                                                  |
+| Connections | `GET /entity/connections`, `DELETE /{clientId}` — withdrawing consent. First-party `skipConsent` clients never appear here, which is correct and worth a line of copy.                                                      |
+| Permissions | `GET /entity/permissions` as `ProvenanceTrace` — the signature, on the screen where a person asks what they are allowed to do.                                                                                              |
 
 ### Done when
 
@@ -414,7 +414,7 @@ through `ConfirmDialog` naming what else is affected (`api_in_use`, `scope_in_us
 
 Create and rotate reveal the secret once through `SecretRevealOnce`. Public clients show no secret
 affordance at all rather than a disabled one. Grantable and granted scopes are presented as the two
-distinct questions they are: what a user *may* delegate to this app, versus what the app holds on its
+distinct questions they are: what a user _may_ delegate to this app, versus what the app holds on its
 own through `client_credentials`.
 
 ### 7.4.5 Profile fields — `src/features/profile-fields/`
@@ -468,11 +468,11 @@ The routing the README has always diagrammed but the repository has never contai
 reference configuration rather than a compose service: `deploy/docker-compose.yml` says in its own
 header that the proxy is the operator's, and adding one would contradict that. The routing is:
 
-| Path | Upstream |
-|---|---|
-| `/oauth2/*`, `/.well-known/*`, `/api/v1/*`, `/admin/*`, `/entity/*`, `/health*` | provider |
-| `/auth/*` | auth-ui |
-| `/*` | dashboard |
+| Path                                                                            | Upstream  |
+| ------------------------------------------------------------------------------- | --------- |
+| `/oauth2/*`, `/.well-known/*`, `/api/v1/*`, `/admin/*`, `/entity/*`, `/health*` | provider  |
+| `/auth/*`                                                                       | auth-ui   |
+| `/*`                                                                            | dashboard |
 
 Only nginx publishes ports. TLS stays the operator's, as `deploy/docker-compose.yml` already says.
 

@@ -1,36 +1,17 @@
-import * as LabelPrimitive from "@radix-ui/react-label";
 import { Search } from "lucide-react";
 import { useId, type ComponentProps, type ReactNode } from "react";
+import { Input } from "./input";
+import { Label } from "./label";
 import { cn } from "./cn";
-
-export function Input({ className, ...props }: ComponentProps<"input">) {
-  return (
-    <input
-      className={cn(
-        "h-control w-full rounded-md border border-hairline bg-canvas px-3.5 text-body-md text-ink",
-        "placeholder:text-muted-soft",
-        "focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15",
-        "aria-invalid:border-error aria-invalid:ring-error/15",
-        "disabled:bg-surface-soft disabled:text-muted",
-        className,
-      )}
-      {...props}
-    />
-  );
-}
-
-export function Label({ className, ...props }: ComponentProps<typeof LabelPrimitive.Root>) {
-  return (
-    <LabelPrimitive.Root
-      className={cn("text-caption font-medium text-body-strong", className)}
-      {...props}
-    />
-  );
-}
 
 /**
  * A label, its control, and the two things that explain it. `hint` describes the
  * field; `error` says what went wrong. Neither ever does the other's job.
+ *
+ * shadcn ships a `Form` built on react-hook-form's context. This stays a plain
+ * render-prop wrapper because half its callers are uncontrolled `useState`
+ * forms, and the wiring it does — one id, `aria-describedby`, `aria-invalid` —
+ * is the part that is easy to get wrong by hand.
  */
 export function Field({
   label,
@@ -64,11 +45,11 @@ export function Field({
       </Label>
       {children({ id, "aria-describedby": describedBy, "aria-invalid": Boolean(error) })}
       {error ? (
-        <p id={errorId} className="text-caption text-error">
+        <p id={errorId} className="text-caption text-destructive">
           {error}
         </p>
       ) : hint ? (
-        <p id={hintId} className="text-caption text-muted">
+        <p id={hintId} className="text-caption text-muted-foreground">
           {hint}
         </p>
       ) : null}

@@ -32,7 +32,7 @@ export function AuthLayout({
           className="step-in mt-6 rounded-xl border border-hairline bg-canvas p-8 shadow-[0_1px_3px_rgba(20,20,19,0.06)]"
         >
           {eyebrow ? (
-            <p className="flex items-center gap-2 text-caption-upper uppercase text-muted">
+            <p className="flex items-center gap-2 text-caption-upper uppercase text-muted-foreground">
               <Mark className="h-3 w-3 text-primary" />
               {eyebrow}
             </p>
@@ -42,7 +42,7 @@ export function AuthLayout({
           <div className="mt-7">{children}</div>
         </div>
 
-        {footer ? <div className="mt-6 text-caption text-muted">{footer}</div> : null}
+        {footer ? <div className="mt-6 text-caption text-muted-foreground">{footer}</div> : null}
       </div>
     </div>
   );

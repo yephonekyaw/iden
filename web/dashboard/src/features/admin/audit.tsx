@@ -127,7 +127,7 @@ function EventRow({ event, isLast }: { event: AuditEvent; isLast?: boolean }) {
           )}
           <time
             dateTime={event.occurredAt}
-            className="w-44 shrink-0 text-caption tabular-nums text-muted"
+            className="w-44 shrink-0 text-caption tabular-nums text-muted-foreground"
           >
             {new Date(event.occurredAt).toLocaleString(undefined, {
               dateStyle: "short",
@@ -145,7 +145,7 @@ function EventRow({ event, isLast }: { event: AuditEvent; isLast?: boolean }) {
           <span className="font-identity min-w-0 flex-1 truncate text-body-strong">
             {event.action}
           </span>
-          <span className="text-body-sm text-muted">
+          <span className="text-body-sm text-muted-foreground">
             {event.actorLabel ?? event.actorClient ?? "anonymous"}
           </span>
         </summary>

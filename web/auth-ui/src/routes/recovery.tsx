@@ -71,7 +71,7 @@ export function ForgotRoute() {
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" disabled={mutation.isPending}>
+        <Button type="submit" variant="default" disabled={mutation.isPending}>
           {mutation.isPending ? "Sending…" : "Send reset link"}
         </Button>
       </form>
@@ -174,7 +174,7 @@ export function ResetRoute() {
           </p>
         ) : null}
 
-        <Button type="submit" variant="primary" disabled={mutation.isPending}>
+        <Button type="submit" variant="default" disabled={mutation.isPending}>
           {mutation.isPending ? "Saving…" : "Save new password"}
         </Button>
       </form>

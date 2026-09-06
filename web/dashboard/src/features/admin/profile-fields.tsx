@@ -3,6 +3,10 @@ import {
   ConfirmDialog,
   DataTable,
   Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
   EmptyState,
   ErrorState,
   Field,
@@ -83,7 +87,7 @@ export function ProfileFieldsRoute() {
         lede="What this organization records about people, beyond name and email. The self-service profile form is built from this."
         count={fields.data?.meta.total}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
+          <Button variant="default" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" />
             Add field
           </Button>
@@ -105,7 +109,7 @@ export function ProfileFieldsRoute() {
           title="No fields defined"
           body="Add the things you need to know about people — a department, a student number, a phone extension. They appear on everyone's profile straight away."
           action={
-            <Button variant="primary" onClick={() => setCreating(true)}>
+            <Button variant="default" onClick={() => setCreating(true)}>
               Add field
             </Button>
           }
@@ -195,7 +199,7 @@ function CreateFieldDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <Dialog.Content className="max-h-[90dvh] overflow-y-auto">
+      <DialogContent className="max-h-[90dvh] overflow-y-auto">
         <form
           noValidate
           onSubmit={form.handleSubmit((values) =>
@@ -207,13 +211,13 @@ function CreateFieldDialog({
             }),
           )}
         >
-          <Dialog.Title className="text-display-sm font-display text-ink">
+          <DialogTitle className="text-display-sm font-display text-ink">
             Add a profile field
-          </Dialog.Title>
-          <Dialog.Description className="mt-2 text-body-sm text-body">
+          </DialogTitle>
+          <DialogDescription className="mt-2 text-body-sm text-body">
             The key and type are fixed once created, because existing values are stored against
             them.
-          </Dialog.Description>
+          </DialogDescription>
 
           <div className="mt-6 flex flex-col gap-5">
             <Field label="Label" required hint="What people see on the form.">
@@ -297,17 +301,17 @@ function CreateFieldDialog({
           ) : null}
 
           <div className="mt-8 flex justify-end gap-3">
-            <Dialog.Close asChild>
-              <Button type="button" variant="secondary">
+            <DialogClose asChild>
+              <Button type="button" variant="outline">
                 Cancel
               </Button>
-            </Dialog.Close>
-            <Button type="submit" variant="primary" disabled={create.isPending}>
+            </DialogClose>
+            <Button type="submit" variant="default" disabled={create.isPending}>
               {create.isPending ? "Adding…" : "Add field"}
             </Button>
           </div>
         </form>
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -322,7 +326,9 @@ function Checkbox({
       <input type="checkbox" className="mt-1 h-4 w-4 shrink-0 accent-primary" {...props} />
       <span>
         <span className="block text-body-sm text-ink">{label}</span>
-        {hint ? <span className="mt-0.5 block text-caption text-muted">{hint}</span> : null}
+        {hint ? (
+          <span className="mt-0.5 block text-caption text-muted-foreground">{hint}</span>
+        ) : null}
       </span>
     </label>
   );

@@ -3,6 +3,8 @@ import {
   ConfirmDialog,
   DataTable,
   Dialog,
+  DialogContent,
+  DialogTitle,
   ErrorState,
   Field,
   IdenError,
@@ -58,7 +60,7 @@ export function ClientsRoute() {
         lede="The applications allowed to ask IDEN for tokens — browser apps, mobile apps, and backend services."
         count={clients.data?.meta.total}
         actions={
-          <Button variant="primary" onClick={() => setCreating(true)}>
+          <Button variant="default" onClick={() => setCreating(true)}>
             <Plus aria-hidden="true" />
             Register client
           </Button>
@@ -140,12 +142,12 @@ function CreateClientDialog({
 
   return (
     <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <Dialog.Content>
+      <DialogContent>
         {created ? (
           <>
-            <Dialog.Title className="text-display-sm font-display text-ink">
+            <DialogTitle className="text-display-sm font-display text-ink">
               {created.name} registered
-            </Dialog.Title>
+            </DialogTitle>
             {created.clientSecret ? (
               <div className="mt-5">
                 <SecretRevealOnce label="Client secret" secret={created.clientSecret} />
@@ -157,11 +159,11 @@ function CreateClientDialog({
               </p>
             )}
             <div className="mt-8 flex justify-end gap-3">
-              <Button variant="secondary" onClick={close}>
+              <Button variant="outline" onClick={close}>
                 Done
               </Button>
               <Button
-                variant="primary"
+                variant="default"
                 onClick={() => {
                   const id = created.id;
                   close();
@@ -179,9 +181,9 @@ function CreateClientDialog({
               create.mutate(values, { onSuccess: setCreated }),
             )}
           >
-            <Dialog.Title className="text-display-sm font-display text-ink">
+            <DialogTitle className="text-display-sm font-display text-ink">
               Register a client
-            </Dialog.Title>
+            </DialogTitle>
 
             <div className="mt-6 flex flex-col gap-5">
               <Field label="Name" required hint="Shown to people on the consent screen.">
@@ -237,7 +239,7 @@ function CreateClientDialog({
                   )}
                 </Field>
               ) : (
-                <p className="text-body-sm text-muted">
+                <p className="text-body-sm text-muted-foreground">
                   A confidential client here uses the client credentials grant: it acts as itself,
                   with no user and no redirect.
                 </p>
@@ -251,16 +253,16 @@ function CreateClientDialog({
             ) : null}
 
             <div className="mt-8 flex justify-end gap-3">
-              <Button type="button" variant="secondary" onClick={close}>
+              <Button type="button" variant="outline" onClick={close}>
                 Cancel
               </Button>
-              <Button type="submit" variant="primary" disabled={create.isPending}>
+              <Button type="submit" variant="default" disabled={create.isPending}>
                 {create.isPending ? "Registering…" : "Register client"}
               </Button>
             </div>
           </form>
         )}
-      </Dialog.Content>
+      </DialogContent>
     </Dialog>
   );
 }
@@ -314,7 +316,7 @@ export function ClientDetailRoute() {
 
   return (
     <>
-      <Link to="/admin/clients" className="text-caption text-muted hover:text-ink">
+      <Link to="/admin/clients" className="text-caption text-muted-foreground hover:text-ink">
         ← Clients
       </Link>
 
@@ -329,17 +331,17 @@ export function ClientDetailRoute() {
 
       <dl className="mb-10 flex flex-wrap gap-x-12 gap-y-4">
         <div>
-          <dt className="text-caption-upper uppercase text-muted">Client ID</dt>
+          <dt className="text-caption-upper uppercase text-muted-foreground">Client ID</dt>
           <dd className="mt-1">
             <ScopeChip value={record.clientId} />
           </dd>
         </div>
         <div>
-          <dt className="text-caption-upper uppercase text-muted">Grants</dt>
+          <dt className="text-caption-upper uppercase text-muted-foreground">Grants</dt>
           <dd className="mt-1 text-body-sm text-body">{record.allowedGrants.join(", ")}</dd>
         </div>
         <div>
-          <dt className="text-caption-upper uppercase text-muted">Consent</dt>
+          <dt className="text-caption-upper uppercase text-muted-foreground">Consent</dt>
           <dd className="mt-1 text-body-sm text-body">
             {record.skipConsent ? "Skipped (first-party)" : "Asked every first time"}
           </dd>
@@ -367,7 +369,7 @@ export function ClientDetailRoute() {
                 ? "Permissions it may request for a user"
                 : "Permissions it may request"}
             </h2>
-            <p className="mb-4 max-w-prose text-body-sm text-muted">
+            <p className="mb-4 max-w-prose text-body-sm text-muted-foreground">
               The ceiling for what a person can delegate to this app. What they actually get is this
               set intersected with their own permissions.
             </p>
@@ -383,7 +385,7 @@ export function ClientDetailRoute() {
           {isConfidential ? (
             <section className="mb-12">
               <h2 className="mb-1 text-title-lg text-ink">Permissions it holds itself</h2>
-              <p className="mb-4 max-w-prose text-body-sm text-muted">
+              <p className="mb-4 max-w-prose text-body-sm text-muted-foreground">
                 Used with the client credentials grant, where there is no person — the application
                 is the identity.
               </p>
@@ -399,7 +401,7 @@ export function ClientDetailRoute() {
 
           <div className="mb-12 flex items-center gap-3">
             <Button
-              variant="primary"
+              variant="default"
               disabled={!changed || saveScopes.isPending}
               onClick={() =>
                 saveScopes.mutate(
@@ -444,13 +446,13 @@ export function ClientDetailRoute() {
         <div className="flex flex-wrap gap-3">
           {isConfidential ? <Button onClick={() => setRotating(true)}>Rotate secret</Button> : null}
           {record.isSystem ? null : (
-            <Button variant="danger" onClick={() => setDeleting(true)}>
+            <Button variant="destructive" onClick={() => setDeleting(true)}>
               Delete client
             </Button>
           )}
         </div>
         {record.isSystem ? (
-          <p className="mt-4 max-w-prose text-body-sm text-muted">
+          <p className="mt-4 max-w-prose text-body-sm text-muted-foreground">
             This client ships with IDEN and cannot be deleted — the dashboard you are reading this
             in is registered through it.
           </p>
