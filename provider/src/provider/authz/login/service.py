@@ -1,4 +1,5 @@
 from datetime import UTC, datetime
+from uuid import UUID
 
 import pyotp
 from sqlalchemy import select
@@ -51,3 +52,20 @@ async def verify_totp(session: AsyncSession, user: User, code: str) -> None:
     # between the phone and the server (RFC 6238 §6).
     if not pyotp.TOTP(credential.secret).verify(code, valid_window=1):
         raise InvalidTotpCode
+
+
+async def has_confirmed_totp(session: AsyncSession, user_id: UUID) -> bool:
+    """Whether this person has finished setting up an authenticator.
+
+    Unconfirmed enrollments do not count. A credential exists from the moment
+    someone opens the QR code, and treating that as a second factor would lock
+    out anyone who walked away from the screen.
+    """
+    return (
+        await session.scalar(
+            select(TotpCredential.id).where(
+                TotpCredential.user_id == user_id,
+                TotpCredential.confirmed_at.is_not(None),
+            )
+        )
+    ) is not None

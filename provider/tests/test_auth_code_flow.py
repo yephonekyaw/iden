@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 import jwt
 import pytest
 
@@ -296,3 +298,104 @@ class TestTokenExchange:
 
         assert response.status_code == 400
         assert response.json()["error"] == "invalid_grant"
+
+
+class TestEnrolledTotpIsMandatory:
+    """A second factor that only applies when a client asks for it protects
+    nobody: the attacker holding the password uses a client that does not ask.
+
+    Once someone has confirmed an authenticator, a password alone stops being
+    enough to sign in as them — whatever the client requested.
+    """
+
+    @pytest.fixture
+    async def enrolled(self, db, admin_user):
+        """Give the administrator a confirmed authenticator."""
+        import pyotp
+
+        from provider.shared.models import TotpCredential
+
+        secret = pyotp.random_base32()
+        db.add(
+            TotpCredential(
+                user_id=admin_user.id,
+                secret=secret,
+                confirmed_at=datetime.now(UTC),
+            )
+        )
+        await db.commit()
+        return secret
+
+    async def test_password_alone_no_longer_completes_the_login(self, client, enrolled):
+        _, challenge = pkce_pair()
+        start_response = await start(client, challenge)
+        challenge_id = query_of(start_response)["challenge"]
+
+        body = (await sign_in(client, challenge_id)).json()
+
+        assert body["status"] == "totp_required"
+        assert body["resumeUrl"] is None
+
+    async def test_the_code_completes_it(self, client, enrolled):
+        import pyotp
+
+        _, challenge = pkce_pair()
+        start_response = await start(client, challenge)
+        challenge_id = query_of(start_response)["challenge"]
+        await sign_in(client, challenge_id)
+
+        body = (
+            await client.post(
+                "/api/v1/auth/totp",
+                json={"challengeId": challenge_id, "code": pyotp.TOTP(enrolled).now()},
+            )
+        ).json()
+
+        assert body["status"] == "complete"
+        assert body["acr"] == "iden:loa:2"
+        assert set(body["amr"]) == {"pwd", "otp", "mfa"}
+
+    async def test_authorize_refuses_to_issue_a_code_to_a_password_only_session(
+        self, client, enrolled
+    ):
+        """The enforcement that matters. Skipping the code form and returning to
+        the resume URL must not be a way around the second factor."""
+        _, challenge = pkce_pair()
+        start_response = await start(client, challenge)
+        challenge_id = query_of(start_response)["challenge"]
+        await sign_in(client, challenge_id)  # session now exists, amr == ["pwd"]
+
+        # Straight back to /authorize, as the resume URL would.
+        resumed = await start(client, challenge)
+
+        query = query_of(resumed)
+        assert "code" not in query
+        assert "challenge" in query
+
+    async def test_someone_without_an_authenticator_is_unaffected(self, client):
+        _, challenge = pkce_pair()
+        start_response = await start(client, challenge)
+        challenge_id = query_of(start_response)["challenge"]
+
+        body = (await sign_in(client, challenge_id)).json()
+
+        assert body["status"] == "complete"
+        assert body["resumeUrl"]
+
+    async def test_an_unconfirmed_enrollment_does_not_count(
+        self, client, db, admin_user
+    ):
+        """A credential exists from the moment the QR code is opened. Treating
+        that as a factor would lock out anyone who walked away from the screen."""
+        import pyotp
+
+        from provider.shared.models import TotpCredential
+
+        db.add(TotpCredential(user_id=admin_user.id, secret=pyotp.random_base32()))
+        await db.commit()
+
+        _, challenge = pkce_pair()
+        start_response = await start(client, challenge)
+        challenge_id = query_of(start_response)["challenge"]
+
+        assert (await sign_in(client, challenge_id)).json()["status"] == "complete"

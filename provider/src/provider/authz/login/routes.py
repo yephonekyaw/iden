@@ -18,7 +18,11 @@ from provider.authz.login.schemas import (
     LoginRequest,
     TotpRequest,
 )
-from provider.authz.login.service import authenticate_password, verify_totp
+from provider.authz.login.service import (
+    authenticate_password,
+    has_confirmed_totp,
+    verify_totp,
+)
 from provider.authz.services import auth_methods, challenge_store, session_store
 from provider.authz.services.scope_resolver import OIDC_SCOPES, parse_scope
 from provider.core import ratelimit
@@ -42,12 +46,25 @@ OIDC_SCOPE_DESCRIPTIONS = {
 }
 
 
-async def _next_step(redis, session, challenge) -> AuthStepResponse:
-    """Whether the assurance the client asked for has been reached yet."""
+async def _next_step(session, challenge, *, totp_enrolled: bool) -> AuthStepResponse:
+    """What still has to happen before the authorization request can resume.
+
+    Two separate reasons to ask for a code, and they answer to different people.
+    The client can demand a level through `acr_values`. The *person* demands it
+    by having set up an authenticator at all: once they have, a password alone
+    stops being enough to sign in as them, whatever the client asked for.
+
+    That second rule is the point of enrolling. A second factor that only
+    applies when an application happens to request it protects nobody — the
+    attacker with the password simply uses an application that does not ask.
+    """
     acr = auth_methods.derive_acr(session.amr)
     amr = auth_methods.normalized_amr(session.amr)
 
-    if not auth_methods.meets(acr, challenge.params.get("acr_values")):
+    needs_step_up = not auth_methods.meets(acr, challenge.params.get("acr_values"))
+    owes_second_factor = totp_enrolled and AmrMethod.OTP not in session.amr
+
+    if needs_step_up or owes_second_factor:
         return AuthStepResponse(status="totp_required", acr=acr, amr=amr)
 
     return AuthStepResponse(
@@ -111,8 +128,15 @@ async def read_challenge(
     description=(
         "Verifies the password, records `pwd` in the session's `amr`, and "
         "returns where to go next.\n\n"
-        "When the client requested an assurance level the password alone does "
-        "not reach, the response is `totpRequired` rather than a resume URL.\n\n"
+        "The response is `totpRequired` rather than a resume URL in two cases, "
+        "and they answer to different people:\n\n"
+        "- the client asked for an assurance level a password alone does not "
+        "reach (`acr_values`), or\n"
+        "- **this person has an authenticator set up.** Once they do, a password "
+        "alone stops being enough to sign in as them, whatever the client asked "
+        "for. A second factor that applied only when an application requested it "
+        "would protect nobody — whoever holds the password would use an "
+        "application that does not ask.\n\n"
         "**Required scope:** none — this is how a session is established."
     ),
     responses={
@@ -195,7 +219,11 @@ async def login(
     challenge.user_id = user.id
     await challenge_store.save(redis, challenge)
 
-    return await _next_step(redis, login_session, challenge)
+    return await _next_step(
+        login_session,
+        challenge,
+        totp_enrolled=await has_confirmed_totp(session, user.id),
+    )
 
 
 @router.post(
@@ -257,7 +285,9 @@ async def totp(
     await ratelimit.clear(redis, ratelimit.TOTP_FAILURES["bucket"], str(user.id))
 
     await session_store.add_method(redis, login_session, AmrMethod.OTP)
-    return await _next_step(redis, login_session, challenge)
+    # Enrollment is settled by the code that just verified, so this cannot ask
+    # for another one.
+    return await _next_step(login_session, challenge, totp_enrolled=True)
 
 
 @router.post(

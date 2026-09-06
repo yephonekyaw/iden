@@ -28,6 +28,24 @@ A single level, derived from `amr` at the moment a token is issued:
 **Derived, never stored.** If someone adds a second factor mid-session, the next token they receive
 reports the higher level with no state anywhere to keep in sync.
 
+## An enrolled authenticator is always required
+
+Before any application asks for anything: **once someone has set up an authenticator, a password
+alone stops being enough to sign in as them.** IDEN asks for the code on every sign-in, whatever the
+client requested.
+
+This is what enrolling means. A second factor that applied only when an application asked for it
+would protect nobody — whoever holds the password would simply use an application that does not ask,
+and every deployment has one.
+
+Two details follow from it:
+
+- An **unconfirmed** enrollment does not count. A credential exists from the moment someone opens the
+  QR code, and treating that as a factor would lock out anyone who walked away from the screen.
+- The rule is enforced at `/oauth2/authorize`, not only in the sign-in steps. That endpoint is what
+  issues the authorization code, so a session that skipped the code form and returned to the resume
+  URL is sent back rather than handed one.
+
 ## Demanding more: `acr_values`
 
 An application asks by adding `acr_values=iden:loa:2` to its authorization request. If the session

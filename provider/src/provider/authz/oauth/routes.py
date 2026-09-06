@@ -12,6 +12,7 @@ from sqlalchemy import select
 from provider.authz import session_cookie
 from provider.authz.consent.service import consent_required
 from provider.authz.deps import LoginSessionDep
+from provider.authz.login.service import has_confirmed_totp
 from provider.authz.logout import service as logout_service
 from provider.authz.oauth.errors import (
     InvalidClient,
@@ -49,7 +50,13 @@ from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.security import hash_token
 from provider.entity.profile import service as profile_service
-from provider.shared.enums import ClientType, CodeChallengeMethod, GrantType, Prompt
+from provider.shared.enums import (
+    AmrMethod,
+    ClientType,
+    CodeChallengeMethod,
+    GrantType,
+    Prompt,
+)
 from provider.shared.models import Client, RefreshToken, User
 
 router = APIRouter(prefix="/oauth2", tags=["oauth2"])
@@ -261,6 +268,16 @@ async def authorize(
     user = await session.get(User, login_session.user_id)
     if user is None or not user.is_active:
         return await interact("/auth/login")
+
+    # Someone who has set up an authenticator must have used it, whatever this
+    # client asked for. Enforced *here* rather than only in the login step
+    # machine because this is the endpoint that issues the code: a session that
+    # skipped the code form and came straight back to the resume URL would
+    # otherwise be handed one anyway, which is the whole attack.
+    if AmrMethod.OTP not in login_session.amr and await has_confirmed_totp(
+        session, login_session.user_id
+    ):
+        return await interact("/auth/login", login_session.user_id, step_up="1")
 
     requested = parse_scope(scope)
     granted = resolve_for_user(requested, client, user)
