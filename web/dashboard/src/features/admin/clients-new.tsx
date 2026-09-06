@@ -12,7 +12,6 @@ import {
   Switch,
   Textarea,
   Button,
-  cn,
   ScopeChip,
 } from "@iden/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -32,6 +31,47 @@ const lines = (value: string) =>
     .map((line) => line.trim())
     .filter(Boolean);
 
+/**
+ * The four shapes an OIDC client comes in.
+ *
+ * One question rather than three. "Can it keep a secret?" and "which grant?"
+ * are not independent decisions an administrator makes — they follow from what
+ * kind of application this is, and every other OIDC console asks it this way for
+ * that reason. The consequences are derived here, once.
+ */
+const APP_TYPES = {
+  web: {
+    label: "Web application",
+    hint: "Server-side app — Next.js, Django, Rails. Keeps a secret.",
+    clientType: "confidential",
+    grants: ["authorization_code", "refresh_token"],
+    summary: "Confidential · authorization code + PKCE",
+  },
+  spa: {
+    label: "Single-page application",
+    hint: "Runs in the browser — React, Vue, Angular. No secret; PKCE proves it.",
+    clientType: "public",
+    grants: ["authorization_code", "refresh_token"],
+    summary: "Public · authorization code + PKCE",
+  },
+  native: {
+    label: "Native or mobile app",
+    hint: "iOS, Android, desktop. Anything a user can read the source of is public.",
+    clientType: "public",
+    grants: ["authorization_code", "refresh_token"],
+    summary: "Public · authorization code + PKCE",
+  },
+  service: {
+    label: "Machine-to-machine",
+    hint: "A backend job or a kiosk acting as itself. No person signs in.",
+    clientType: "confidential",
+    grants: ["client_credentials"],
+    summary: "Confidential · client credentials",
+  },
+} as const;
+
+type AppType = keyof typeof APP_TYPES;
+
 const schema = z
   .object({
     name: z.string().min(1, "Give the application a name."),
@@ -39,8 +79,7 @@ const schema = z
       .string()
       .min(1, "Choose a client ID.")
       .regex(/^[a-zA-Z0-9._-]+$/, "Letters, numbers, dots, dashes and underscores only."),
-    clientType: z.enum(["public", "confidential"]),
-    usesAuthorizationCode: z.boolean(),
+    appType: z.enum(["web", "spa", "native", "service"]),
     redirectUris: z.string(),
     postLogoutRedirectUris: z.string(),
     grantableScopeIds: z.array(z.string()),
@@ -49,7 +88,7 @@ const schema = z
     backchannelLogoutSessionRequired: z.boolean(),
     skipConsent: z.boolean(),
   })
-  .refine((values) => !values.usesAuthorizationCode || lines(values.redirectUris).length > 0, {
+  .refine((values) => values.appType === "service" || lines(values.redirectUris).length > 0, {
     path: ["redirectUris"],
     message: "A client that signs people in needs at least one redirect URI.",
   })
@@ -72,8 +111,7 @@ export function ClientCreateRoute() {
     defaultValues: {
       name: "",
       clientId: "",
-      clientType: "public",
-      usesAuthorizationCode: true,
+      appType: "web",
       redirectUris: "",
       postLogoutRedirectUris: "",
       grantableScopeIds: [],
@@ -85,15 +123,13 @@ export function ClientCreateRoute() {
   });
 
   const create = useWrite<Values, ClientCreated>(["/admin/clients"], async (values) => {
-    const grants = values.usesAuthorizationCode
-      ? ["authorization_code", "refresh_token"]
-      : ["client_credentials"];
+    const kind = APP_TYPES[values.appType];
     const response = await api.post<ClientCreated>("/admin/clients", {
       clientId: values.clientId,
       name: values.name,
-      clientType: values.clientType,
-      allowedGrants: grants,
-      redirectUris: values.usesAuthorizationCode ? lines(values.redirectUris) : [],
+      clientType: kind.clientType,
+      allowedGrants: [...kind.grants],
+      redirectUris: values.appType === "service" ? [] : lines(values.redirectUris),
       postLogoutRedirectUris: lines(values.postLogoutRedirectUris),
       backchannelLogoutUri: values.backchannelLogoutUri.trim() || null,
       backchannelLogoutSessionRequired: values.backchannelLogoutSessionRequired,
@@ -104,7 +140,8 @@ export function ClientCreateRoute() {
     return response.data;
   });
 
-  const usesCode = useWatch({ control: form.control, name: "usesAuthorizationCode" });
+  const appType = useWatch({ control: form.control, name: "appType" }) as AppType;
+  const usesCode = appType !== "service";
   const options = scopeOptions.data ?? [];
   const labelFor = (ids: string[]) =>
     options
@@ -121,7 +158,7 @@ export function ClientCreateRoute() {
       label: "Basics",
       title: "What is this application?",
       lede: "The name is what people see on the consent screen. The client ID is what the application sends to IDEN.",
-      fields: ["name", "clientId", "clientType", "usesAuthorizationCode"],
+      fields: ["name", "clientId", "appType"],
       render: (f) => (
         <div className="flex max-w-xl flex-col gap-6">
           <Field label="Name" required error={f.formState.errors.name?.message}>
@@ -137,66 +174,35 @@ export function ClientCreateRoute() {
             {(props) => <Input {...props} {...f.register("clientId")} className="font-identity" />}
           </Field>
 
-          <fieldset className="flex flex-col gap-3">
-            <legend className="text-caption font-medium text-body-strong">
-              How does it authenticate?
-            </legend>
-            <Controller
-              control={f.control}
-              name="usesAuthorizationCode"
-              render={({ field }) => (
-                <div className="flex flex-col gap-3">
-                  <ChoiceCard
-                    selected={field.value}
-                    onSelect={() => field.onChange(true)}
-                    title="On behalf of a person"
-                    body="The authorization code flow. Someone signs in and the application acts for them."
-                  />
-                  <ChoiceCard
-                    selected={!field.value}
-                    onSelect={() => {
-                      field.onChange(false);
-                      f.setValue("clientType", "confidential");
-                    }}
-                    title="As itself"
-                    body="The client credentials flow. No person is involved — a backend job or a kiosk."
-                  />
-                </div>
-              )}
-            />
-          </fieldset>
-
-          {usesCode ? (
-            <Field
-              label="Can it keep a secret?"
-              hint="A browser or mobile app cannot; anything a user can read the source of is public. This cannot be changed later."
-            >
-              {(props) => (
-                <Controller
-                  control={f.control}
-                  name="clientType"
-                  render={({ field }) => (
-                    <Select value={field.value} onValueChange={field.onChange}>
-                      <SelectTrigger {...props} className="w-full">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="public">
-                          No — browser or mobile app (PKCE only)
+          <Field label="Application type" hint={APP_TYPES[appType].hint}>
+            {(props) => (
+              <Controller
+                control={f.control}
+                name="appType"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger {...props} className="w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.entries(APP_TYPES).map(([value, kind]) => (
+                        <SelectItem key={value} value={value}>
+                          {kind.label}
                         </SelectItem>
-                        <SelectItem value="confidential">Yes — a backend it controls</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                />
-              )}
-            </Field>
-          ) : (
-            <p className="text-body-sm text-muted-foreground">
-              A client acting as itself is always confidential — the secret is the only thing
-              proving who it is.
-            </p>
-          )}
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              />
+            )}
+          </Field>
+
+          {/* What the choice above decided, so the consequence is visible
+              before the review rather than only after it. Neither half can be
+              changed once the client exists. */}
+          <p className="-mt-3 text-caption text-muted-soft">
+            {APP_TYPES[appType].summary} · fixed once registered
+          </p>
         </div>
       ),
     },
@@ -340,16 +346,8 @@ export function ClientCreateRoute() {
             <ReviewItem label="Client ID">
               <ScopeChip value={v.clientId} />
             </ReviewItem>
-            <ReviewItem label="Flow">
-              {usesCode
-                ? "Authorization code, on behalf of a person"
-                : "Client credentials, as itself"}
-            </ReviewItem>
-            <ReviewItem label="Type">
-              {v.clientType === "public"
-                ? "Public — no secret, PKCE"
-                : "Confidential — has a secret"}
-            </ReviewItem>
+            <ReviewItem label="Type">{APP_TYPES[v.appType].label}</ReviewItem>
+            <ReviewItem label="Authentication">{APP_TYPES[v.appType].summary}</ReviewItem>
             {usesCode ? (
               <ReviewItem label="Redirect URIs">
                 {lines(v.redirectUris).length ? (
@@ -434,34 +432,6 @@ function SecretHandover({ created }: { created: ClientCreated }) {
         </Button>
       </div>
     </div>
-  );
-}
-
-/** A choice between two shapes of thing, where the difference needs a sentence. */
-export function ChoiceCard({
-  selected,
-  onSelect,
-  title,
-  body,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  title: string;
-  body: string;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onSelect}
-      aria-pressed={selected}
-      className={cn(
-        "rounded-lg border px-5 py-4 text-left transition-colors duration-100",
-        selected ? "border-primary bg-secondary/60" : "border-border hover:bg-secondary/40",
-      )}
-    >
-      <p className="text-title-sm text-foreground">{title}</p>
-      <p className="mt-1 text-body-sm text-muted-foreground">{body}</p>
-    </button>
   );
 }
 
