@@ -1,0 +1,77 @@
+[project]
+name = "engine"
+version = "0.0.1"
+description = "IDEN biometric engine — face detection, embedding, and liveness"
+readme = "README.md"
+authors = [
+    { name = "SAI ZAW OO", email = "saizywoo@gmail.com" }
+]
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "fastapi[standard]>=0.141.1",
+    "insightface>=0.7.3",
+    "ml-dtypes>=0.5",
+    "numpy>=2",
+    # These four exist so `onnxruntime-gpu`'s CUDA execution provider has
+    # something to load without requiring a system-wide CUDA Toolkit + cuDNN
+    # install (which needs an NVIDIA developer login just for cuDNN). See
+    # `engine/__init__.py`, which registers each package's `bin/` directory
+    # with `os.add_dll_directory` before anything imports onnxruntime.
+    # Confirmed on this machine: all four load individually and the CUDA
+    # driver itself initializes (`cuInit` succeeds, GPU visible) — but
+    # `onnxruntime_providers_cuda.dll`'s own init routine still fails
+    # (WinError 1114) with both onnxruntime-gpu 1.20.2 and 1.19.2. Root cause
+    # not yet found; CPU execution provider works correctly as the fallback.
+    "nvidia-cublas-cu12>=12.9",
+    "nvidia-cuda-runtime-cu12>=12.9.79",
+    "nvidia-cudnn-cu12==9.5.1.17",
+    "nvidia-cufft-cu12>=11.4.1.4",
+    # Pinned, not >=: 1.21+ links against CUDA 13's cuBLAS
+    # (cublasLt64_13.dll), which has no matching pip wheel here — this pins
+    # to the last release built against CUDA 12.x + cuDNN 9.x.
+    "onnxruntime-gpu==1.20.2",
+    "opencv-python-headless>=4.10.0.84",
+    "pydantic-settings>=2.15.0",
+    "python-multipart>=0.0.32",
+    "structlog>=26.1.0",
+]
+
+[project.scripts]
+engine = "engine.core.app:main"
+
+[build-system]
+requires = ["uv_build>=0.12.1,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.411",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.4",
+]
+
+[tool.uv]
+# onnxruntime-gpu ships no macOS wheels at all — CUDA doesn't run there — so
+# there is nothing for uv to resolve on darwin. Without this, locking for a
+# specific CUDA-compatible onnxruntime-gpu version fails outright because uv
+# tries to solve for every platform by default.
+environments = [
+    "sys_platform == 'win32'",
+    "sys_platform == 'linux'",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+ignore = [
+    "E501",
+    # `Form(...)` / `File(...)` in a parameter default is the FastAPI idiom,
+    # not the mutable default B008 exists to catch.
+    "B008",
+]
+
+[tool.pyright]
+include = ["src"]
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "standard"
