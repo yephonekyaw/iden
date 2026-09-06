@@ -9,9 +9,16 @@ cannot copy out of this repository and point at your own deployment is not a
 sample, it is a second frontend. Copy the directory, change the issuer, and it
 runs.
 
-They do share IDEN's visual language, because they are also a showcase. Each
-carries its own transcription of the tokens in [`DESIGN.md`](../DESIGN.md) — a
-file you are free to delete when you copy it.
+They do share a look, because they are also a showcase: neo-brutalism — black
+rules, hard offset shadows, flat colour, square corners, and one loud accent per
+application. It is deliberately *not* the dashboard's design language from
+[`DESIGN.md`](../DESIGN.md): these are demos, they are meant to be read across a
+room, and nobody should mistake a sample for the product. Each sample carries
+its own copy of the styling, which is yours to delete when you copy it.
+
+The type is Archivo for headings, Space Grotesk for prose and JetBrains Mono for
+anything you would copy — loaded from Google Fonts, with a system fallback so a
+laptop with no network still looks right.
 
 | Sample | Shape | Shows |
 |---|---|---|
