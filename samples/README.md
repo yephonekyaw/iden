@@ -1,0 +1,40 @@
+# Sample applications
+
+Working applications that sign in with IDEN. Each one exists to show a different
+way of integrating, and each is **its own project** — its own dependencies, its
+own build, its own README.
+
+Nothing here imports from `web/` or `provider/`. That is deliberate: a sample you
+cannot copy out of this repository and point at your own deployment is not a
+sample, it is a second frontend. Copy the directory, change the issuer, and it
+runs.
+
+They do share IDEN's visual language, because they are also a showcase. Each
+carries its own transcription of the tokens in [`DESIGN.md`](../DESIGN.md) — a
+file you are free to delete when you copy it.
+
+| Sample | Shape | Shows |
+|---|---|---|
+| [`oidc-playground`](oidc-playground/) | React SPA, no backend | The authorization code flow one parameter at a time — PKCE, the callback, the token exchange, and every claim in every token |
+
+## Registering a client
+
+Every sample needs an OAuth client registered in your deployment before it will
+run, and the seed does not create them: a sample client with a live redirect URI
+is not something to leave lying around in a deployment by accident.
+
+Register one from the dashboard under **Clients → Register client**, or through
+the admin API. Each sample's README names the exact `client_id`, redirect URI and
+scopes it expects.
+
+## Letting a browser sample talk to the provider
+
+A single-page sample calls `/oauth2/token` and `/oauth2/userinfo` from its own
+origin, so that origin has to be in the provider's CORS allowlist:
+
+```bash
+IDEN_ALLOWED_ADMIN_ORIGINS='["http://localhost:3000","http://localhost:5173","http://localhost:5100"]'
+```
+
+Credentialed CORS forbids a wildcard, so every origin is named. A sample with its
+own backend does not need this — the browser never talks to the provider directly.
