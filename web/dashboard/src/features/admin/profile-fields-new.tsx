@@ -16,7 +16,8 @@ import {
 } from "@iden/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useQuery } from "@tanstack/react-query";
-import { Plus, X } from "lucide-react";
+import { useState } from "react";
+import { Check, Plus, X } from "lucide-react";
 import { Controller, useFieldArray, useForm, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router";
 import { z } from "zod";
@@ -66,6 +67,9 @@ const schema = z
   });
 
 type Values = z.infer<typeof schema>;
+
+/** Not a preset key — presets are lowercase identifiers, so this cannot collide. */
+const BLANK_KEY = "\u0000blank";
 
 const BLANK: Values = {
   key: "",
@@ -117,11 +121,16 @@ export function ProfileFieldCreateRoute() {
     return response.data;
   });
 
+  // Only so the step can show what was chosen when it is revisited — the
+  // form already holds the answer.
+  const [chosen, setChosen] = useState<string | null>(null);
+
   const options = useFieldArray({ control: form.control, name: "options" });
   const dataType = useWatch({ control: form.control, name: "dataType" });
   const claimName = useWatch({ control: form.control, name: "claimName" });
 
   function apply(preset: Preset) {
+    setChosen(preset.key);
     form.reset({
       ...BLANK,
       key: preset.key,
@@ -142,14 +151,22 @@ export function ProfileFieldCreateRoute() {
       label: "Start",
       title: "Start from something, or from nothing",
       lede: "Presets are templates — nothing is created until the last step, and you can change every part of one first.",
-      render: () =>
+      render: (_f, step) =>
         presets.isPending ? (
           <Spinner label="Loading presets" />
         ) : (
           <PresetPicker
             presets={presets.data ?? []}
-            onPick={apply}
-            onBlank={() => form.reset(BLANK)}
+            chosen={chosen}
+            onPick={(preset) => {
+              apply(preset);
+              step.next();
+            }}
+            onBlank={() => {
+              setChosen(BLANK_KEY);
+              form.reset(BLANK);
+              step.next();
+            }}
           />
         ),
     },
@@ -439,12 +456,25 @@ export function ProfileFieldCreateRoute() {
  * reader here is an administrator deciding whether they want the field, not the
  * person who will eventually fill it in.
  */
+/**
+ * The catalogue, grouped the way the server groups it.
+ *
+ * Each card leads with `rationale` rather than the field's own description: the
+ * reader here is an administrator deciding whether they want the field, not the
+ * person who will eventually fill it in.
+ *
+ * Picking one moves the flow on. The choice *is* the answer to this step, so a
+ * second click on Continue would carry no information — but the selection is
+ * still marked, because the step can be returned to from the stepper.
+ */
 function PresetPicker({
   presets,
+  chosen,
   onPick,
   onBlank,
 }: {
   presets: Preset[];
+  chosen: string | null;
   onPick: (preset: Preset) => void;
   onBlank: () => void;
 }) {
@@ -455,12 +485,16 @@ function PresetPicker({
       <button
         type="button"
         onClick={onBlank}
-        className="rounded-lg border border-dashed border-border px-5 py-4 text-left hover:bg-secondary/40"
+        aria-pressed={chosen === BLANK_KEY}
+        className={cn(
+          "rounded-lg border border-dashed px-5 py-4 text-left transition-colors duration-100",
+          chosen === BLANK_KEY
+            ? "border-primary bg-secondary/60"
+            : "border-border hover:bg-secondary/40",
+        )}
       >
         <p className="text-title-sm text-foreground">Start from nothing</p>
-        <p className="mt-1 text-body-sm text-muted-foreground">
-          Define every part yourself. Continue without picking a preset.
-        </p>
+        <p className="mt-1 text-body-sm text-muted-foreground">Define every part yourself.</p>
       </button>
 
       {categories.map((category) => (
@@ -469,26 +503,38 @@ function PresetPicker({
           <div className="grid gap-3 sm:grid-cols-2">
             {presets
               .filter((preset) => preset.category === category)
-              .map((preset) => (
-                <button
-                  key={preset.key}
-                  type="button"
-                  onClick={() => onPick(preset)}
-                  className={cn(
-                    "rounded-lg border border-border px-4 py-3.5 text-left transition-colors duration-100",
-                    "hover:border-primary hover:bg-secondary/40",
-                  )}
-                >
-                  <span className="flex flex-wrap items-center gap-2">
-                    <span className="text-title-sm text-foreground">{preset.label}</span>
-                    <Badge variant="secondary">{preset.dataType}</Badge>
-                    {preset.userWritable ? null : <Badge variant="outline">org-owned</Badge>}
-                  </span>
-                  <span className="mt-1.5 block text-body-sm text-muted-foreground">
-                    {preset.rationale}
-                  </span>
-                </button>
-              ))}
+              .map((preset) => {
+                const selected = chosen === preset.key;
+                return (
+                  <button
+                    key={preset.key}
+                    type="button"
+                    onClick={() => onPick(preset)}
+                    aria-pressed={selected}
+                    className={cn(
+                      "relative rounded-lg border px-4 py-3.5 text-left transition-colors duration-100",
+                      selected
+                        ? "border-primary bg-secondary/60"
+                        : "border-border hover:border-primary hover:bg-secondary/40",
+                    )}
+                  >
+                    {selected ? (
+                      <Check
+                        aria-hidden="true"
+                        className="absolute right-3 top-3.5 h-4 w-4 text-primary"
+                      />
+                    ) : null}
+                    <span className="flex flex-wrap items-center gap-2 pr-6">
+                      <span className="text-title-sm text-foreground">{preset.label}</span>
+                      <Badge variant="secondary">{preset.dataType}</Badge>
+                      {preset.userWritable ? null : <Badge variant="outline">org-owned</Badge>}
+                    </span>
+                    <span className="mt-1.5 block text-body-sm text-muted-foreground">
+                      {preset.rationale}
+                    </span>
+                  </button>
+                );
+              })}
           </div>
         </section>
       ))}

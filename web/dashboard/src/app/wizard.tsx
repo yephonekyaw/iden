@@ -17,6 +17,18 @@ import { useState, type ReactNode } from "react";
 import type { FieldValues, Path, UseFormReturn } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 
+/** What a step can do to the flow it sits in. */
+export interface StepControls {
+  /**
+   * Move on, validating this step's fields first.
+   *
+   * For a step whose whole content *is* a choice — picking a preset, say —
+   * making that choice is the answer, and asking for a second click on
+   * Continue only to confirm it is a click that carries no information.
+   */
+  next: () => void;
+}
+
 /**
  * One step of a creation flow.
  *
@@ -31,7 +43,7 @@ export interface Step<T extends FieldValues> {
   title: string;
   lede?: string;
   fields?: Path<T>[];
-  render: (form: UseFormReturn<T>) => ReactNode;
+  render: (form: UseFormReturn<T>, step: StepControls) => ReactNode;
 }
 
 /**
@@ -201,7 +213,7 @@ export function Wizard<T extends FieldValues>({
           {step.lede ? (
             <p className="mt-1 max-w-prose text-body-sm text-muted-foreground">{step.lede}</p>
           ) : null}
-          <div className="mt-6">{step.render(form)}</div>
+          <div className="mt-6">{step.render(form, { next: () => void next() })}</div>
         </CardContent>
       </Card>
 
