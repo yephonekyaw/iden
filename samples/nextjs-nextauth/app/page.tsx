@@ -23,6 +23,14 @@ export default async function Home() {
           adapter, no custom fetch, no patched endpoint — just an issuer and a client id.
         </p>
       </header>
+      <p className="meta">
+        <span>
+          client_id <b>{process.env.IDEN_CLIENT_ID ?? "unset"}</b>
+        </span>
+        <span>
+          issuer <b>{(process.env.IDEN_ISSUER ?? "unset").replace(/^https?:\/\//, "")}</b>
+        </span>
+      </p>
 
       {session?.user ? <SignedIn session={session} /> : <SignedOut />}
 
@@ -74,11 +82,13 @@ interface IdenSession {
 }
 
 function SignedIn({ session }: { session: IdenSession }) {
-  const rows: [string, string][] = [
+  // `acr` and `amr` carry the colour: they are how the person proved who they
+  // were, and Auth.js surfaced them without knowing what they mean.
+  const rows: [string, string, boolean?][] = [
     ["name", session.user?.name ?? "—"],
     ["email", session.user?.email ?? "—"],
-    ["acr", typeof session.acr === "string" ? session.acr : "—"],
-    ["amr", Array.isArray(session.amr) ? session.amr.join(", ") : "—"],
+    ["acr", typeof session.acr === "string" ? session.acr : "—", true],
+    ["amr", Array.isArray(session.amr) ? session.amr.join(", ") : "—", true],
     ["sid", typeof session.sid === "string" ? session.sid : "— not requested —"],
     ["session expires", session.expires ? new Date(session.expires).toLocaleString() : "—"],
   ];
@@ -96,8 +106,8 @@ function SignedIn({ session }: { session: IdenSession }) {
       </div>
 
       <dl className="claims">
-        {rows.map(([key, value]) => (
-          <div key={key}>
+        {rows.map(([key, value, star]) => (
+          <div key={key} className={star ? "star" : undefined}>
             <dt>{key}</dt>
             <dd>{value}</dd>
           </div>
