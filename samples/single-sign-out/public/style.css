@@ -1,0 +1,150 @@
+/* IDEN's design tokens from DESIGN.md, transcribed. This file and the markup
+   are the only things making the sample look like IDEN; both are yours to
+   delete when you copy it. */
+
+:root {
+  --canvas: #faf9f5;
+  --surface-soft: #f5f0e8;
+  --surface-card: #efe9de;
+  --surface-dark: #181715;
+  --ink: #141413;
+  --body: #3d3d3a;
+  --body-strong: #252523;
+  --muted: #6c6a64;
+  --muted-soft: #8e8b82;
+  --hairline: #e6dfd8;
+  --hairline-soft: #ebe6df;
+  --primary: #cc785c;
+  --success: #5db872;
+  --error: #c64545;
+  --on-primary: #ffffff;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --serif: "EB Garamond", Garamond, "Times New Roman", serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--canvas);
+  color: var(--body);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.page { max-width: 44rem; margin: 0 auto; padding: 4rem 1.5rem 6rem; }
+
+/* Masthead ---------------------------------------------------------------- */
+
+.masthead { margin-bottom: 2.5rem; }
+
+.eyebrow {
+  display: flex; align-items: center; gap: 0.5rem;
+  margin: 0 0 0.5rem; font-size: 0.75rem; font-weight: 500;
+  letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted);
+}
+
+.dot {
+  width: 8px; height: 8px; border-radius: 999px;
+  background: var(--accent, var(--primary));
+}
+
+h1 {
+  margin: 0; font-family: var(--serif); font-weight: 400;
+  font-size: 2.25rem; line-height: 1.15; letter-spacing: -0.5px; color: var(--ink);
+}
+
+h2 {
+  margin: 0 0 0.5rem; font-family: var(--serif); font-weight: 400;
+  font-size: 1.375rem; color: var(--ink);
+}
+
+.lede { margin: 0.5rem 0 0; color: var(--body); }
+
+/* Cards ------------------------------------------------------------------- */
+
+.card {
+  border: 1px solid var(--hairline); border-radius: 12px;
+  background: var(--canvas); padding: 2rem; margin-bottom: 1.5rem;
+}
+
+.card--in { border-color: color-mix(in srgb, var(--accent, var(--primary)) 40%, transparent); }
+.card--quiet { background: var(--surface-soft); border-color: var(--hairline-soft); }
+.card--quiet ol { margin: 0 0 1rem; padding-left: 1.25rem; }
+.card--quiet li { margin-bottom: 0.35rem; }
+
+/* Identity ---------------------------------------------------------------- */
+
+.who { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem; }
+
+.avatar {
+  display: flex; align-items: center; justify-content: center;
+  width: 44px; height: 44px; flex: none; border-radius: 999px;
+  background: var(--accent, var(--primary)); color: var(--on-primary);
+  font-size: 1.125rem; font-weight: 500;
+}
+
+.name { margin: 0; font-size: 1.125rem; font-weight: 500; color: var(--ink); }
+.email { margin: 0; font-size: 0.875rem; color: var(--muted); }
+
+.badge {
+  margin-left: auto; padding: 0.2rem 0.7rem; border-radius: 999px;
+  font-size: 0.8125rem; font-weight: 500; white-space: nowrap;
+}
+.badge--live { background: color-mix(in srgb, var(--success) 16%, transparent); color: var(--success); }
+.badge--ended { background: color-mix(in srgb, var(--error) 12%, transparent); color: var(--error); }
+
+/* Claims ------------------------------------------------------------------ */
+
+.claims { margin: 0 0 1.5rem; }
+.claims > div {
+  display: flex; gap: 1rem; align-items: baseline;
+  padding: 0.55rem 0; border-bottom: 1px solid var(--hairline-soft);
+}
+.claims > div:last-child { border-bottom: 0; }
+.claims dt {
+  min-width: 11rem; font-family: var(--mono); font-size: 0.8125rem; color: var(--muted);
+}
+.claims dd {
+  margin: 0; font-family: var(--mono); font-size: 0.8125rem;
+  color: var(--body-strong); word-break: break-all;
+}
+
+/* Buttons ----------------------------------------------------------------- */
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+
+.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+  height: 40px; padding: 0 1.25rem; border-radius: 8px;
+  border: 1px solid var(--hairline); background: var(--canvas); color: var(--ink);
+  font-family: inherit; font-size: 0.875rem; font-weight: 500; text-decoration: none;
+  transition: background-color 100ms, border-color 100ms;
+}
+.button:hover { background: var(--surface-soft); }
+
+.button--primary {
+  background: var(--accent, var(--primary)); border-color: transparent; color: var(--on-primary);
+}
+.button--primary:hover { filter: brightness(0.94); background: var(--accent, var(--primary)); }
+
+.mark { width: 16px; height: 16px; fill: currentColor; }
+
+/* Banners ----------------------------------------------------------------- */
+
+.banner {
+  border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+  font-size: 0.875rem; border-left: 3px solid;
+}
+.banner--ended { background: var(--surface-soft); border-color: var(--primary); color: var(--body); }
+.banner--error { background: color-mix(in srgb, var(--error) 8%, transparent); border-color: var(--error); color: var(--body-strong); }
+
+/* Odds and ends ----------------------------------------------------------- */
+
+.hint { margin: 1.25rem 0 0; font-size: 0.875rem; color: var(--muted); }
+.sibling { font-size: 0.875rem; color: var(--muted); }
+a { color: var(--primary); }
+:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
