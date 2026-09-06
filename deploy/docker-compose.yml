@@ -52,7 +52,7 @@ services:
       IDEN_REDIS_URL: redis://redis:6379/0
       IDEN_ISSUER: http://localhost:8000
       IDEN_AUTH_UI_BASE_URL: http://localhost:4000
-      IDEN_ALLOWED_ADMIN_ORIGINS: '["http://localhost:3000","http://localhost:5173"]'
+      IDEN_ALLOWED_ADMIN_ORIGINS: '["http://localhost:3000","http://localhost:5173","http://localhost:5100"]'
       IDEN_SIGNING_KEY_DIR: /keys
     volumes: &provider-volumes
       # Generated on the host with `uv run python -m scripts.gen_keys`, and
