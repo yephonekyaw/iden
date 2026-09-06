@@ -210,25 +210,21 @@ function ProviderStage({
       lede="Discovery is how a client learns every endpoint from one URL, so nothing below is hardcoded."
       done={Boolean(discovery)}
     >
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
-        <Field
-          label="Issuer"
-          className="flex-1"
-          hint="The base URL. Must match the `iss` in issued tokens exactly."
-        >
-          {(props) => (
+      <Field label="Issuer" hint="The base URL. Must match the `iss` in issued tokens exactly.">
+        {(props) => (
+          <div className="flex gap-3">
             <Input
               {...props}
               className="font-identity"
               value={config.issuer}
               onChange={(event) => update({ issuer: event.target.value })}
             />
-          )}
-        </Field>
-        <Button variant="primary" onClick={onDiscover} disabled={busy}>
-          {busy ? "Fetching…" : discovery ? "Re-discover" : "Discover"}
-        </Button>
-      </div>
+            <Button variant="primary" onClick={onDiscover} disabled={busy}>
+              {busy ? "Fetching…" : discovery ? "Re-discover" : "Discover"}
+            </Button>
+          </div>
+        )}
+      </Field>
 
       {discovery ? (
         <div className="mt-6 flex flex-col gap-4">
