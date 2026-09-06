@@ -15,6 +15,7 @@ import { GroupsRoute, GroupDetailRoute } from "./features/admin/groups";
 import { RolesRoute, RoleDetailRoute } from "./features/admin/roles";
 import { ApisRoute, ApiDetailRoute } from "./features/admin/apis";
 import { ClientsRoute, ClientDetailRoute } from "./features/admin/clients";
+import { ClientCreateRoute } from "./features/admin/clients-new";
 import { ProfileFieldsRoute } from "./features/admin/profile-fields";
 import { AuditRoute } from "./features/admin/audit";
 
@@ -51,6 +52,10 @@ const router = createBrowserRouter([
       { path: "admin/apis", element: guarded("admin:apis:read", <ApisRoute />) },
       { path: "admin/apis/:apiId", element: guarded("admin:apis:read", <ApiDetailRoute />) },
       { path: "admin/clients", element: guarded("admin:clients:read", <ClientsRoute />) },
+      {
+        path: "admin/clients/new",
+        element: guarded("admin:clients:write", <ClientCreateRoute />),
+      },
       {
         path: "admin/clients/:clientId",
         element: guarded("admin:clients:read", <ClientDetailRoute />),

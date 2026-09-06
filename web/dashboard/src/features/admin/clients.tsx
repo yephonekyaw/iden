@@ -2,13 +2,7 @@ import {
   Button,
   ConfirmDialog,
   DataTable,
-  Dialog,
-  DialogContent,
-  DialogTitle,
   ErrorState,
-  Field,
-  IdenError,
-  Input,
   Pagination,
   ScopeChip,
   SecretRevealOnce,
@@ -17,11 +11,10 @@ import {
 } from "@iden/shared";
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { useForm, useWatch } from "react-hook-form";
 import { Link, useNavigate, useParams } from "react-router";
 import { useApi } from "../../app/api";
 import { PageHeader } from "../../app/shell";
-import { useList, useRecord, useWrite, type ClientCreated, type ClientRecord } from "./api";
+import { useList, useRecord, useWrite, type ClientRecord } from "./api";
 import { SetPicker } from "./picker";
 import { useScopeOptions } from "./options";
 import { SystemTag } from "./roles";
@@ -50,7 +43,6 @@ export function ClientsRoute() {
   const api = useApi();
   const navigate = useNavigate();
   const [offset, setOffset] = useState(0);
-  const [creating, setCreating] = useState(false);
   const clients = useList<ClientRecord>(api, "/admin/clients", { offset });
 
   return (
@@ -60,9 +52,11 @@ export function ClientsRoute() {
         lede="The applications allowed to ask IDEN for tokens — browser apps, mobile apps, and backend services."
         count={clients.data?.meta.total}
         actions={
-          <Button variant="default" onClick={() => setCreating(true)}>
-            <Plus aria-hidden="true" />
-            Register client
+          <Button variant="default" asChild>
+            <Link to="/admin/clients/new">
+              <Plus aria-hidden="true" />
+              Register client
+            </Link>
           </Button>
         }
       />
@@ -83,187 +77,7 @@ export function ClientsRoute() {
           <Pagination meta={clients.data.meta} onOffsetChange={setOffset} />
         </>
       )}
-
-      <CreateClientDialog open={creating} onOpenChange={setCreating} />
     </>
-  );
-}
-
-interface ClientForm {
-  clientId: string;
-  name: string;
-  clientType: "public" | "confidential";
-  redirectUris: string;
-}
-
-function CreateClientDialog({
-  open,
-  onOpenChange,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-}) {
-  const api = useApi();
-  const navigate = useNavigate();
-  const form = useForm<ClientForm>({
-    defaultValues: { clientId: "", name: "", clientType: "public", redirectUris: "" },
-  });
-  const [created, setCreated] = useState<ClientCreated | null>(null);
-
-  const clientType = useWatch({ control: form.control, name: "clientType" });
-
-  const create = useWrite<ClientForm, ClientCreated>(["/admin/clients"], async (values) => {
-    const response = await api.post<ClientCreated>("/admin/clients", {
-      clientId: values.clientId,
-      name: values.name,
-      clientType: values.clientType,
-      allowedGrants:
-        values.clientType === "confidential"
-          ? ["client_credentials"]
-          : ["authorization_code", "refresh_token"],
-      redirectUris: values.redirectUris
-        .split("\n")
-        .map((uri) => uri.trim())
-        .filter(Boolean),
-      grantableScopeIds: [],
-      grantedScopeIds: [],
-    });
-    return response.data;
-  });
-
-  const problem = create.error instanceof IdenError ? create.error : null;
-
-  function close() {
-    onOpenChange(false);
-    setCreated(null);
-    create.reset();
-    form.reset();
-  }
-
-  return (
-    <Dialog open={open} onOpenChange={(next) => (next ? onOpenChange(true) : close())}>
-      <DialogContent>
-        {created ? (
-          <>
-            <DialogTitle className="text-display-sm font-display text-ink">
-              {created.name} registered
-            </DialogTitle>
-            {created.clientSecret ? (
-              <div className="mt-5">
-                <SecretRevealOnce label="Client secret" secret={created.clientSecret} />
-              </div>
-            ) : (
-              <p className="mt-3 text-body-sm text-body">
-                Public clients have no secret. They prove themselves with PKCE instead, which is
-                mandatory here for every client.
-              </p>
-            )}
-            <div className="mt-8 flex justify-end gap-3">
-              <Button variant="outline" onClick={close}>
-                Done
-              </Button>
-              <Button
-                variant="default"
-                onClick={() => {
-                  const id = created.id;
-                  close();
-                  void navigate(`/admin/clients/${id}`);
-                }}
-              >
-                Choose its permissions
-              </Button>
-            </div>
-          </>
-        ) : (
-          <form
-            noValidate
-            onSubmit={form.handleSubmit((values) =>
-              create.mutate(values, { onSuccess: setCreated }),
-            )}
-          >
-            <DialogTitle className="text-display-sm font-display text-ink">
-              Register a client
-            </DialogTitle>
-
-            <div className="mt-6 flex flex-col gap-5">
-              <Field label="Name" required hint="Shown to people on the consent screen.">
-                {(props) => <Input {...props} {...form.register("name")} />}
-              </Field>
-
-              <Field
-                label="Client ID"
-                required
-                hint="What the application sends at /authorize and /token."
-                error={problem?.code === "client_id_taken" ? "That client ID is taken." : undefined}
-              >
-                {(props) => (
-                  <Input {...props} {...form.register("clientId")} className="font-identity" />
-                )}
-              </Field>
-
-              <Field
-                label="Type"
-                hint="A browser or mobile app cannot keep a secret; a backend can. This cannot be changed later."
-              >
-                {(props) => (
-                  <select
-                    {...props}
-                    {...form.register("clientType")}
-                    className="h-control w-full rounded-md border border-hairline bg-canvas px-3 text-body-md text-ink focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
-                  >
-                    <option value="public">Public — browser or mobile app</option>
-                    <option value="confidential">Confidential — backend service</option>
-                  </select>
-                )}
-              </Field>
-
-              {clientType === "public" ? (
-                <Field
-                  label="Redirect URIs"
-                  required
-                  hint="One per line. Matched exactly — no wildcards, no trailing-slash forgiveness."
-                  error={
-                    problem?.code === "redirect_uri_required"
-                      ? "A client using the authorization code flow needs at least one."
-                      : undefined
-                  }
-                >
-                  {(props) => (
-                    <textarea
-                      {...props}
-                      {...form.register("redirectUris")}
-                      rows={3}
-                      className="font-identity w-full rounded-md border border-hairline bg-canvas p-3 text-ink focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
-                      placeholder="https://app.example.org/callback"
-                    />
-                  )}
-                </Field>
-              ) : (
-                <p className="text-body-sm text-muted-foreground">
-                  A confidential client here uses the client credentials grant: it acts as itself,
-                  with no user and no redirect.
-                </p>
-              )}
-            </div>
-
-            {problem && !problem.code.includes("taken") ? (
-              <p role="alert" className="mt-4 text-body-sm text-error">
-                {problem.message}
-              </p>
-            ) : null}
-
-            <div className="mt-8 flex justify-end gap-3">
-              <Button type="button" variant="outline" onClick={close}>
-                Cancel
-              </Button>
-              <Button type="submit" variant="default" disabled={create.isPending}>
-                {create.isPending ? "Registering…" : "Register client"}
-              </Button>
-            </div>
-          </form>
-        )}
-      </DialogContent>
-    </Dialog>
   );
 }
 
