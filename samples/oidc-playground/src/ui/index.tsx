@@ -5,7 +5,7 @@ import { useId, useState, type ComponentProps, type ReactNode } from "react";
  *
  * Small on purpose and dependency-free: this sample should run after one
  * `pnpm install` with nothing from the rest of the repository. Every value here
- * is a DESIGN.md token defined in `theme.css`.
+ * is a token defined in `theme.css`: black rules, hard shadows, no radius.
  */
 
 export function cn(...parts: (string | false | null | undefined)[]): string {
@@ -19,13 +19,10 @@ export function cn(...parts: (string | false | null | undefined)[]): string {
 type ButtonVariant = "primary" | "secondary" | "ghost" | "onDark";
 
 const BUTTON: Record<ButtonVariant, string> = {
-  primary:
-    "bg-primary text-on-primary hover:bg-primary-active disabled:bg-primary-disabled disabled:text-muted",
-  secondary:
-    "border border-hairline bg-canvas text-ink hover:bg-surface-soft disabled:text-muted-soft",
-  ghost: "text-ink hover:bg-surface-soft disabled:text-muted-soft",
-  onDark:
-    "bg-surface-dark-elevated text-on-dark hover:bg-surface-dark-soft disabled:text-on-dark-soft",
+  primary: "bg-primary text-on-primary hover:bg-primary-active disabled:bg-primary-disabled",
+  secondary: "bg-surface-soft text-ink hover:bg-warning",
+  ghost: "border-transparent bg-transparent text-ink shadow-none hover:bg-warning",
+  onDark: "bg-surface-dark text-on-dark hover:bg-surface-dark-elevated",
 };
 
 export function Button({
@@ -37,10 +34,14 @@ export function Button({
   return (
     <button
       className={cn(
-        "inline-flex shrink-0 items-center justify-center gap-2 rounded-md font-medium",
-        "transition-colors duration-100 disabled:pointer-events-none disabled:cursor-not-allowed",
+        "inline-flex shrink-0 items-center justify-center gap-2 border-[3px] border-ink uppercase",
+        "font-semibold tracking-wide shadow-drop-sm transition-[transform,box-shadow] duration-75",
+        // The press. A brutalist button has somewhere to go.
+        "hover:translate-x-[2px] hover:translate-y-[2px] hover:shadow-drop-xs",
+        "active:translate-x-[4px] active:translate-y-[4px] active:shadow-none",
+        "disabled:pointer-events-none disabled:cursor-not-allowed disabled:text-muted",
         "[&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0",
-        size === "sm" ? "h-8 px-3 text-caption" : "h-control px-5 text-body-sm",
+        size === "sm" ? "h-9 px-3 text-caption" : "h-control px-5 text-body-sm",
         BUTTON[variant],
         className,
       )}
@@ -53,9 +54,10 @@ export function Input({ className, ...props }: ComponentProps<"input">) {
   return (
     <input
       className={cn(
-        "h-control w-full rounded-md border border-hairline bg-canvas px-3.5 text-body-sm text-ink",
-        "placeholder:text-muted-soft focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15",
-        "disabled:bg-surface-soft disabled:text-muted",
+        "h-control w-full border-[3px] border-ink bg-surface-soft px-3 text-body-sm text-ink",
+        "font-identity placeholder:text-muted-soft",
+        "focus:bg-warning/25 focus:shadow-drop-xs focus:outline-none",
+        "disabled:bg-surface-card disabled:text-muted",
         className,
       )}
       {...props}
@@ -67,8 +69,8 @@ export function Select({ className, ...props }: ComponentProps<"select">) {
   return (
     <select
       className={cn(
-        "h-control w-full rounded-md border border-hairline bg-canvas px-3 text-body-sm text-ink",
-        "focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15",
+        "h-control w-full border-[3px] border-ink bg-surface-soft px-2.5 text-body-sm font-medium text-ink",
+        "focus:shadow-drop-xs focus:outline-none",
         className,
       )}
       {...props}
@@ -93,7 +95,10 @@ export function Field({
 
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <label htmlFor={id} className="text-caption font-medium text-body-strong">
+      <label
+        htmlFor={id}
+        className="font-identity text-caption font-bold tracking-wide text-ink uppercase"
+      >
         {label}
       </label>
       {children({ id, "aria-describedby": hintId })}
@@ -126,7 +131,7 @@ export function Toggle({
         type="checkbox"
         checked={checked}
         onChange={(event) => onChange(event.target.checked)}
-        className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+        className="mt-0.5 h-4.5 w-4.5 shrink-0 accent-primary"
       />
       <div className="min-w-0">
         <label htmlFor={id} className="text-body-sm text-ink">
@@ -167,8 +172,7 @@ export function Stage({
   return (
     <section
       className={cn(
-        "rounded-lg border bg-canvas p-6 sm:p-8",
-        done ? "border-primary/40" : "border-hairline",
+        "border-[3px] border-ink bg-surface-soft p-6 shadow-drop sm:p-8",
         disabled && "opacity-55",
       )}
       aria-disabled={disabled}
@@ -177,15 +181,16 @@ export function Stage({
         <span
           aria-hidden="true"
           className={cn(
-            "mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-caption tabular-nums",
-            done ? "bg-primary text-on-primary" : "border border-hairline text-muted",
+            "flex h-9 w-9 shrink-0 items-center justify-center border-[3px] border-ink",
+            "text-title-sm tabular-nums",
+            done ? "bg-primary text-on-primary" : "bg-canvas text-ink",
           )}
         >
-          {step}
+          {done ? "✓" : step}
         </span>
         <div className="min-w-0">
           <h2 className="text-title-lg text-ink">{title}</h2>
-          {lede ? <p className="mt-1 max-w-prose text-body-sm text-muted">{lede}</p> : null}
+          {lede ? <p className="mt-1.5 max-w-prose text-body-sm text-body">{lede}</p> : null}
         </div>
       </header>
       {children}
@@ -201,16 +206,17 @@ export function Badge({
   children: ReactNode;
 }) {
   const tones = {
-    neutral: "bg-surface-card text-body-strong",
-    coral: "bg-primary text-on-primary uppercase text-caption-upper",
-    success: "bg-success/15 text-success",
-    error: "bg-error/12 text-error",
-    dark: "bg-surface-dark-elevated text-on-dark-soft",
+    neutral: "bg-surface-card text-ink",
+    coral: "bg-primary text-on-primary",
+    success: "bg-success text-ink",
+    error: "bg-error text-surface-soft",
+    dark: "bg-surface-dark text-on-dark",
   };
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-caption whitespace-nowrap",
+        "font-identity inline-flex items-center gap-1.5 border-2 border-ink px-2 py-0.5",
+        "text-caption font-bold tracking-wide whitespace-nowrap uppercase",
         tones[tone],
       )}
     >
@@ -225,7 +231,10 @@ export function Check({ ok, children }: { ok: boolean; children: ReactNode }) {
     <li className="flex items-start gap-2.5 text-body-sm">
       <span
         aria-hidden="true"
-        className={cn("mt-2 h-1.5 w-1.5 shrink-0 rounded-full", ok ? "bg-success" : "bg-error")}
+        className={cn(
+          "mt-1.5 h-3 w-3 shrink-0 border-2 border-ink",
+          ok ? "bg-success" : "bg-error",
+        )}
       />
       <span className={ok ? "text-body" : "text-error"}>{children}</span>
       <span className="sr-only">{ok ? "(passed)" : "(failed)"}</span>
@@ -235,7 +244,7 @@ export function Check({ ok, children }: { ok: boolean; children: ReactNode }) {
 
 export function Note({ children }: { children: ReactNode }) {
   return (
-    <p className="rounded-md border-l-2 border-primary/50 bg-surface-soft px-4 py-3 text-body-sm text-body">
+    <p className="border-[3px] border-ink bg-warning px-4 py-3 text-body-sm font-medium text-ink">
       {children}
     </p>
   );
@@ -255,7 +264,7 @@ function Copy({ value }: { value: string }) {
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
       }}
-      className="shrink-0 rounded-sm px-2 py-1 text-caption text-on-dark-soft hover:bg-surface-dark-elevated hover:text-on-dark"
+      className="font-identity shrink-0 border-2 border-transparent px-2 py-0.5 text-caption font-bold text-on-dark-soft uppercase hover:border-on-dark-soft hover:text-on-dark"
     >
       {copied ? "Copied" : "Copy"}
       <span aria-live="polite" className="sr-only">
@@ -281,10 +290,12 @@ export function Code({
   tone?: "default" | "error";
 }) {
   return (
-    <div className="overflow-hidden rounded-lg bg-surface-dark">
+    <div className="border-[3px] border-ink bg-surface-dark shadow-drop-sm">
       {label || value ? (
-        <div className="flex items-center justify-between gap-3 border-b border-hairline-dark px-4 py-2">
-          <span className="text-caption-upper uppercase text-on-dark-soft">{label}</span>
+        <div className="flex items-center justify-between gap-3 border-b-[3px] border-hairline-dark px-4 py-2">
+          <span className="font-identity text-caption-upper text-on-dark-soft uppercase">
+            {label}
+          </span>
           <Copy value={value} />
         </div>
       ) : null}
@@ -307,10 +318,12 @@ export function Json({ label, value }: { label?: string; value: unknown }) {
 /** A row of `key: value`, for reading a claim set or a query string. */
 export function Rows({ entries }: { entries: [string, ReactNode][] }) {
   return (
-    <dl className="m-0 divide-y divide-hairline-soft">
+    <dl className="m-0 divide-y-2 divide-ink border-[3px] border-ink bg-canvas">
       {entries.map(([key, value]) => (
-        <div key={key} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 py-2.5">
-          <dt className="font-identity min-w-44 text-caption text-muted">{key}</dt>
+        <div key={key} className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2.5">
+          <dt className="font-identity min-w-44 text-caption font-bold text-muted uppercase">
+            {key}
+          </dt>
           <dd className="min-w-0 flex-1 text-body-sm text-body-strong">{value}</dd>
         </div>
       ))}

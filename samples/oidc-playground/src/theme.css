@@ -1,78 +1,79 @@
 @import "tailwindcss";
 
-/* IDEN's design tokens, transcribed from DESIGN.md.
+/* Neo-brutalism: black rules, hard shadows, flat colour, square corners.
  *
  * Deliberately a copy rather than an import of the dashboard's shared package.
  * A sample you cannot lift out of this repository and point at your own
  * deployment is not a sample — this file and `src/ui/` are the only things
- * making the playground look like IDEN, and both are yours to delete.
+ * styling the playground, and both are yours to delete.
  *
- * The playground leans on the dark surfaces DESIGN.md reserves for product
- * chrome — code windows, terminal panels — because that is what a debugger is.
- * The cream canvas carries the prose; every request and every token sits on
- * dark, in mono. */
+ * Tokens and responses stay on the dark panels a debugger deserves; everything
+ * around them is paper, ink and one loud accent. */
 
 @theme {
-  --color-primary: #cc785c;
-  --color-primary-active: #a9583e;
-  --color-primary-disabled: #e6dfd8;
-  --color-on-primary: #ffffff;
+  --color-primary: #ff5c39;
+  --color-primary-active: #e6421f;
+  --color-primary-disabled: #ddd6c6;
+  /* Ink on coral, not white: brutalism keeps one text colour and lets the
+     background do the shouting. */
+  --color-on-primary: #14110d;
 
-  --color-canvas: #faf9f5;
-  --color-surface-soft: #f5f0e8;
-  --color-surface-card: #efe9de;
-  --color-surface-dark: #181715;
-  --color-surface-dark-elevated: #252320;
-  --color-surface-dark-soft: #1f1e1b;
+  --color-canvas: #f2eee3;
+  --color-surface-soft: #fffdf7;
+  --color-surface-card: #e9e3d5;
+  --color-surface-dark: #14110d;
+  --color-surface-dark-elevated: #262218;
+  --color-surface-dark-soft: #1d1a12;
 
-  --color-ink: #141413;
-  --color-body-strong: #252523;
-  --color-body: #3d3d3a;
-  --color-muted: #6c6a64;
-  --color-muted-soft: #8e8b82;
-  --color-on-dark: #faf9f5;
-  --color-on-dark-soft: #a09d96;
+  --color-ink: #14110d;
+  --color-body-strong: #14110d;
+  --color-body: #3a352c;
+  --color-muted: #6f675c;
+  --color-muted-soft: #8a8275;
+  --color-on-dark: #f7f3e8;
+  --color-on-dark-soft: #a49b88;
 
-  --color-hairline: #e6dfd8;
-  --color-hairline-soft: #ebe6df;
-  --color-hairline-dark: #302e2a;
+  /* Every rule on the page is the same black. There are no hairlines here. */
+  --color-hairline: #14110d;
+  --color-hairline-soft: #14110d;
+  --color-hairline-dark: #3a3428;
 
-  --color-success: #5db872;
-  --color-warning: #d4a017;
-  --color-error: #c64545;
-  --color-accent-teal: #5db8a6;
-  --color-accent-amber: #e8a55a;
+  --color-success: #2fbf71;
+  --color-warning: #ffd23f;
+  --color-error: #ff3b30;
+  --color-accent-teal: #3ddad7;
+  --color-accent-amber: #ffd23f;
 
-  --font-display: "EB Garamond", "Tiempos Headline", Garamond, "Times New Roman", serif;
-  --font-sans: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Archivo", "Helvetica Neue", system-ui, -apple-system, sans-serif;
+  --font-sans: "Space Grotesk", "Helvetica Neue", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 
   --text-display-lg: 3rem;
   --text-display-lg--line-height: 1.1;
-  --text-display-lg--letter-spacing: -1px;
-  --text-display-lg--font-weight: 400;
+  --text-display-lg--letter-spacing: -0.035em;
+  --text-display-lg--font-weight: 900;
 
   --text-display-md: 2.25rem;
   --text-display-md--line-height: 1.15;
-  --text-display-md--letter-spacing: -0.5px;
-  --text-display-md--font-weight: 400;
+  --text-display-md--letter-spacing: -0.035em;
+  --text-display-md--font-weight: 900;
 
   --text-display-sm: 1.75rem;
   --text-display-sm--line-height: 1.2;
-  --text-display-sm--letter-spacing: -0.3px;
-  --text-display-sm--font-weight: 400;
+  --text-display-sm--letter-spacing: -0.03em;
+  --text-display-sm--font-weight: 900;
 
   --text-title-lg: 1.375rem;
   --text-title-lg--line-height: 1.3;
-  --text-title-lg--font-weight: 500;
+  --text-title-lg--font-weight: 800;
 
   --text-title-md: 1.125rem;
   --text-title-md--line-height: 1.4;
-  --text-title-md--font-weight: 500;
+  --text-title-md--font-weight: 800;
 
   --text-title-sm: 1rem;
   --text-title-sm--line-height: 1.4;
-  --text-title-sm--font-weight: 500;
+  --text-title-sm--font-weight: 800;
 
   --text-body-md: 1rem;
   --text-body-md--line-height: 1.55;
@@ -92,13 +93,19 @@
   --text-code: 0.8125rem;
   --text-code--line-height: 1.6;
 
-  --radius-xs: 4px;
-  --radius-sm: 6px;
-  --radius-md: 8px;
-  --radius-lg: 12px;
-  --radius-xl: 16px;
+  /* Nothing is rounded. */
+  --radius-xs: 0px;
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 
-  --spacing-control: 40px;
+  /* The drop shadow is the elevation system: hard, offset, never blurred. */
+  --shadow-drop: 6px 6px 0 #14110d;
+  --shadow-drop-sm: 4px 4px 0 #14110d;
+  --shadow-drop-xs: 2px 2px 0 #14110d;
+
+  --spacing-control: 44px;
 }
 
 @layer base {
@@ -108,6 +115,11 @@
 
   body {
     background-color: var(--color-canvas);
+    /* Graph paper. Brutalism shows the grid rather than hiding it. */
+    background-image:
+      linear-gradient(to right, rgba(20, 17, 13, 0.055) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(20, 17, 13, 0.055) 1px, transparent 1px);
+    background-size: 28px 28px;
     color: var(--color-body);
     font-family: var(--font-sans);
     font-size: var(--text-body-md);
@@ -120,20 +132,21 @@
   h3 {
     color: var(--color-ink);
     font-family: var(--font-display);
-    font-weight: 400;
+    font-weight: 900;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
     margin: 0;
   }
 
-  /* DESIGN.md puts the focus ring in coral, and a keyboard user stepping
-     through twenty parameters needs to know where they are. */
+  /* A keyboard user stepping through twenty parameters needs to know where
+     they are, and a thin ring would be a lie about the rest of this page. */
   :focus-visible {
-    outline: 2px solid var(--color-primary);
-    outline-offset: 2px;
-    border-radius: var(--radius-xs);
+    outline: 3px solid var(--color-ink);
+    outline-offset: 3px;
   }
 
   ::selection {
-    background-color: color-mix(in srgb, var(--color-primary) 22%, transparent);
+    background-color: var(--color-warning);
     color: var(--color-ink);
   }
 }

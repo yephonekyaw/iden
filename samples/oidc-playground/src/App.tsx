@@ -92,16 +92,17 @@ function Playground() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-12 sm:py-16">
-      <header className="mb-12">
-        <p className="flex items-center gap-2 text-caption-upper uppercase text-muted">
-          <Mark className="h-3 w-3 text-primary" />
+      <header className="mb-10 border-[3px] border-ink bg-primary p-6 shadow-drop sm:p-8">
+        <p className="font-identity inline-flex items-center gap-2 bg-ink px-2.5 py-1 text-caption-upper text-canvas uppercase">
+          <Mark className="h-3 w-3" />
           IDEN sample
         </p>
-        <h1 className="mt-2 text-display-md">OIDC Playground</h1>
-        <p className="mt-3 max-w-prose text-body-md text-body">
+        <h1 className="mt-4 text-display-lg text-ink">OIDC Playground</h1>
+        <p className="mt-3 max-w-prose text-body-md font-medium text-ink">
           Build an authorization request one parameter at a time, run it against your IDEN
           deployment, and read everything that comes back. Nothing here is hidden by a client
-          library — every request on this page is a `fetch` you can copy.
+          library — every request on this page is a <code className="font-identity">fetch</code> you
+          can copy.
         </p>
       </header>
 
@@ -174,7 +175,7 @@ function Playground() {
         />
       </div>
 
-      <footer className="mt-16 border-t border-hairline pt-6 text-caption text-muted">
+      <footer className="mt-16 border-t-[3px] border-ink pt-6 text-caption text-muted">
         A sample application for <span className="font-identity text-body-strong">IDEN</span>.
         Everything it stores lives in this browser: the configuration in localStorage, the
         single-use secrets of one attempt in sessionStorage.
@@ -255,7 +256,7 @@ function ProviderStage({
               ],
             ]}
           />
-          <details className="rounded-lg border border-hairline">
+          <details className="border-[3px] border-ink bg-canvas">
             <summary className="cursor-pointer px-4 py-3 text-body-sm text-body-strong">
               The whole metadata document
             </summary>
@@ -489,8 +490,11 @@ function RequestStage({
                     })
                   }
                   className={cn(
-                    "font-identity rounded-full px-2.5 py-1 text-caption transition-colors duration-100",
-                    on ? "bg-primary text-on-primary" : "bg-surface-card text-muted hover:text-ink",
+                    "font-identity border-2 border-ink px-2.5 py-1 text-caption font-bold uppercase",
+                    "transition-colors duration-75",
+                    on
+                      ? "bg-primary text-on-primary"
+                      : "bg-canvas text-muted hover:bg-warning hover:text-ink",
                   )}
                 >
                   {value}
@@ -560,7 +564,7 @@ function RequestStage({
           </Field>
         </div>
 
-        <div className="flex flex-col gap-3 border-t border-hairline-soft pt-5">
+        <div className="flex flex-col gap-3 border-t-[3px] border-ink pt-5">
           <Toggle
             checked={config.usePkce}
             onChange={(value) => update({ usePkce: value })}
