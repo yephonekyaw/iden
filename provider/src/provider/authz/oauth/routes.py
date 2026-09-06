@@ -2,7 +2,7 @@ import base64
 import uuid
 from datetime import timedelta
 from typing import Annotated
-from urllib.parse import urlencode
+from urllib.parse import unquote_plus, urlencode
 
 import jwt
 from fastapi import APIRouter, Depends, Form, Query, Request, Response
@@ -36,6 +36,7 @@ from provider.authz.oauth.service import (
 from provider.authz.services import auth_methods, challenge_store, session_store
 from provider.authz.services import token_service as tokens
 from provider.authz.services.scope_resolver import (
+    OFFLINE_ACCESS,
     format_scope,
     parse_scope,
     resolve_for_client,
@@ -43,7 +44,7 @@ from provider.authz.services.scope_resolver import (
 )
 from provider.core import ratelimit
 from provider.core.config import settings
-from provider.core.crypto import verify_jwt
+from provider.core.crypto import ACCESS_TOKEN_TYP, verify_jwt
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.security import hash_token
@@ -285,7 +286,11 @@ async def authorize(
     # session ever reached this client.
     await session_store.add_client(redis, login_session.id, client.client_id)
 
-    query = {"code": code}
+    # `iss` on every authorization response — RFC 9207. A client talking to more
+    # than one provider cannot otherwise tell which one answered, which is the
+    # opening for a mix-up attack: an attacker's provider returns a code the
+    # client then redeems at the honest one.
+    query = {"code": code, "iss": settings.iden_issuer}
     if state:
         query["state"] = state
     return RedirectResponse(f"{redirect_uri}?{urlencode(query)}", status_code=303)
@@ -302,7 +307,12 @@ def _client_auth(request: Request, client_id: str | None, client_secret: str | N
         except ValueError as exc:
             raise InvalidClient("Malformed Basic authorization header.") from exc
         name, _, secret = decoded.partition(":")
-        return name, secret
+        # RFC 6749 §2.3.1 encodes both halves with `application/x-www-form-
+        # urlencoded` *before* base64, so they have to be decoded after. IDEN's
+        # own secrets are URL-safe and unaffected; an imported one containing a
+        # reserved character failed as `invalid_client` with nothing to suggest
+        # why.
+        return unquote_plus(name), unquote_plus(secret)
 
     return client_id, client_secret
 
@@ -392,8 +402,13 @@ async def _authorization_code_grant(
         authenticated_at=record.authenticated_at,
     )
 
+    # Two conditions, and they say different things. `allowed_grants` is what
+    # this client is *configured* to do; `offline_access` is what was asked for
+    # and consented to on this request (OIDC Core §11). Issuing on the first
+    # alone meant a client that never asked for offline access got it anyway,
+    # and one that did ask was never told whether it had been granted.
     refresh = None
-    if GrantType.REFRESH_TOKEN in client.allowed_grants:
+    if GrantType.REFRESH_TOKEN in client.allowed_grants and OFFLINE_ACCESS in scopes:
         refresh, _ = await tokens.issue_refresh_token(
             session,
             client=client,
@@ -569,22 +584,25 @@ async def _client_credentials_grant(
     )
 
 
-async def _verify_access_token(request: Request, redis) -> dict:
+async def _verify_access_token(raw: str | None, redis) -> dict:
     """Verify a bearer token for IDEN's own OIDC endpoints.
 
     Audience is deliberately not checked here: an access token's `aud` names the
     resource APIs its scopes belong to, while /userinfo is IDEN describing the
     user to the client. Requiring `openid` is the real gate (OIDC Core §5.3).
+
+    The **type** is checked, and that is what audience would otherwise have to
+    stand in for. An ID token is signed by IDEN, names the same person, and has
+    no `jti` — so before this it reached the `claims["jti"]` below and answered
+    500 where 401 belongs (RFC 9068 §2.1).
     """
-    header = request.headers.get("authorization", "")
-    scheme, _, raw = header.partition(" ")
-    if scheme.lower() != "bearer" or not raw:
+    if not raw:
         raise OAuthError(
             "invalid_token", "A bearer access token is required.", status_code=401
         )
 
     try:
-        claims = verify_jwt(raw)
+        claims = verify_jwt(raw, typ=ACCESS_TOKEN_TYP)
     except jwt.PyJWTError as exc:
         raise OAuthError("invalid_token", str(exc), status_code=401) from exc
 
@@ -596,27 +614,40 @@ async def _verify_access_token(request: Request, redis) -> dict:
     return claims
 
 
-@router.get(
-    "/userinfo",
-    response_model=UserInfoResponse,
-    response_model_exclude_none=True,
-    summary="Claims about the signed-in user",
-    description=(
+def _bearer_token(request: Request) -> str | None:
+    """The credential from the Authorization header, if it is a Bearer one."""
+    scheme, _, raw = request.headers.get("authorization", "").partition(" ")
+    return raw if scheme.lower() == "bearer" and raw else None
+
+
+USERINFO_DOCS = {
+    "response_model": UserInfoResponse,
+    "response_model_exclude_none": True,
+    "summary": "Claims about the signed-in user",
+    "description": (
         "Returns the claims released by the granted scopes: `sub` always, plus "
         "`profile` and `email` claims when those scopes were granted.\n\n"
+        "Available as both `GET` and `POST`, as OIDC Core §5.3.1 requires. The "
+        "`POST` form accepts the token in the `access_token` form field as well "
+        "as in the header (RFC 6750 §2.2), which is what conformance suites and "
+        "several relying-party libraries send by default.\n\n"
         "**Required scope:** `openid`"
     ),
-    responses={
+    "responses": {
         401: {
             "model": OAuthErrorResponse,
             "description": "Missing, invalid, or revoked token",
-        }
+        },
+        403: {
+            "model": OAuthErrorResponse,
+            "description": "The token does not carry `openid`",
+        },
     },
-)
-async def userinfo(
-    request: Request, session: DBSessionDep, redis: RedisDep
-) -> UserInfoResponse:
-    claims = await _verify_access_token(request, redis)
+}
+
+
+async def _userinfo(raw: str | None, session, redis) -> UserInfoResponse:
+    claims = await _verify_access_token(raw, redis)
     scopes = parse_scope(claims.get("scope"))
 
     if "openid" not in scopes:
@@ -637,6 +668,28 @@ async def userinfo(
     )
 
 
+@router.get("/userinfo", **USERINFO_DOCS)
+async def userinfo(
+    request: Request, session: DBSessionDep, redis: RedisDep
+) -> UserInfoResponse:
+    return await _userinfo(_bearer_token(request), session, redis)
+
+
+# A second handler rather than a second decorator: a route that declares a Form
+# parameter parses a body on every method, and there is no body on the GET.
+@router.post("/userinfo", **USERINFO_DOCS)
+async def userinfo_post(
+    request: Request,
+    session: DBSessionDep,
+    redis: RedisDep,
+    access_token: Annotated[str | None, Form()] = None,
+) -> UserInfoResponse:
+    # The header wins when both are present: it is the form RFC 6750 prefers,
+    # and honouring the body over it would let a query-string token override a
+    # properly presented one.
+    return await _userinfo(_bearer_token(request) or access_token, session, redis)
+
+
 @router.post(
     "/revoke",
     status_code=200,
@@ -648,6 +701,9 @@ async def userinfo(
         "it, so that this endpoint cannot be used to probe which tokens exist.\n\n"
         "Public clients may revoke their **own** tokens (RFC 7009 §2.1); the "
         "caller must already hold the token, so there is nothing to learn.\n\n"
+        "`tokenTypeHint` is honoured as an ordering hint (RFC 7009 §2.1): it "
+        "decides which lookup runs first, never which ones are allowed, so a "
+        "wrong hint costs a little time rather than the revocation.\n\n"
         "**Required scope:** none — client authentication only."
     ),
     responses={401: {"model": OAuthErrorResponse, "description": "invalid_client"}},
@@ -666,21 +722,37 @@ async def revoke(
         session, name, secret, require_confidential=False
     )
 
-    record = await session.scalar(
-        select(RefreshToken).where(RefreshToken.token_hash == hash_token(token))
-    )
-    if record is not None and record.client_id == client.id:
+    async def as_refresh_token() -> bool:
+        record = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == hash_token(token))
+        )
+        if record is None or record.client_id != client.id:
+            return False
         await tokens.revoke_family(session, record.family_id)
         await session.commit()
-        return Response(status_code=200)
+        return True
 
-    try:
-        claims = verify_jwt(token)
-    except jwt.PyJWTError:
-        return Response(status_code=200)
-
-    if claims.get("client_id") == client.client_id:
+    async def as_access_token() -> bool:
+        try:
+            claims = verify_jwt(token, typ=ACCESS_TOKEN_TYP)
+        except jwt.PyJWTError:
+            return False
+        if claims.get("client_id") != client.client_id:
+            # Someone else's token. RFC 7009 §2.1 says answer 200 regardless, so
+            # this reports "handled" without having revoked anything.
+            return True
         await tokens.denylist_access_token(redis, claims["jti"], claims["exp"])
+        return True
+
+    # Both are always tried; the hint only says which to try first.
+    attempts = (
+        (as_access_token, as_refresh_token)
+        if token_type_hint == "access_token"
+        else (as_refresh_token, as_access_token)
+    )
+    for attempt in attempts:
+        if await attempt():
+            break
 
     return Response(status_code=200)
 
@@ -697,6 +769,12 @@ async def revoke(
         "**Requires a confidential client.** The response describes someone "
         "else's token, so a `client_id` alone is not enough — it is public by "
         "definition (RFC 7662 §2.1).\n\n"
+        "**A client may only introspect its own tokens.** Anything issued to "
+        'another client answers `{"active": false}` — the same answer an '
+        "expired or unknown token gets, so the endpoint reveals nothing about "
+        "what exists (RFC 7662 §4).\n\n"
+        "Both access tokens and refresh tokens are accepted; `tokenTypeHint` "
+        "orders the lookups.\n\n"
         "**Required scope:** none — client authentication only."
     ),
     responses={401: {"model": OAuthErrorResponse, "description": "invalid_client"}},
@@ -711,37 +789,78 @@ async def introspect(
     client_secret: Annotated[str | None, Form()] = None,
 ) -> IntrospectionResponse:
     name, secret = _client_auth(request, client_id, client_secret)
-    await authenticate_endpoint_client(session, name, secret, require_confidential=True)
-
-    try:
-        claims = verify_jwt(token)
-    except jwt.PyJWTError:
-        return IntrospectionResponse(active=False)
-
-    if await tokens.is_denylisted(redis, claims["jti"]):
-        return IntrospectionResponse(active=False)
-
-    return IntrospectionResponse(
-        active=True,
-        scope=claims.get("scope"),
-        client_id=claims.get("client_id"),
-        sub=claims.get("sub"),
-        aud=claims.get("aud"),
-        exp=claims.get("exp"),
-        iat=claims.get("iat"),
-        jti=claims.get("jti"),
-        token_type="Bearer",
+    client = await authenticate_endpoint_client(
+        session, name, secret, require_confidential=True
     )
 
+    async def as_access_token() -> IntrospectionResponse | None:
+        try:
+            claims = verify_jwt(token, typ=ACCESS_TOKEN_TYP)
+        except jwt.PyJWTError:
+            return None
 
-@router.get(
-    "/logout",
-    summary="End the session everywhere",
-    description=(
+        # Someone else's token is not this caller's business. Reported as
+        # inactive rather than refused, so the answer is indistinguishable from
+        # a token that never existed (RFC 7662 §4).
+        if claims.get("client_id") != client.client_id:
+            return IntrospectionResponse(active=False)
+
+        if await tokens.is_denylisted(redis, claims["jti"]):
+            return IntrospectionResponse(active=False)
+
+        return IntrospectionResponse(
+            active=True,
+            scope=claims.get("scope"),
+            client_id=claims.get("client_id"),
+            sub=claims.get("sub"),
+            aud=claims.get("aud"),
+            exp=claims.get("exp"),
+            iat=claims.get("iat"),
+            jti=claims.get("jti"),
+            token_type="Bearer",
+        )
+
+    async def as_refresh_token() -> IntrospectionResponse | None:
+        record = await session.scalar(
+            select(RefreshToken).where(RefreshToken.token_hash == hash_token(token))
+        )
+        if record is None or record.client_id != client.id:
+            return None
+        if record.revoked_at is not None or record.expires_at <= tokens.now():
+            return IntrospectionResponse(active=False)
+
+        return IntrospectionResponse(
+            active=True,
+            scope=record.scope,
+            client_id=client.client_id,
+            sub=str(record.user_id),
+            exp=int(record.expires_at.timestamp()),
+            iat=int(record.created_at.timestamp()),
+            token_type="refresh_token",
+        )
+
+    attempts = (
+        (as_refresh_token, as_access_token)
+        if token_type_hint == "refresh_token"
+        else (as_access_token, as_refresh_token)
+    )
+    for attempt in attempts:
+        if (answer := await attempt()) is not None:
+            return answer
+
+    return IntrospectionResponse(active=False)
+
+
+LOGOUT_DOCS = {
+    "summary": "End the session everywhere",
+    "description": (
         "Single sign-out. Clears the browser session and its cookie, revokes the "
         "refresh tokens the session produced, and delivers a **logout token** to "
         "every client that registered a `backchannelLogoutUri` and was signed "
         "into during this session (OIDC Back-Channel Logout 1.0).\n\n"
+        "Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 §2 "
+        "requires. Prefer `POST`: it keeps `id_token_hint` out of browser "
+        "history and out of the `Referer` header of whatever comes next.\n\n"
         "Access tokens already issued stay valid until they expire — they are "
         "self-contained by design, and their ten-minute lifetime is the trade "
         "that buys offline validation. Refresh tokens do not, so nothing can be "
@@ -751,8 +870,11 @@ async def introspect(
         "it is not a credential for ending someone else's session.\n\n"
         "**Required scope:** none."
     ),
-    responses={303: {"description": "Redirect to post_logout_redirect_uri"}},
-)
+    "responses": {303: {"description": "Redirect to post_logout_redirect_uri"}},
+}
+
+
+@router.get("/logout", **LOGOUT_DOCS)
 async def logout(
     login_session: LoginSessionDep,
     session: DBSessionDep,
@@ -761,6 +883,50 @@ async def logout(
     id_token_hint: Annotated[str | None, Query()] = None,
     post_logout_redirect_uri: Annotated[str | None, Query()] = None,
     state: Annotated[str | None, Query()] = None,
+) -> Response:
+    return await _logout(
+        login_session,
+        session,
+        redis,
+        client_id=client_id,
+        id_token_hint=id_token_hint,
+        post_logout_redirect_uri=post_logout_redirect_uri,
+        state=state,
+    )
+
+
+# Separate handler for the same reason as /userinfo: a Form parameter would make
+# the GET try to parse a body it does not have.
+@router.post("/logout", **LOGOUT_DOCS)
+async def logout_post(
+    login_session: LoginSessionDep,
+    session: DBSessionDep,
+    redis: RedisDep,
+    client_id: Annotated[str | None, Form()] = None,
+    id_token_hint: Annotated[str | None, Form()] = None,
+    post_logout_redirect_uri: Annotated[str | None, Form()] = None,
+    state: Annotated[str | None, Form()] = None,
+) -> Response:
+    return await _logout(
+        login_session,
+        session,
+        redis,
+        client_id=client_id,
+        id_token_hint=id_token_hint,
+        post_logout_redirect_uri=post_logout_redirect_uri,
+        state=state,
+    )
+
+
+async def _logout(
+    login_session,
+    session,
+    redis,
+    *,
+    client_id: str | None,
+    id_token_hint: str | None,
+    post_logout_redirect_uri: str | None,
+    state: str | None,
 ) -> Response:
     if login_session is not None:
         sid = login_session.public_id

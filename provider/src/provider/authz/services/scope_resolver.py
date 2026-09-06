@@ -9,10 +9,17 @@ from dataclasses import dataclass, field
 
 from provider.shared.models import Client, ClientScope, Role, User
 
-# OIDC's own scopes (OpenID Connect Core §5.4). They are not permissions on any
-# API, so they are never stored in the scopes table and never contribute an
-# audience — they only decide which claims /userinfo returns.
-OIDC_SCOPES = frozenset({"openid", "profile", "email"})
+# OIDC's own scopes (OpenID Connect Core §5.4, §11). They are not permissions on
+# any API, so they are never stored in the scopes table and never contribute an
+# audience — they decide which claims are released, and in `offline_access`'s
+# case whether a refresh token is issued at all.
+OIDC_SCOPES = frozenset({"openid", "profile", "email", "offline_access"})
+
+# Requesting long-lived access to your account while you are away from it.
+# Separate from the grant the client is configured for: the client says what it
+# is *able* to do, this says what was asked for and consented to on this
+# request (OIDC Core §11).
+OFFLINE_ACCESS = "offline_access"
 
 
 @dataclass

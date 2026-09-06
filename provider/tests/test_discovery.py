@@ -20,8 +20,10 @@ async def test_scopes_are_read_from_the_database(client, catalogue):
     body = (await client.get("/.well-known/openid-configuration")).json()
 
     assert "admin:users:read" in body["scopes_supported"]
-    assert {"openid", "profile", "email"} <= set(body["scopes_supported"])
-    assert len(body["scopes_supported"]) == len(catalogue["scopes"]) + 3
+    assert {"openid", "profile", "email", "offline_access"} <= set(
+        body["scopes_supported"]
+    )
+    assert len(body["scopes_supported"]) == len(catalogue["scopes"]) + 4
 
 
 async def test_a_new_scope_appears_without_a_restart(client, catalogue, db):

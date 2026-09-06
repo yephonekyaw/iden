@@ -42,32 +42,62 @@ def active_kid() -> str:
     return sorted(_keys())[-1]
 
 
-def sign_jwt(claims: dict[str, Any]) -> str:
+# The JOSE `typ` header each kind of token carries. Every token IDEN signs says
+# what it is, and every consumer says what it will accept — which is what stops
+# one being presented where another belongs (RFC 9068 §2.1, OIDC Back-Channel
+# Logout 1.0 §2.4). Without it the only thing separating an ID token from an
+# access token at a protected resource is which claims it happens to have.
+ACCESS_TOKEN_TYP = "at+jwt"
+ID_TOKEN_TYP = "JWT"
+LOGOUT_TOKEN_TYP = "logout+jwt"
+
+
+def sign_jwt(claims: dict[str, Any], *, typ: str = ID_TOKEN_TYP) -> str:
     kid = active_kid()
     return jwt.encode(
         claims,
         _keys()[kid],
         algorithm=settings.iden_signing_algorithm,
-        headers={"kid": kid},
+        headers={"kid": kid, "typ": typ},
     )
 
 
 def verify_jwt(
-    token: str, audience: str | None = None, *, allow_expired: bool = False
+    token: str,
+    audience: str | None = None,
+    *,
+    allow_expired: bool = False,
+    typ: str | None = None,
 ) -> dict[str, Any]:
-    """Verify signature, issuer, expiry, and — when given — audience.
+    """Verify signature, issuer, expiry, and — when given — audience and type.
 
     `allow_expired` is for `id_token_hint`, where an expired token is the normal
     case: the client is saying *this is who I last saw signed in*, and ID tokens
     are minted to live ten minutes. The signature and issuer are still checked,
     so the hint remains IDEN's own statement rather than the caller's.
 
+    `typ` is how a caller says which kind of token it will accept. It is
+    deliberately opt-in rather than always-on: `id_token_hint` accepts an ID
+    token and `/introspect` accepts anything IDEN signed, so a blanket rule
+    would be wrong in exactly the places that matter.
+
     Raises the underlying `jwt.PyJWTError` on failure; callers decide the HTTP shape.
     """
-    kid = jwt.get_unverified_header(token).get("kid")
+    header = jwt.get_unverified_header(token)
+    kid = header.get("kid")
     key = _keys().get(kid) if isinstance(kid, str) else None
     if key is None:
         raise jwt.InvalidKeyError(f"Unknown kid: {kid}")
+
+    if typ is not None:
+        # Case-insensitive, and an absent `typ` is a mismatch rather than a pass:
+        # RFC 8725 §3.11 treats the header as a claim about the token, so the
+        # only safe reading of silence is "not the type you asked for".
+        declared = header.get("typ")
+        if not isinstance(declared, str) or declared.lower() != typ.lower():
+            raise jwt.InvalidTokenError(
+                f"Expected a {typ} token, got {declared or 'none'}."
+            )
 
     return jwt.decode(
         token,

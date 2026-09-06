@@ -38,8 +38,15 @@ export const ENTITY_SCOPES = [
   "entity:connections:revoke",
 ] as const;
 
-/** Not in the DB and never carry an audience — see `scope_resolver.OIDC_SCOPES`. */
-export const OIDC_SCOPES = ["openid", "profile", "email"] as const;
+/**
+ * Not in the DB and never carry an audience — see `scope_resolver.OIDC_SCOPES`.
+ *
+ * `offline_access` is what asks for a refresh token (OIDC Core §11). The
+ * dashboard needs one: `automaticSilentRenew` renews from it, and without the
+ * scope the provider issues none and the session ends at the first access
+ * token's expiry.
+ */
+export const OIDC_SCOPES = ["openid", "profile", "email", "offline_access"] as const;
 
 export type AdminScope = (typeof ADMIN_SCOPES)[number];
 export type EntityScope = (typeof ENTITY_SCOPES)[number];

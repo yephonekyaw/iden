@@ -3,6 +3,7 @@ import asyncio
 import jwt
 import pytest
 
+from provider.core.security import hash_secret
 from tests.conftest import ADMIN_EMAIL
 from tests.flows import get_tokens
 
@@ -93,23 +94,31 @@ class TestRefreshRotation:
         that once asked for less has to be able to get the rest back, or a single
         narrow request silently downgrades it forever.
         """
-        tokens = await get_tokens(client, scope="openid admin:users:read")
+        tokens = await get_tokens(
+            client, scope="openid offline_access admin:users:read"
+        )
 
         narrowed = (
-            await refresh(client, tokens["refresh_token"], scope="openid")
+            await refresh(
+                client, tokens["refresh_token"], scope="openid offline_access"
+            )
         ).json()
-        assert set(narrowed["scope"].split()) == {"openid"}
+        assert set(narrowed["scope"].split()) == {"openid", "offline_access"}
 
         restored = (await refresh(client, narrowed["refresh_token"])).json()
         assert "admin:users:read" in restored["scope"].split()
 
     async def test_scope_cannot_be_widened_beyond_the_original_grant(self, client):
         """RFC 6749 §6 — a refresh must not gain scopes the original lacked."""
-        tokens = await get_tokens(client, scope="openid admin:users:read")
+        tokens = await get_tokens(
+            client, scope="openid offline_access admin:users:read"
+        )
 
         widened = (
             await refresh(
-                client, tokens["refresh_token"], scope="openid admin:clients:write"
+                client,
+                tokens["refresh_token"],
+                scope="openid offline_access admin:clients:write",
             )
         ).json()
         assert "admin:clients:write" not in widened["scope"]
@@ -357,16 +366,32 @@ class TestRevocation:
         assert response.status_code == 200
 
 
+async def kiosk_token(client, secret: str) -> str:
+    """An access token the kiosk holds in its own right, so it may introspect it."""
+    body = (
+        await client.post(
+            "/oauth2/token",
+            data={
+                "grant_type": "client_credentials",
+                "client_id": "kiosk",
+                "client_secret": secret,
+                "scope": "entity:profile:read",
+            },
+        )
+    ).json()
+    return body["access_token"]
+
+
 class TestIntrospection:
     async def test_reports_an_active_token(self, client, kiosk):
         _, secret = kiosk
-        tokens = await get_tokens(client)
+        token = await kiosk_token(client, secret)
 
         body = (
             await client.post(
                 "/oauth2/introspect",
                 data={
-                    "token": tokens["access_token"],
+                    "token": token,
                     "client_id": "kiosk",
                     "client_secret": secret,
                 },
@@ -374,15 +399,37 @@ class TestIntrospection:
         ).json()
 
         assert body["active"] is True
-        assert body["client_id"] == "dashboard"
+        assert body["client_id"] == "kiosk"
 
     async def test_reports_a_revoked_token_as_inactive(self, client, kiosk):
         _, secret = kiosk
-        tokens = await get_tokens(client)
+        token = await kiosk_token(client, secret)
         await client.post(
             "/oauth2/revoke",
-            data={"token": tokens["access_token"], "client_id": "dashboard"},
+            data={"token": token, "client_id": "kiosk", "client_secret": secret},
         )
+
+        body = (
+            await client.post(
+                "/oauth2/introspect",
+                data={
+                    "token": token,
+                    "client_id": "kiosk",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
+
+        assert body["active"] is False
+
+    async def test_a_client_cannot_introspect_another_clients_token(
+        self, client, kiosk
+    ):
+        """RFC 7662 §4. Any confidential client could previously read the
+        contents of any token IDEN had issued, including who it was for and
+        what it could do."""
+        _, secret = kiosk
+        tokens = await get_tokens(client)  # issued to `dashboard`
 
         body = (
             await client.post(
@@ -395,7 +442,62 @@ class TestIntrospection:
             )
         ).json()
 
-        assert body["active"] is False
+        # Inactive rather than refused: the answer must not distinguish
+        # "someone else's" from "never existed".
+        assert body == {"active": False}
+
+    async def test_a_refresh_token_can_be_introspected_by_its_own_client(
+        self, client, kiosk, db, catalogue
+    ):
+        """RFC 7662 accepts any token type the server issues, not only JWTs."""
+        from provider.shared.enums import ClientType, GrantType
+        from provider.shared.models import Client, ClientScope
+
+        secret = "confidential-app-secret"
+        app = Client(
+            client_id="reporting",
+            name="Reporting",
+            client_type=ClientType.CONFIDENTIAL,
+            client_secret_hash=hash_secret(secret),
+            allowed_grants=[GrantType.AUTHORIZATION_CODE, GrantType.REFRESH_TOKEN],
+            redirect_uris=["https://reporting.example.org/callback"],
+            skip_consent=True,
+        )
+        db.add(app)
+        await db.flush()
+        for value in ("openid", "entity:profile:read"):
+            if value in catalogue["scopes"]:
+                db.add(
+                    ClientScope(
+                        client_id=app.id,
+                        scope_id=catalogue["scopes"][value].id,
+                        grantable=True,
+                    )
+                )
+        await db.commit()
+
+        tokens = await get_tokens(
+            client,
+            client_id="reporting",
+            redirect_uri="https://reporting.example.org/callback",
+            scope="openid offline_access entity:profile:read",
+            client_secret=secret,
+        )
+
+        body = (
+            await client.post(
+                "/oauth2/introspect",
+                data={
+                    "token": tokens["refresh_token"],
+                    "token_type_hint": "refresh_token",
+                    "client_id": "reporting",
+                    "client_secret": secret,
+                },
+            )
+        ).json()
+
+        assert body["active"] is True
+        assert body["token_type"] == "refresh_token"
 
     async def test_garbage_is_inactive_not_an_error(self, client, kiosk):
         _, secret = kiosk

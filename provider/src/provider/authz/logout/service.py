@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from provider.core import audit
 from provider.core.config import settings
-from provider.core.crypto import sign_jwt
+from provider.core.crypto import LOGOUT_TOKEN_TYP, sign_jwt
 from provider.core.logging import logger
 from provider.shared.models import Client, RefreshToken
 
@@ -30,10 +30,10 @@ DELIVERY_TIMEOUT = 5.0
 def mint_logout_token(client: Client, *, subject: uuid.UUID, sid: str) -> str:
     """A logout token — OIDC Back-Channel Logout 1.0 §2.4.
 
-    Two rules keep it from being mistaken for an ID token, and both are
-    required rather than stylistic: `events` marks what this token is, and the
-    **absence of `nonce`** stops it being replayed as proof that someone just
-    authenticated.
+    Three rules keep it from being mistaken for an ID token, and none is
+    stylistic: the `logout+jwt` header says what it is, `events` marks what it
+    is for, and the **absence of `nonce`** stops it being replayed as proof
+    that someone just authenticated.
     """
     issued_at = datetime.now(UTC)
     return sign_jwt(
@@ -46,7 +46,8 @@ def mint_logout_token(client: Client, *, subject: uuid.UUID, sid: str) -> str:
             "sub": str(subject),
             "sid": sid,
             "events": {BACKCHANNEL_LOGOUT_EVENT: {}},
-        }
+        },
+        typ=LOGOUT_TOKEN_TYP,
     )
 
 

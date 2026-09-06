@@ -66,3 +66,4 @@ Not IDEN's to define — these come from the specification and behave as clients
 | `openid` | Required to receive an ID token at all. Without it the flow is plain OAuth 2.0. |
 | `profile` | Releases `name` and `preferred_username`. |
 | `email` | Releases `email` and `email_verified`. |
+| `offline_access` | Asks for a refresh token, so the application keeps working while the person is away from it. The client must also allow the `refresh_token` grant; without both, no refresh token is issued. |

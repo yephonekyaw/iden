@@ -7,7 +7,12 @@ from urllib.parse import parse_qs, urlparse
 
 from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, REDIRECT_URI
 
-DEFAULT_SCOPE = "openid profile email admin:users:read entity:profile:read"
+# `offline_access` is what asks for a refresh token (OIDC Core §11), so it
+# belongs in the default any test about refreshing starts from. A test about
+# *not* getting one overrides `scope` to leave it out.
+DEFAULT_SCOPE = (
+    "openid profile email offline_access admin:users:read entity:profile:read"
+)
 
 
 def pkce_pair() -> tuple[str, str]:
@@ -74,17 +79,23 @@ async def get_code(client, **overrides) -> tuple[str, str]:
     return query_of(resumed)["code"], verifier
 
 
-async def get_tokens(client, **overrides) -> dict:
-    """Run the flow all the way to a token response."""
+async def get_tokens(client, *, client_secret: str | None = None, **overrides) -> dict:
+    """Run the flow all the way to a token response.
+
+    Overrides that name a different client are carried through to the token
+    exchange as well: `client_id` and `redirect_uri` must match what /authorize
+    was given, and a confidential client also has to present its secret.
+    """
     code, verifier = await get_code(client, **overrides)
-    response = await client.post(
-        "/oauth2/token",
-        data={
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": REDIRECT_URI,
-            "code_verifier": verifier,
-            "client_id": "dashboard",
-        },
-    )
+    body = {
+        "grant_type": "authorization_code",
+        "code": code,
+        "redirect_uri": overrides.get("redirect_uri", REDIRECT_URI),
+        "code_verifier": verifier,
+        "client_id": overrides.get("client_id", "dashboard"),
+    }
+    if client_secret is not None:
+        body["client_secret"] = client_secret
+
+    response = await client.post("/oauth2/token", data=body)
     return response.json()

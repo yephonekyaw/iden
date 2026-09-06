@@ -39,7 +39,7 @@ GET /oauth2/authorize
   ?response_type=code
   &client_id=library
   &redirect_uri=https://library.example.org/callback
-  &scope=openid profile email library:loans:read
+  &scope=openid profile email offline_access library:loans:read
   &state=<random, tied to this browser session>
   &nonce=<random, checked in the ID token later>
   &code_challenge=<the hash>
@@ -70,7 +70,7 @@ curl -X POST http://localhost:8000/oauth2/token \
   "access_token": "eyJ...",
   "token_type": "Bearer",
   "expires_in": 600,
-  "scope": "openid profile email library:loans:read",
+  "scope": "openid profile email offline_access library:loans:read",
   "refresh_token": "3sT...",
   "id_token": "eyJ..."
 }

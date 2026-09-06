@@ -25,6 +25,27 @@ router = APIRouter(tags=["discovery"])
     ),
 )
 async def openid_configuration(session: DBSessionDep) -> OpenIDConfiguration:
+    return await _metadata(session)
+
+
+@router.get(
+    "/.well-known/oauth-authorization-server",
+    response_model=OpenIDConfiguration,
+    summary="OAuth 2.0 authorization server metadata",
+    description=(
+        "The same document, at the location RFC 8414 defines.\n\n"
+        "A pure OAuth 2.0 client with no OIDC layer looks only here and would "
+        "otherwise conclude the server has no metadata at all. The content is "
+        "identical — every field RFC 8414 defines is already in the OIDC "
+        "document, which is a superset of it.\n\n"
+        "**Required scope:** none — this endpoint is public."
+    ),
+)
+async def oauth_authorization_server(session: DBSessionDep) -> OpenIDConfiguration:
+    return await _metadata(session)
+
+
+async def _metadata(session: DBSessionDep) -> OpenIDConfiguration:
     values = await session.scalars(select(Scope.value).order_by(Scope.value))
     issuer = settings.iden_issuer
 
@@ -68,6 +89,22 @@ async def openid_configuration(session: DBSessionDep) -> OpenIDConfiguration:
             "preferred_username",
             "email",
             "email_verified",
+        ],
+        response_modes_supported=["query"],
+        request_parameter_supported=False,
+        request_uri_parameter_supported=False,
+        claims_parameter_supported=False,
+        authorization_response_iss_parameter_supported=True,
+        revocation_endpoint_auth_methods_supported=[
+            "client_secret_basic",
+            "client_secret_post",
+            "none",
+        ],
+        # No `none`: introspection describes someone else's token, and a
+        # client_id alone is public by definition (RFC 7662 §2.1).
+        introspection_endpoint_auth_methods_supported=[
+            "client_secret_basic",
+            "client_secret_post",
         ],
     )
 

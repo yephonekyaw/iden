@@ -28,6 +28,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/.well-known/oauth-authorization-server": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * OAuth 2.0 authorization server metadata
+         * @description The same document, at the location RFC 8414 defines.
+         *
+         *     A pure OAuth 2.0 client with no OIDC layer looks only here and would otherwise conclude the server has no metadata at all. The content is identical — every field RFC 8414 defines is already in the OIDC document, which is a superset of it.
+         *
+         *     **Required scope:** none — this endpoint is public.
+         */
+        get: operations["oauth_authorization_server__well_known_oauth_authorization_server_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/.well-known/jwks.json": {
         parameters: {
             query?: never;
@@ -115,11 +139,21 @@ export interface paths {
          * Claims about the signed-in user
          * @description Returns the claims released by the granted scopes: `sub` always, plus `profile` and `email` claims when those scopes were granted.
          *
+         *     Available as both `GET` and `POST`, as OIDC Core §5.3.1 requires. The `POST` form accepts the token in the `access_token` form field as well as in the header (RFC 6750 §2.2), which is what conformance suites and several relying-party libraries send by default.
+         *
          *     **Required scope:** `openid`
          */
         get: operations["userinfo_oauth2_userinfo_get"];
         put?: never;
-        post?: never;
+        /**
+         * Claims about the signed-in user
+         * @description Returns the claims released by the granted scopes: `sub` always, plus `profile` and `email` claims when those scopes were granted.
+         *
+         *     Available as both `GET` and `POST`, as OIDC Core §5.3.1 requires. The `POST` form accepts the token in the `access_token` form field as well as in the header (RFC 6750 §2.2), which is what conformance suites and several relying-party libraries send by default.
+         *
+         *     **Required scope:** `openid`
+         */
+        post: operations["userinfo_post_oauth2_userinfo_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -142,6 +176,8 @@ export interface paths {
          *     Always returns `200`, even for an unknown token — RFC 7009 §2.2 requires it, so that this endpoint cannot be used to probe which tokens exist.
          *
          *     Public clients may revoke their **own** tokens (RFC 7009 §2.1); the caller must already hold the token, so there is nothing to learn.
+         *
+         *     `tokenTypeHint` is honoured as an ordering hint (RFC 7009 §2.1): it decides which lookup runs first, never which ones are allowed, so a wrong hint costs a little time rather than the revocation.
          *
          *     **Required scope:** none — client authentication only.
          */
@@ -167,6 +203,10 @@ export interface paths {
          *
          *     **Requires a confidential client.** The response describes someone else's token, so a `client_id` alone is not enough — it is public by definition (RFC 7662 §2.1).
          *
+         *     **A client may only introspect its own tokens.** Anything issued to another client answers `{"active": false}` — the same answer an expired or unknown token gets, so the endpoint reveals nothing about what exists (RFC 7662 §4).
+         *
+         *     Both access tokens and refresh tokens are accepted; `tokenTypeHint` orders the lookups.
+         *
          *     **Required scope:** none — client authentication only.
          */
         post: operations["introspect_oauth2_introspect_post"];
@@ -187,6 +227,8 @@ export interface paths {
          * End the session everywhere
          * @description Single sign-out. Clears the browser session and its cookie, revokes the refresh tokens the session produced, and delivers a **logout token** to every client that registered a `backchannelLogoutUri` and was signed into during this session (OIDC Back-Channel Logout 1.0).
          *
+         *     Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 §2 requires. Prefer `POST`: it keeps `id_token_hint` out of browser history and out of the `Referer` header of whatever comes next.
+         *
          *     Access tokens already issued stay valid until they expire — they are self-contained by design, and their ten-minute lifetime is the trade that buys offline validation. Refresh tokens do not, so nothing can be renewed after this.
          *
          *     `idTokenHint` identifies the client for redirect validation. A request without a session cookie ends nothing: the hint says who was signed in, it is not a credential for ending someone else's session.
@@ -195,7 +237,19 @@ export interface paths {
          */
         get: operations["logout_oauth2_logout_get"];
         put?: never;
-        post?: never;
+        /**
+         * End the session everywhere
+         * @description Single sign-out. Clears the browser session and its cookie, revokes the refresh tokens the session produced, and delivers a **logout token** to every client that registered a `backchannelLogoutUri` and was signed into during this session (OIDC Back-Channel Logout 1.0).
+         *
+         *     Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 §2 requires. Prefer `POST`: it keeps `id_token_hint` out of browser history and out of the `Referer` header of whatever comes next.
+         *
+         *     Access tokens already issued stay valid until they expire — they are self-contained by design, and their ten-minute lifetime is the trade that buys offline validation. Refresh tokens do not, so nothing can be renewed after this.
+         *
+         *     `idTokenHint` identifies the client for redirect validation. A request without a session cookie ends nothing: the hint says who was signed in, it is not a credential for ending someone else's session.
+         *
+         *     **Required scope:** none.
+         */
+        post: operations["logout_post_oauth2_logout_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1306,6 +1360,8 @@ export interface paths {
          *
          *     Returns `204` whether or not the session existed: a different answer would tell a caller which session ids are real.
          *
+         *     Ending your *own* session clears the session cookie with it, so the browser is not left holding one that names nothing.
+         *
          *     **Required scope:** `entity:sessions:revoke`
          */
         delete: operations["revoke_session_entity_sessions__session_id__delete"];
@@ -1613,6 +1669,17 @@ export interface components {
             /** Client Secret */
             client_secret?: string | null;
         };
+        /** Body_logout_post_oauth2_logout_post */
+        Body_logout_post_oauth2_logout_post: {
+            /** Client Id */
+            client_id?: string | null;
+            /** Id Token Hint */
+            id_token_hint?: string | null;
+            /** Post Logout Redirect Uri */
+            post_logout_redirect_uri?: string | null;
+            /** State */
+            state?: string | null;
+        };
         /** Body_revoke_oauth2_revoke_post */
         Body_revoke_oauth2_revoke_post: {
             /** Token */
@@ -1642,6 +1709,11 @@ export interface components {
             client_id?: string | null;
             /** Client Secret */
             client_secret?: string | null;
+        };
+        /** Body_userinfo_post_oauth2_userinfo_post */
+        Body_userinfo_post_oauth2_userinfo_post: {
+            /** Access Token */
+            access_token?: string | null;
         };
         /**
          * ChallengeResponse
@@ -2183,6 +2255,38 @@ export interface components {
             backchannel_logout_session_supported: boolean;
             /** Claims Supported */
             claims_supported: string[];
+            /**
+             * Response Modes Supported
+             * @description Only the query response mode; IDEN issues codes, never fragments.
+             */
+            response_modes_supported: string[];
+            /**
+             * Request Parameter Supported
+             * @description False — IDEN does not accept request objects by value (JAR).
+             */
+            request_parameter_supported: boolean;
+            /**
+             * Request Uri Parameter Supported
+             * @description False — IDEN does not accept request objects by reference.
+             */
+            request_uri_parameter_supported: boolean;
+            /**
+             * Claims Parameter Supported
+             * @description False — claims are released by scope, not per-request.
+             */
+            claims_parameter_supported: boolean;
+            /**
+             * Authorization Response Iss Parameter Supported
+             * @description True — every authorization response carries `iss` (RFC 9207).
+             */
+            authorization_response_iss_parameter_supported: boolean;
+            /** Revocation Endpoint Auth Methods Supported */
+            revocation_endpoint_auth_methods_supported: string[];
+            /**
+             * Introspection Endpoint Auth Methods Supported
+             * @description Confidential clients only — `none` is deliberately absent (RFC 7662 §2.1).
+             */
+            introspection_endpoint_auth_methods_supported: string[];
         };
         /** PageMeta */
         PageMeta: {
@@ -3015,6 +3119,26 @@ export interface operations {
             };
         };
     };
+    oauth_authorization_server__well_known_oauth_authorization_server_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpenIDConfiguration"];
+                };
+            };
+        };
+    };
     json_web_key_set__well_known_jwks_json_get: {
         parameters: {
             query?: never;
@@ -3172,6 +3296,66 @@ export interface operations {
                     "application/json": components["schemas"]["OAuthErrorResponse"];
                 };
             };
+            /** @description The token does not carry `openid` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponse"];
+                };
+            };
+        };
+    };
+    userinfo_post_oauth2_userinfo_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_userinfo_post_oauth2_userinfo_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UserInfoResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponse"];
+                };
+            };
+            /** @description The token does not carry `openid` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OAuthErrorResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
         };
     };
     revoke_oauth2_revoke_post: {
@@ -3271,6 +3455,46 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Redirect to post_logout_redirect_uri */
+            303: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logout_post_oauth2_logout_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/x-www-form-urlencoded": components["schemas"]["Body_logout_post_oauth2_logout_post"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

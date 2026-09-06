@@ -38,6 +38,30 @@ class OpenIDConfiguration(BaseModel):
     )
     claims_supported: list[str]
 
+    # Declared rather than omitted. Each of these defaults to `true` when absent
+    # (OIDC Discovery 1.0 §3), so silence here advertised support for request
+    # objects, request URIs, and the `claims` parameter — none of which IDEN
+    # implements. A conforming client would have believed it.
+    response_modes_supported: list[str] = Field(
+        description="Only the query response mode; IDEN issues codes, never fragments."
+    )
+    request_parameter_supported: bool = Field(
+        description="False — IDEN does not accept request objects by value (JAR)."
+    )
+    request_uri_parameter_supported: bool = Field(
+        description="False — IDEN does not accept request objects by reference."
+    )
+    claims_parameter_supported: bool = Field(
+        description="False — claims are released by scope, not per-request."
+    )
+    authorization_response_iss_parameter_supported: bool = Field(
+        description="True — every authorization response carries `iss` (RFC 9207)."
+    )
+    revocation_endpoint_auth_methods_supported: list[str]
+    introspection_endpoint_auth_methods_supported: list[str] = Field(
+        description="Confidential clients only — `none` is deliberately absent (RFC 7662 §2.1)."
+    )
+
 
 class JsonWebKeySet(BaseModel):
     keys: list[dict]

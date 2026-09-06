@@ -11,7 +11,7 @@ from fastapi import Depends, HTTPException, Request
 from provider.authz.services.token_service import is_denylisted
 from provider.core.audit import set_actor
 from provider.core.config import settings
-from provider.core.crypto import verify_jwt
+from provider.core.crypto import ACCESS_TOKEN_TYP, verify_jwt
 from provider.core.redis import RedisDep
 
 
@@ -27,6 +27,13 @@ class AccessToken:
     claims: dict
 
 
+# The scope prefixes whose audience is derivable, because IDEN registers those
+# APIs itself under exactly these names. A scope outside this set has an
+# audience only its own registration knows, so guessing one would mint a
+# nonexistent expectation and 401 every request that satisfied it.
+SYSTEM_SCOPE_PREFIXES = frozenset({"admin", "entity", "biometric"})
+
+
 def _audience_for(scope: str) -> str:
     """The audience a scope's API was registered under.
 
@@ -34,8 +41,19 @@ def _audience_for(scope: str) -> str:
     the `admin` API), so the audience is derivable rather than repeated on
     every route. Externally registered APIs are validated by their own
     resource servers, never here.
+
+    Refuses to guess for anything else: a route guarded by a scope outside the
+    convention must pass `audience=` explicitly. Raising at import time — when
+    the router is built — turns what used to be a silent 401 on every request
+    into a startup failure naming the scope.
     """
-    return f"{settings.iden_issuer}/{scope.split(':')[0]}"
+    prefix = scope.split(":")[0]
+    if prefix not in SYSTEM_SCOPE_PREFIXES:
+        raise ValueError(
+            f"Cannot derive an audience from {scope!r}: {prefix!r} is not one of "
+            f"IDEN's own APIs. Pass require_scope(..., audience=...) instead."
+        )
+    return f"{settings.iden_issuer}/{prefix}"
 
 
 def _is_uuid(value: str) -> bool:
@@ -59,21 +77,28 @@ def _bearer(request: Request) -> str:
     return token
 
 
-def require_scope(*required: str):
+def require_scope(*required: str, audience: str | None = None):
     """Verify the access token and enforce scopes.
 
     401 means *authenticate again* — no token, bad signature, expired, revoked.
     403 means *authentication will not help* — the token is valid but lacks the
     scope. Collapsing the two would tell a client to retry a login that cannot
     fix anything.
+
+    `audience` overrides the one derived from the first scope's prefix, which is
+    what a route guarded by a scope outside IDEN's own APIs must supply.
     """
-    audience = _audience_for(required[0]) if required else None
+    if audience is None and required:
+        audience = _audience_for(required[0])
 
     async def dependency(request: Request, redis: RedisDep) -> AccessToken:
         raw = _bearer(request)
 
         try:
-            claims = verify_jwt(raw, audience=audience)
+            # Only an access token opens a resource server. Before this check the
+            # sole thing separating one from an ID token here was which claims it
+            # happened to carry (RFC 9068 §4).
+            claims = verify_jwt(raw, audience=audience, typ=ACCESS_TOKEN_TYP)
         except jwt.PyJWTError as exc:
             raise HTTPException(
                 status_code=401,
@@ -91,9 +116,19 @@ def require_scope(*required: str):
         granted = set(claims.get("scope", "").split())
         missing = set(required) - granted
         if missing:
+            # RFC 6750 §3.1: `insufficient_scope`, naming what would satisfy it.
+            # Without the header a client cannot tell this 403 from any other
+            # without reading the prose.
             raise HTTPException(
                 status_code=403,
                 detail=f"Missing required scope: {' '.join(sorted(missing))}",
+                headers={
+                    "WWW-Authenticate": (
+                        'Bearer error="insufficient_scope", '
+                        f'error_description="Missing required scope", '
+                        f'scope="{" ".join(sorted(required))}"'
+                    )
+                },
             )
 
         # A client_credentials token's subject is the client itself, not a

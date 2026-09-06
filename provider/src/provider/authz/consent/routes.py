@@ -10,6 +10,7 @@ from provider.authz.login.errors import ChallengeNotFound, NoSession
 from provider.authz.services import challenge_store
 from provider.authz.services.scope_resolver import parse_scope, resolve_for_user
 from provider.core.audit import set_actor
+from provider.core.config import settings
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.schemas import ErrorResponse
@@ -53,6 +54,8 @@ async def consent(
         params = {
             "error": "access_denied",
             "error_description": "The user refused the request.",
+            # An authorization response like any other — RFC 9207 §2.
+            "iss": settings.iden_issuer,
         }
         if state := challenge.params.get("state"):
             params["state"] = state

@@ -4,6 +4,10 @@
 
 Addressed to an API. Your resource server validates it offline and reads it.
 
+The JOSE header carries **`typ: at+jwt`** (RFC 9068 §2.1). Check it. It is what distinguishes an
+access token from an ID token by kind rather than by which claims each happens to have — every token
+IDEN signs says what it is, and every endpoint says what it accepts.
+
 | Claim | Always | Meaning |
 |---|---|---|
 | `iss` | ✅ | The issuer. Must match your configured IDEN URL. |
@@ -22,7 +26,8 @@ nothing to report.
 
 ## ID token
 
-Addressed to the **application**, describing the sign-in event. Never send it to an API.
+Addressed to the **application**, describing the sign-in event. Never send it to an API — it carries
+`typ: JWT`, and IDEN's protected resources refuse anything that is not `at+jwt`.
 
 | Claim | Always | Meaning |
 |---|---|---|
@@ -47,9 +52,14 @@ Sent server-to-server when a session ends.
 | `sid` | Which session. Match it against what you stored. |
 | `events` | Contains `http://schemas.openid.net/event/backchannel-logout`. **This is what makes it a logout token.** |
 
-**No `nonce`, ever.** Verify both facts. Together they stop a captured logout token being replayed as
-proof that someone just authenticated.
+The header carries `typ: logout+jwt`.
+
+**No `nonce`, ever.** Verify all three facts. Together they stop a captured logout token being
+replayed as proof that someone just authenticated.
 
 ## Refresh token
 
 Not a JWT. An opaque random string, meaningless outside IDEN, stored only as a hash.
+
+Issued only when the **`offline_access`** scope was granted and the client allows the
+`refresh_token` grant (OIDC Core §11).

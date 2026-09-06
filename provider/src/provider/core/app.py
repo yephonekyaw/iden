@@ -233,7 +233,14 @@ async def handle_redirectable_error(
 
     Only reachable after client_id and redirect_uri have been validated.
     """
-    params = {"error": exc.error, "error_description": exc.description}
+    # `iss` rides on the error response too — RFC 9207 §2 requires it on every
+    # authorization response, and a client that validates it on success but not
+    # on failure has only closed half the mix-up.
+    params = {
+        "error": exc.error,
+        "error_description": exc.description,
+        "iss": settings.iden_issuer,
+    }
     if exc.state:
         params["state"] = exc.state
     return RedirectResponse(f"{exc.redirect_uri}?{urlencode(params)}", status_code=303)
@@ -242,10 +249,24 @@ async def handle_redirectable_error(
 @app.exception_handler(OAuthError)
 async def handle_oauth_error(request: Request, exc: OAuthError) -> JSONResponse:
     """RFC 6749 §5.2 fixes this shape; a client library will not understand
-    the project's own error contract here."""
-    headers = (
-        {"WWW-Authenticate": 'Basic realm="iden"'} if exc.status_code == 401 else None
-    )
+    the project's own error contract here.
+
+    The `WWW-Authenticate` scheme follows what failed, not the status code.
+    `invalid_client` is a *client* that did not authenticate, so `Basic` tells
+    it to retry with its credentials (RFC 6749 §5.2). `invalid_token` is a
+    protected resource refusing a *user's* token, and answering `Basic` there
+    told the client to present client credentials instead of sending the person
+    back through a login — the opposite of the recovery it needs (RFC 6750 §3).
+    """
+    headers = None
+    if exc.status_code in (401, 403):
+        challenge = (
+            'Basic realm="iden"'
+            if exc.error == "invalid_client"
+            else f'Bearer error="{exc.error}", error_description="{exc.description}"'
+        )
+        headers = {"WWW-Authenticate": challenge}
+
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": exc.error, "error_description": exc.description},

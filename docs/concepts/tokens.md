@@ -38,6 +38,13 @@ See [Token claims](../reference/claims.md) for every field.
 Opaque — a random string, meaningless outside IDEN, stored only as a hash. Its job is to obtain a new
 access token when the old one expires, without dragging the person through a sign-in again.
 
+**You have to ask for one.** Request the `offline_access` scope, and the client must also allow the
+`refresh_token` grant (OIDC Core §11). The two say different things: the grant is what this client is
+*configured* to do, the scope is what this particular request asked for and the person consented to.
+It is the difference between access while someone is using your app and access while they are not,
+so it is a separate question from anything else the app can do — which is why it is a scope and why
+the consent screen names it.
+
 **Every use rotates it.** You hand in a refresh token, you get a new one, and the old one dies. That
 is what makes theft detectable: if a token that has already been spent shows up again, two parties
 hold it, and only one of them can be legitimate. IDEN revokes the entire lineage.

@@ -1187,11 +1187,12 @@ expressible. Expressing it needs a rule such as *you may not grant a scope you d
 `aud`. Standard per RFC 9068, but a compromised resource server can replay the token at the other.
 RFC 8707 (`resource`) is the tighter design if that matters.
 
-**KI-10 · `require_scope` derives the audience from the scope prefix.** `core/auth._audience_for`
-is correct for `admin:`/`entity:`/`biometric:` and silently wrong for anything else — an IDEN route
-guarded by a custom scope would compute a nonexistent audience and 401 every request. Needs a guard
-rail or an explicit audience argument. **Phase 4 will add `admin:profile-fields:*`, which keeps the
-prefix convention — but it is one custom scope away from biting.**
+~~**KI-10 · `require_scope` derives the audience from the scope prefix.**~~ **Resolved.**
+`_audience_for` now derives only for the three prefixes IDEN registers itself and raises for
+anything else, and `require_scope` takes an explicit `audience=` for routes outside the convention.
+The raise happens when the router is built rather than per request, so what used to be a silent 401
+on every call is now a startup failure naming the scope. Pinned by
+`tests/test_conformance.py::TestDerivedAudience`.
 
 **KI-11 · Key rotation needs a restart.** `core/crypto._keys` is `@cache`d at import. The docs called
 rotation "a config change"; it is a config change *and* a rolling restart. **Resolved in Phase 6 by
@@ -1217,8 +1218,10 @@ detection needs the row.
 4. ~~KI-16~~ ✅ — the replay window and the lock, together.
 5. ~~KI-8~~ ✅ — the last-administrator guard. **KI-7** still waits on what a non-root administrator
    should be.
-6. ~~KI-14~~ ✅ and ~~KI-11~~ ✅ (as a documentation fix) with Phase 6 hardening. **KI-9, KI-10**
-   remain open and deliberately so — see below.
+6. ~~KI-14~~ ✅ and ~~KI-11~~ ✅ (as a documentation fix) with Phase 6 hardening.
+7. ~~KI-10~~ ✅ with the conformance pass, which closed all eight Tier 1 gaps from the
+   [README](../README.md#tier-1--conformance-gaps--closed) and adopted RFC 8414, RFC 9207,
+   RFC 7662 §4 and RFC 7009 §2.1. **KI-9** remains open and deliberately so — see below.
 
 **Deferred deliberately, before Phase 6.** None of the seven open issues blocks a later phase, so
 they were reviewed and left standing rather than fixed first. What that decision rests on:
@@ -1229,13 +1232,12 @@ they were reviewed and left standing rather than fixed first. What that decision
   cost is a choice rather than a surprise.
 - ~~**KI-8**~~ was the one with a one-way door behind it, and was taken straight after Phase 6 for
   exactly that reason.
-- **KI-10** is latent. The prefix convention holds for `admin:`, `entity:`, `biometric:` and every
-  scope any phase plans to add. It bites the first time an IDEN route is guarded by a scope that does
-  not follow it.
+- ~~**KI-10**~~ was latent rather than harmless, and cost one guard clause to close. Taken with the
+  conformance pass, because the same pass made `require_scope` grow an `audience` argument anyway.
 - ~~**KI-11, KI-14**~~ were deployment concerns and were answered inside Phase 6 — rotation as a
   documentation correction, cleanup as `scripts/cleanup.py`.
 
-That leaves **four** open, all by choice: KI-7, KI-9, KI-10, KI-17.
+That leaves **three** open, all by choice: KI-7, KI-9, KI-17.
 
 ---
 

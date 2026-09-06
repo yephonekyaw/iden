@@ -104,3 +104,8 @@ Usually the right answer is to accept that. If you cannot, call
 [`POST /oauth2/introspect`](../reference/endpoints.md), which checks the denylist. It costs a network
 round trip on every request, which is the thing offline validation exists to avoid, so use it only
 where it earns that cost.
+
+Introspection requires a **confidential** client, and a client may only introspect tokens issued to
+itself (RFC 7662 §4). A token belonging to someone else comes back `{"active": false}` — the same
+answer an unknown token gets, so the endpoint cannot be used to discover what exists. If your API is
+a separate client from the one that obtained the token, offline validation is the path open to you.

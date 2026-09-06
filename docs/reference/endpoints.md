@@ -170,8 +170,16 @@ Every `/admin/*` and `/entity/*` route is gated by a permission named in its des
 | Method | Path | Purpose |
 |---|---|---|
 | `GET` | `/oauth2/authorize` | Start an authorization request |
-| `POST` | `/oauth2/introspect` | Inspect a token |
-| `GET` | `/oauth2/logout` | End the session everywhere |
+| `POST` | `/oauth2/introspect` | Inspect a token — your own tokens only |
+| `GET` `POST` | `/oauth2/logout` | End the session everywhere. Prefer `POST`: it keeps `id_token_hint` out of browser history and the `Referer` header |
 | `POST` | `/oauth2/revoke` | Revoke a token |
 | `POST` | `/oauth2/token` | Exchange a grant for tokens |
-| `GET` | `/oauth2/userinfo` | Claims about the signed-in user |
+| `GET` `POST` | `/oauth2/userinfo` | Claims about the signed-in user. `POST` also accepts the token as an `access_token` form field |
+
+### Discovery
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/.well-known/openid-configuration` | OpenID provider metadata |
+| `GET` | `/.well-known/oauth-authorization-server` | The same document, where RFC 8414 puts it. A pure OAuth 2.0 client with no OIDC layer looks only here |
+| `GET` | `/.well-known/jwks.json` | Public signing keys, one JWK per `kid` |

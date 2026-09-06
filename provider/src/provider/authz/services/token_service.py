@@ -10,7 +10,7 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from provider.core.config import settings
-from provider.core.crypto import sign_jwt
+from provider.core.crypto import ACCESS_TOKEN_TYP, sign_jwt
 from provider.core.security import generate_token, hash_token
 from provider.shared.models import Client, RefreshToken, ResourceApi, Scope, User
 
@@ -78,7 +78,7 @@ async def mint_access_token(
     if authenticated_at:
         claims["auth_time"] = int(authenticated_at.timestamp())
 
-    return sign_jwt(claims), jti, settings.iden_access_token_ttl
+    return sign_jwt(claims, typ=ACCESS_TOKEN_TYP), jti, settings.iden_access_token_ttl
 
 
 def mint_id_token(

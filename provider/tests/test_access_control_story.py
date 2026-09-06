@@ -173,7 +173,9 @@ async def test_removing_the_user_from_the_group_revokes_it_at_the_next_token(
 ):
     """Permissions are evaluated at issuance — which is why access tokens are
     short-lived rather than long-lived."""
-    first = await sign_in_as(client, "officer@test.local", f"openid {SCOPE}")
+    first = await sign_in_as(
+        client, "officer@test.local", f"openid offline_access {SCOPE}"
+    )
     assert (
         SCOPE
         in jwt.decode(first["access_token"], options={"verify_signature": False})[
@@ -203,7 +205,9 @@ async def test_removing_the_user_from_the_group_revokes_it_at_the_next_token(
 async def test_taking_the_scope_off_the_role_revokes_it_for_everyone(
     client, admin_headers, officer, attendance
 ):
-    first = await sign_in_as(client, "officer@test.local", f"openid {SCOPE}")
+    first = await sign_in_as(
+        client, "officer@test.local", f"openid offline_access {SCOPE}"
+    )
 
     await client.put(
         f"/admin/roles/{attendance['role']['id']}/scopes",

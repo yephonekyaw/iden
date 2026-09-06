@@ -28,7 +28,7 @@ Set these explicitly if your library asks:
 | PKCE | **Required**, `S256`. Not optional, even for confidential clients. |
 | Client auth | `client_secret_basic`, `client_secret_post`, or `none` for public clients |
 | ID token signing | `RS256` |
-| Refresh tokens | Issued when the client allows the `refresh_token` grant. There is no `offline_access` scope to request. |
+| Refresh tokens | Request the **`offline_access`** scope (OIDC Core §11). The client must also allow the `refresh_token` grant — the grant is what it *may* do, the scope is what this request asked for. Ask for neither and you get no refresh token. |
 | Front-channel logout | Not supported — use [back-channel](single-sign-out.md) |
 
 ## Browser single-page app
@@ -46,7 +46,7 @@ Public client, PKCE, tokens in memory.
       redirect_uri: "https://library.example.org/callback",
       post_logout_redirect_uri: "https://library.example.org/",
       response_type: "code",
-      scope: "openid profile email library:loans:read",
+      scope: "openid profile email offline_access library:loans:read",
 
       // Silent renewal in a hidden iframe. This is what `prompt=none` exists for.
       automaticSilentRenew: true,
@@ -67,7 +67,7 @@ Public client, PKCE, tokens in memory.
       authority="https://iden.example.org"
       client_id="library"
       redirect_uri="https://library.example.org/callback"
-      scope="openid profile email library:loans:read"
+      scope="openid profile email offline_access library:loans:read"
       onSigninCallback={() => window.history.replaceState({}, "", "/")}
     >
       <App />
@@ -82,7 +82,7 @@ Public client, PKCE, tokens in memory.
         authority: "https://iden.example.org",
         clientId: "library",
         redirectUrl: "https://library.example.org/callback",
-        scope: "openid profile email library:loans:read",
+        scope: "openid profile email offline_access library:loans:read",
         responseType: "code",
         silentRenew: true,
         useRefreshToken: true,
@@ -97,7 +97,7 @@ Public client, PKCE, tokens in memory.
 
     In practice this means silent renewal works when IDEN and your app share a site, and does not
     when they are cross-site in a browser that blocks third-party cookies. If they are cross-site,
-    use refresh tokens instead of iframe renewal.
+    use refresh tokens instead of iframe renewal — which means requesting `offline_access`.
 
 ## Server-rendered web app
 
