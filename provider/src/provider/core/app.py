@@ -50,6 +50,13 @@ ERROR_STATUS = (
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Provider starting", env=settings.iden_env, issuer=settings.iden_issuer)
+    if settings.iden_biometric_enabled:
+        # `core.storage` carries no import-time side effect of its own — this
+        # is lazy only so a disabled deployment never opens a connection to
+        # (or even constructs a client for) an object store it isn't using.
+        from provider.core import storage
+
+        storage.ensure_bucket()
     yield
     await engine.dispose()
     await redis_module.client.aclose()
@@ -294,6 +301,15 @@ app.add_middleware(
 # Outermost, so the headers reach responses the inner middleware produces on
 # its own — a CORS preflight, an audit failure — not only the ones routes return.
 app.add_middleware(SecurityHeadersMiddleware)
+
+if settings.iden_biometric_enabled:
+    # Imported here, conditionally, rather than at module level: importing
+    # `provider.biometric` at all registers the `face` auth method (see
+    # `biometric/__init__.py`), and the module must add no cost — not even an
+    # advertised method — when the flag is off.
+    from provider.biometric.engine_client import EngineUnavailable
+
+    app.add_exception_handler(EngineUnavailable, handle_unavailable)
 
 app.include_router(router, prefix=settings.iden_api_prefix)
 

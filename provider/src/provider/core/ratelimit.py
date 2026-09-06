@@ -109,6 +109,7 @@ async def clear(redis, bucket: str, identity: str) -> None:
 # is one address to us.
 LOGIN_PER_IP = limit_by_ip("login-ip", limit=30, window=300)
 TOTP_PER_IP = limit_by_ip("totp-ip", limit=20, window=300)
+BIOMETRIC_PER_IP = limit_by_ip("biometric-ip", limit=20, window=300)
 TOKEN_PER_IP = limit_by_ip("token-ip", limit=120, window=60)
 RESET_PER_IP = limit_by_ip("reset-ip", limit=10, window=3600)
 

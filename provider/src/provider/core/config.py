@@ -56,6 +56,42 @@ class Settings(BaseSettings):
     # Biometric extension
     iden_biometric_enabled: bool = False
     iden_engine_base_url: str = "http://engine:8000"
+    # Cosine *distance* (1 - similarity) at or below which two embeddings count
+    # as the same person. Lower is stricter. ArcFace embeddings from
+    # `buffalo_l` are L2-normalized, so 0 is identical and 2 is opposite;
+    # tune against real enrollment data before relying on this for access
+    # control.
+    iden_biometric_match_threshold: float = 0.6
+    # Separate from the match threshold above, and deliberately stricter:
+    # this gates whether *enrollment* refuses a face as "already someone
+    # else's". The match threshold is tuned for recognizing a real return
+    # visit; a false positive there just means "try again". A false positive
+    # here means an unrelated person is blocked from ever enrolling, so it
+    # only rejects when the two faces are almost certainly the same person.
+    iden_biometric_duplicate_threshold: float = 0.9
+
+    # Weights for combining the 5 enrollment poses into one template
+    # embedding (see `biometric/enroll/service.py`). Frontal carries the most
+    # weight because it's what verification actually looks like day to day;
+    # the angled poses add pose-robustness but are individually less
+    # reliable due to partial self-occlusion, so they stay minority
+    # contributors. Kept as separate settings, not a parsed dict, so each is
+    # a plain env var — these are meant to be tuned against FAR/FRR
+    # measurements later, not treated as fixed. No enforced sum-to-1
+    # constraint; the combination step normalizes the result regardless.
+    iden_biometric_pose_weight_frontal: float = 0.45
+    iden_biometric_pose_weight_left: float = 0.15
+    iden_biometric_pose_weight_right: float = 0.15
+    iden_biometric_pose_weight_up: float = 0.125
+    iden_biometric_pose_weight_down: float = 0.125
+
+    # Object storage for enrollment images. S3-compatible — MinIO in
+    # development, swappable for S3/R2/GCS without code changes. Only read
+    # when biometric is enabled.
+    iden_minio_endpoint_url: str = "http://localhost:9000"
+    iden_minio_access_key: str = "iden"
+    iden_minio_secret_key: str = "iden12345"
+    iden_minio_bucket: str = "biometric-enrollments"
 
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False

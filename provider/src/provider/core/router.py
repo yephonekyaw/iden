@@ -8,6 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from provider.core.config import settings
 from provider.core.db import DBSessionDep
 from provider.core.redis import RedisDep
 from provider.core.schemas import CamelCaseBaseModel
@@ -67,6 +68,29 @@ router.include_router(entity_totp_router)
 router.include_router(entity_sessions_router)
 router.include_router(entity_connections_router)
 router.include_router(entity_permissions_router)
+
+if settings.iden_biometric_enabled:
+    # Imported only when enabled: importing `provider.biometric` at all
+    # registers the `face` auth method (see `biometric/__init__.py`), and the
+    # module must carry no cost — not even an advertised method or a scope —
+    # when the flag is off.
+    from provider.biometric.enroll.routes import (  # noqa: E402
+        router as biometric_enroll_router,
+    )
+    from provider.biometric.liveness.routes import (  # noqa: E402
+        router as biometric_liveness_router,
+    )
+    from provider.biometric.search.routes import (  # noqa: E402
+        router as biometric_search_router,
+    )
+    from provider.biometric.verify.routes import (  # noqa: E402
+        router as biometric_verify_router,
+    )
+
+    router.include_router(biometric_enroll_router)
+    router.include_router(biometric_verify_router)
+    router.include_router(biometric_search_router)
+    router.include_router(biometric_liveness_router)
 
 
 class LivenessResponse(CamelCaseBaseModel):
