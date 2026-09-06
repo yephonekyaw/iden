@@ -22,6 +22,15 @@ class TotpRequest(CamelCaseBaseModel):
     )
 
 
+class BiometricLoginRequest(CamelCaseBaseModel):
+    challenge_id: str = Field(
+        description="From the `challenge` query parameter on the login page."
+    )
+    image: str = Field(
+        description="A single captured frame, base64-encoded (no data URL prefix)."
+    )
+
+
 class AuthStepResponse(CamelCaseBaseModel):
     status: Literal["complete", "totp_required"] = Field(
         description=(

@@ -1,3 +1,6 @@
+import base64
+import binascii
+
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from sqlalchemy import select
 
@@ -13,6 +16,7 @@ from provider.authz.login.errors import (
 )
 from provider.authz.login.schemas import (
     AuthStepResponse,
+    BiometricLoginRequest,
     ChallengeResponse,
     ChallengeScope,
     LoginRequest,
@@ -298,19 +302,76 @@ async def totp(
         "Adds `face` to the session's `amr`, but only when the engine reports a "
         "**liveness-verified** match — a match without liveness is not an "
         "authentication.\n\n"
-        "Returns `501` unless `IDEN_BIOMETRIC_ENABLED` is set. The route exists "
-        "while the module does not so the Auth UI contract is fixed from the "
-        "start; Phase 4 fills in the handler.\n\n"
-        "**Required scope:** none — requires an existing session or challenge."
+        "**Required scope:** none — this is how a session is established, the "
+        "same as `/login`.\n\n"
+        "Returns `501` unless `IDEN_BIOMETRIC_ENABLED` is set."
     ),
     responses={
-        501: {"model": ErrorResponse, "description": "Biometric module not enabled"}
+        400: {"model": ErrorResponse, "description": "Image not valid base64"},
+        401: {"model": ErrorResponse, "description": "No liveness-verified match"},
+        403: {"model": ErrorResponse, "description": "Account disabled"},
+        404: {"model": ErrorResponse, "description": "Challenge expired or unknown"},
+        429: {"model": ErrorResponse, "description": "Too many attempts"},
+        501: {"model": ErrorResponse, "description": "Biometric module not enabled"},
     },
+    dependencies=[Depends(ratelimit.BIOMETRIC_PER_IP)],
 )
-async def biometric() -> AuthStepResponse:
+async def biometric(
+    body: BiometricLoginRequest,
+    request: Request,
+    response: Response,
+    login_session: LoginSessionDep,
+    session: DBSessionDep,
+    redis: RedisDep,
+) -> AuthStepResponse:
     if not settings.iden_biometric_enabled:
         raise HTTPException(
             status_code=501,
             detail="The biometric module is not enabled on this deployment.",
         )
-    raise HTTPException(status_code=501, detail="Biometric login arrives in Phase 4.")
+
+    # Imported here, not at module level: importing `provider.biometric` at all
+    # registers the `face` auth method (see `biometric/__init__.py`), and that
+    # must only happen when the flag above is already known to be on.
+    from provider.biometric.search.service import identify
+
+    challenge = await challenge_store.get(redis, body.challenge_id)
+    if challenge is None:
+        raise HTTPException(status_code=404, detail=ChallengeNotFound.message)
+
+    try:
+        image = base64.b64decode(body.image, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=400, detail="Image is not valid base64."
+        ) from exc
+
+    result = await identify(session, image)
+    if not (result.matched and result.liveness_passed) or result.user_id is None:
+        raise HTTPException(status_code=401, detail="No liveness-verified match.")
+
+    user = await session.get(User, result.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=403, detail=InactiveUser.message)
+
+    set_actor(request, user_id=user.id)
+
+    if login_session is not None and login_session.user_id == user.id:
+        login_session = await session_store.reauthenticate(
+            redis, login_session, AmrMethod.FACE
+        )
+    else:
+        if login_session is not None:
+            await session_store.delete(redis, login_session.id)
+        login_session = await session_store.create(redis, user.id, AmrMethod.FACE)
+
+    session_cookie.set_session(response, login_session.id)
+
+    challenge.user_id = user.id
+    await challenge_store.save(redis, challenge)
+
+    return await _next_step(
+        login_session,
+        challenge,
+        totp_enrolled=await has_confirmed_totp(session, user.id),
+    )
