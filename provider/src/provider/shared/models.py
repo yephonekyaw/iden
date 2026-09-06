@@ -8,10 +8,12 @@ expiry is the storage layer's job rather than a cleanup job's.
 import uuid
 from datetime import datetime
 
+from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
+    Float,
     ForeignKey,
     Index,
     String,
@@ -465,3 +467,36 @@ class UserProfileValue(Base, TimestampMixin):
     is_unique: Mapped[bool] = mapped_column(Boolean, default=False)
 
     field: Mapped[ProfileField] = relationship(lazy="selectin")
+
+
+# --------------------------------------------------------------------------
+# Biometric extension
+# --------------------------------------------------------------------------
+
+
+class FaceEnrollment(Base, TimestampMixin):
+    """One person's enrolled face.
+
+    One row per user, not a history of enrollments: re-enrolling overwrites
+    the embedding and the stored image, the same way changing a password
+    replaces the old hash rather than keeping every one a person ever had.
+    512 dimensions matches InsightFace's `buffalo_l` (ArcFace) embedding —
+    see `engine/README.md`.
+    """
+
+    __tablename__ = "face_enrollments"
+
+    id: Mapped[uuid.UUID] = _pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), unique=True
+    )
+    embedding: Mapped[list[float]] = mapped_column(Vector(512))
+    # The worst (not average) of the 5 per-pose quality scores at enrollment
+    # time — see `biometric/enroll/service.py`. A single bad pose shouldn't
+    # be hidden by four good ones for something access-control-relevant.
+    quality: Mapped[float] = mapped_column(Float)
+    # The MinIO object key the enrollment image was stored under, not the
+    # image itself — large binaries stay out of Postgres.
+    image_object_key: Mapped[str] = mapped_column(String(255))
+
+    user: Mapped[User] = relationship(lazy="selectin")
