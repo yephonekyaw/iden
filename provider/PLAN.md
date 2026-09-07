@@ -965,7 +965,7 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
 
 ### Done when
 
-✅ `docker compose -f deploy/docker-compose.yml up --build` brings up a working deployment —
+`docker compose -f deploy/docker-compose.yml up --build` brings up a working deployment —
 verified: migrations ran to completion, the container reported healthy as uid `iden`, and
 `/health/ready` answered `{"status":"ok"}` with the security headers attached. The suite passes at
 388 tests, and the OWASP-relevant checks — rate limits engaged, no secrets in logs, headers present —
@@ -1212,14 +1212,14 @@ detection needs the row.
 
 ### Suggested order
 
-1. ~~KI-1~~ ✅ — with KI-2 through KI-6.
-2. ~~KI-15~~ ✅ Alembic, ~~KI-12~~ ✅ audit log — both taken ahead of Phase 3.
-3. ~~KI-13~~ ✅ — per-address and per-account limits, with a proxy expected to cap floods.
-4. ~~KI-16~~ ✅ — the replay window and the lock, together.
-5. ~~KI-8~~ ✅ — the last-administrator guard. **KI-7** still waits on what a non-root administrator
+1. ~~KI-1~~ — with KI-2 through KI-6.
+2. ~~KI-15~~ Alembic, ~~KI-12~~ audit log — both taken ahead of Phase 3.
+3. ~~KI-13~~ — per-address and per-account limits, with a proxy expected to cap floods.
+4. ~~KI-16~~ — the replay window and the lock, together.
+5. ~~KI-8~~ — the last-administrator guard. **KI-7** still waits on what a non-root administrator
    should be.
-6. ~~KI-14~~ ✅ and ~~KI-11~~ ✅ (as a documentation fix) with Phase 6 hardening.
-7. ~~KI-10~~ ✅ with the conformance pass, which closed all eight Tier 1 gaps from the
+6. ~~KI-14~~ and ~~KI-11~~ (as a documentation fix) with Phase 6 hardening.
+7. ~~KI-10~~ with the conformance pass, which closed all eight Tier 1 gaps from the
    [README](../README.md#tier-1--conformance-gaps--closed) and adopted RFC 8414, RFC 9207,
    RFC 7662 Section 4 and RFC 7009 Section 2.1. **KI-9** remains open and deliberately so — see below.
 
