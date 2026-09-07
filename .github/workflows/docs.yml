@@ -4,14 +4,14 @@ on:
   push:
     branches: [dev]
     paths:
-      - docs/**
+      - doc/**
       - mkdocs.yml
       - provider/pyproject.toml
       - provider/uv.lock
       - .github/workflows/docs.yml
   pull_request:
     paths:
-      - docs/**
+      - doc/**
       - mkdocs.yml
       - provider/pyproject.toml
       - provider/uv.lock

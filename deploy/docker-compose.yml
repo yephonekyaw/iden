@@ -5,7 +5,7 @@
 #
 # Not here: TLS and a reverse proxy. Certificates are site-specific and the
 # proxy is where flood protection belongs, so both are the operator's — see
-# docs/operations/deployment.md and the reference config in
+# doc/operations/deployment.md and the reference config in
 # nginx/iden.conf.example.
 
 name: iden-dev

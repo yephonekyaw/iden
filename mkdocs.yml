@@ -12,11 +12,11 @@ site_description: >-
 site_url: https://yephonekyaw.github.io/iden/
 repo_url: https://github.com/yephonekyaw/iden
 repo_name: yephonekyaw/iden
-edit_uri: edit/dev/docs/
+edit_uri: edit/dev/doc/
 
 # The site covers the whole repository, not just the provider: the kiosk, the
 # engine and the front ends get their own sections as they are built.
-docs_dir: docs
+docs_dir: doc
 site_dir: site
 
 theme:

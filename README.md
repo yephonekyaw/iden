@@ -17,14 +17,14 @@ Everything deploys via Docker Compose.
 ## Documentation
 
 Full documentation — concepts, integration guides, reference, and operations — lives in
-[`docs/`](docs/index.md) and builds as a site:
+[`doc/`](doc/index.md) and builds as a site:
 
 ```bash
 uv run --project provider mkdocs serve -a localhost:8001
 ```
 
-Start with [Concepts](docs/concepts/index.md) if identity is new to you, or
-[Run it locally](docs/guides/quickstart.md) to have something working in five minutes. This file
+Start with [Concepts](doc/concepts/index.md) if identity is new to you, or
+[Run it locally](doc/guides/quickstart.md) to have something working in five minutes. This file
 stays as the system-level overview; the server's own reference is
 [`provider/README.md`](provider/README.md).
 
@@ -663,7 +663,7 @@ The seed prints the bootstrap administrator's password **once** — it is hashed
 database and cannot be recovered. Change it immediately after signing in.
 
 For a full walkthrough, including a check on every part of the system before anyone else is let in,
-see [Install IDEN for your organization](docs/guides/install.md).
+see [Install IDEN for your organization](doc/guides/install.md).
 
 For backend development without Docker, see [provider/README.md](provider/README.md) and the phased
 build plan in [provider/PLAN.md](provider/PLAN.md).

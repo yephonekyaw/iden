@@ -2,7 +2,7 @@
 #
 # Not wired into docker-compose.yml on purpose: certificates are site-specific
 # and the proxy is where flood protection belongs, so the proxy is the
-# operator's — see docs/operations/deployment.md. Copy this, point it at your
+# operator's — see doc/operations/deployment.md. Copy this, point it at your
 # own upstreams, and terminate TLS in front of it.
 #
 # The routing below is what the architecture assumes: one origin for everything,

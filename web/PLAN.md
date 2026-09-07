@@ -337,7 +337,7 @@ a person needs to manage their own account.
 
 ### 7.3.1 OIDC — `web/dashboard/src/app/auth.tsx`
 
-`react-oidc-context` over `oidc-client-ts`, the pair `docs/guides/oidc-libraries.md` already
+`react-oidc-context` over `oidc-client-ts`, the pair `doc/guides/oidc-libraries.md` already
 recommends to IDEN's users — the dashboard should be the reference integration. `client_id:
 dashboard`, public, PKCE S256, `/callback`, silent renew via `prompt=none`.
 
@@ -346,7 +346,7 @@ broadly is correct, not greedy: `granted = requested ∩ client.grantable ∩ ef
 pruning is silent, so a member simply receives a narrower token.
 
 The callback route is guarded against React StrictMode's double-effect. Authorization codes are
-single-use, and `docs/guides/troubleshooting.md` names a double-submitting React effect as the
+single-use, and `doc/guides/troubleshooting.md` names a double-submitting React effect as the
 first thing to check when a code is rejected.
 
 Sign-out navigates to `/oauth2/logout?id_token_hint=…`. The seeded dashboard client has an empty
@@ -486,7 +486,7 @@ because a toast that only exists visually is invisible to a screen reader.
 ### 7.5.5 Documentation
 
 `web/README.md` (what the workspace is, how to run both apps, the environment variables), a
-`docs/guides/` page on running the frontends, and the `mkdocs.yml` nav entry.
+`doc/guides/` page on running the frontends, and the `mkdocs.yml` nav entry.
 
 ### Done when
 
