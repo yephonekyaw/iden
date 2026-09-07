@@ -22,6 +22,18 @@ class Settings(BaseSettings):
     iden_database_url: str = "postgresql+asyncpg://iden:iden@localhost:5432/iden"
     iden_redis_url: str = "redis://localhost:6379/0"
 
+    # Blob storage, over the S3 API. Empty endpoint means no store is attached
+    # and profile photos are simply unavailable — every other feature works, so
+    # a deployment that does not want a third service does not have to run one.
+    iden_s3_endpoint_url: str = ""
+    iden_s3_access_key: str = ""
+    iden_s3_secret_key: str = ""
+    iden_s3_bucket: str = "iden"
+    iden_s3_region: str = "us-east-1"
+    # Refused before the file is decoded. Generous for a photo, small enough
+    # that an upload cannot be used to make the provider hold a large buffer.
+    iden_avatar_max_bytes: int = 5_242_880
+
     # Crypto
     iden_signing_key_dir: Path = Path("keys")
     iden_signing_algorithm: str = "RS256"
@@ -60,6 +72,10 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", case_sensitive=False
     )
+
+    @property
+    def blob_storage_configured(self) -> bool:
+        return bool(self.iden_s3_endpoint_url)
 
     @property
     def admin_audience(self) -> str:

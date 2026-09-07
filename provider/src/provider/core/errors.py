@@ -38,6 +38,17 @@ class ValidationError(IdenError):
     message = "The request is invalid."
 
 
+class UnavailableError(IdenError):
+    """Something the request needs is not attached to this deployment.
+
+    Separate from a 500: nothing is broken and there is nothing to retry — the
+    feature is simply not configured here.
+    """
+
+    code = "unavailable"
+    message = "This feature is not available on this deployment."
+
+
 class RateLimitedError(IdenError):
     """Too many attempts. Carries how long to wait, because a client that is
     not told simply retries immediately."""

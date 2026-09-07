@@ -25,12 +25,14 @@ from provider.core.errors import (
     ImmutableError,
     NotFoundError,
     RateLimitedError,
+    UnavailableError,
     ValidationError,
 )
 from provider.core.headers import SecurityHeadersMiddleware
 from provider.core.logging import configure_logging, logger
 from provider.core.router import router
 from provider.core.schemas import ErrorResponse
+from provider.core.storage import ensure_ready
 
 configure_logging()
 
@@ -44,12 +46,14 @@ ERROR_STATUS = (
     (ImmutableError, 409),
     (ConflictError, 409),
     (ValidationError, 422),
+    (UnavailableError, 503),
 )
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Provider starting", env=settings.iden_env, issuer=settings.iden_issuer)
+    await ensure_ready()
     yield
     await engine.dispose()
     await redis_module.client.aclose()
