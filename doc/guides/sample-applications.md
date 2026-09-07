@@ -58,6 +58,11 @@ need this, because the browser never talks to the provider directly.
 
 ## Why they look like that
 
-The samples share a deliberately loud neo-brutalist style that is *not* the dashboard's design
-language. They are demos meant to be read across a room, and nobody should mistake a sample for the
-product. Each carries its own copy of the styling, which is yours to delete when you copy it.
+The samples share a neo-brutalist style that is *not* the dashboard's design language. They are
+demos meant to be read across a room, and nobody should mistake a sample for the product.
+
+The volume comes from the structure — 3px black rules, hard offset shadows, no radius, Archivo 900
+set in caps over Space Grotesk, and JetBrains Mono for anything you would copy — so the palette
+underneath it can stay earthy: paper, ink, one clay accent, an ochre for the line that matters.
+
+Each sample carries its own copy of the styling, which is yours to delete when you copy it.
