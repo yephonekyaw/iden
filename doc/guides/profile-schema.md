@@ -59,8 +59,8 @@ The only difference that matters is `userWritable`. It decides which endpoint ca
 
 | | `PATCH /entity/profile` | `PATCH /admin/users/{id}/profile` |
 |---|---|---|
-| `userWritable: true` | ✅ | ✅ |
-| `userWritable: false` | ❌ `422` | ✅ |
+| `userWritable: true` | :material-check-circle-outline: | :material-check-circle-outline: |
+| `userWritable: false` | :material-close-circle-outline: `422` | :material-check-circle-outline: |
 
 ## A field only some people have
 
