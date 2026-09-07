@@ -1,7 +1,7 @@
 # yaml-language-server: $schema=https://squidfunk.github.io/mkdocs-material/schema.json
 #
-# The `!!python/name:` tag below is resolved by MkDocs' own YAML loader, not by a
-# plain parser. An editor will report it as an unresolved tag unless it is told
+# The `!!python/name:` tags below are resolved by MkDocs' own YAML loader, not by
+# a plain parser. An editor will report them as unresolved tags unless it is told
 # otherwise — the schema line above does that, and .vscode/settings.json lists
 # the tags explicitly for the VS Code YAML extension.
 
@@ -58,6 +58,11 @@ markdown_extensions:
   - toc:
       permalink: true
   - pymdownx.details
+  # `:material-rocket-launch-outline:` and friends. Material ships the icon sets
+  # as an emoji index, so without this the shortcodes reach the page as text.
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - pymdownx.highlight:
       anchor_linenums: true
   - pymdownx.inlinehilite
