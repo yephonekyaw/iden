@@ -94,7 +94,7 @@ function SignedIn({ session }: { session: IdenSession }) {
   ];
 
   return (
-    <section className="card card--in">
+    <section className="card">
       <div className="who">
         <span className="avatar" aria-hidden="true">
           {(session.user?.name ?? session.user?.email ?? "?").slice(0, 1).toUpperCase()}
