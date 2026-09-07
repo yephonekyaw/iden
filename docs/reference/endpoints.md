@@ -134,6 +134,8 @@ Every `/admin/*` and `/entity/*` route is gated by a permission named in its des
 | `GET` | `/entity/profile` | Read your own profile |
 | `PATCH` | `/entity/profile` | Update your own profile |
 | `GET` | `/entity/profile/schema` | Read the shape of your profile |
+| `PUT` | `/entity/profile/photo` | Set your profile photo |
+| `DELETE` | `/entity/profile/photo` | Remove your profile photo |
 
 ### Entity — sessions
 
@@ -150,6 +152,12 @@ Every `/admin/*` and `/entity/*` route is gated by a permission named in its des
 | `GET` | `/entity/totp` | Is an authenticator set up? |
 | `POST` | `/entity/totp/confirm` | Finish setting up an authenticator |
 | `POST` | `/entity/totp/enroll` | Start setting up an authenticator |
+
+### Media
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/media/avatars/{name}` | Fetch a profile photo. Public — it is what the `picture` claim points at, and an `<img>` cannot send a token |
 
 ### Service
 

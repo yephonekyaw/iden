@@ -1,7 +1,14 @@
 # Profile fields
 
-IDEN ships three facts about a person: email, username, display name. Everything else your
-organization records is defined **by your organization, at runtime**.
+IDEN ships four facts about a person: email, username, display name, and a photo. Everything else
+your organization records is defined **by your organization, at runtime**.
+
+The photo is on that short list rather than being a field an administrator defines, because it does
+not vary between deployments the way `student_id` does — OIDC already named it, and IDEN releases it
+as the standard `picture` claim. It is uploaded through
+[`PUT /entity/profile/photo`](../reference/endpoints.md), not written as a value, and it needs an
+S3-compatible store to be configured; without one, the endpoint answers `503` and nothing else on
+the profile changes.
 
 A university needs `student_id`, `department`, `enrollment_year`. A company needs `employee_id`,
 `cost_centre`, `manager`. Shipping either set would make the other deployment wrong, so IDEN ships

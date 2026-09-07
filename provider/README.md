@@ -104,8 +104,8 @@ The image is two-stage: dependencies resolve in a `uv` image and are copied into
 1000. Its `HEALTHCHECK` calls `/health/live`, never `/health/ready` — see the note under those
 endpoints for why.
 
-TLS, a reverse proxy, and MinIO are not in this file. The first two are site-specific and belong to
-whoever operates the deployment; MinIO exists for the biometric module, which is not built.
+TLS and a reverse proxy are not in this file: both are site-specific and belong to whoever operates
+the deployment.
 
 ### Housekeeping
 

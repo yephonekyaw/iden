@@ -13,6 +13,12 @@ development defaults — the ones that matter in production are called out below
 | `IDEN_AUTH_UI_BASE_URL` | `'http://localhost:4000'` | Where `/authorize` sends people to sign in. |
 | `IDEN_DATABASE_URL` | `'postgresql+asyncpg://iden:iden@localhost:5432/iden'` |  |
 | `IDEN_REDIS_URL` | `'redis://localhost:6379/0'` | Sessions, pending sign-ins, the denylist, and rate-limit counters. |
+| `IDEN_S3_ENDPOINT_URL` | `''` | Blob storage, over the S3 API. Empty means none is attached and profile photos are unavailable; nothing else changes. |
+| `IDEN_S3_ACCESS_KEY` | `''` |  |
+| `IDEN_S3_SECRET_KEY` | `''` |  |
+| `IDEN_S3_BUCKET` | `'iden'` | Created at startup when it does not exist. |
+| `IDEN_S3_REGION` | `'us-east-1'` | Required by the S3 signature even where the store ignores it. |
+| `IDEN_AVATAR_MAX_BYTES` | `5242880` | Refused before the upload is decoded. |
 | `IDEN_SIGNING_KEY_DIR` | `PosixPath('keys')` | One PEM per key. Filenames sort, and the last one signs — a date-stamped name makes the newest key active. |
 | `IDEN_SIGNING_ALGORITHM` | `'RS256'` |  |
 | `IDEN_ACCESS_TOKEN_TTL` | `600` | Short on purpose: permission changes take effect at the next issuance, and a revoked token cannot be recalled before it expires. |

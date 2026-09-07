@@ -38,6 +38,7 @@ Addressed to the **application**, describing the sign-in event. Never send it to
 | `sid` | ✅ | Names the session. A **hash** of the session id, never the cookie. Store it for [single sign-out](../guides/single-sign-out.md). |
 | `nonce` | when sent | Echoes your authorization request. Check it. |
 | `name`, `preferred_username` | `profile` | — |
+| `picture` | `profile` | Where the profile photo is served from, or `null`. Public, and safe to cache forever — the URL changes whenever the photo does. |
 | `email`, `email_verified` | `email` | — |
 | *your fields* | when mapped | Organization-defined fields released under their `claimScope`. |
 

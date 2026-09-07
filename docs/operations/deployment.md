@@ -7,12 +7,16 @@
 | **provider** | The application. One process, one port, all modules. |
 | **PostgreSQL 18** | With the `pgvector` extension, for the biometrics that come later. |
 | **Redis 8** | Sessions, pending sign-ins, the denylist, rate limits. |
+| **An S3-compatible store** | Profile photos, and the biometric module's images later. Optional: leave `IDEN_S3_ENDPOINT_URL` empty and photos are unavailable, nothing else changes. |
 | **A reverse proxy** | TLS termination, and flood protection IDEN cannot do for itself. |
 
-`provider/Dockerfile` and `deploy/docker-compose.yml` build and wire the first three;
+`provider/Dockerfile` and `deploy/docker-compose.yml` build and wire the first four;
 `docker compose -f deploy/docker-compose.yml up --build` is a working deployment. The proxy is not in
-that file — certificates are site-specific — and neither is MinIO, which exists for the biometric
-module that is not built yet.
+that file, because certificates are site-specific.
+
+The object store there is SeaweedFS, chosen for its licence rather than its features — the provider
+speaks the S3 API and nothing else, so MinIO, Garage, or AWS S3 need only different values for
+`IDEN_S3_ENDPOINT_URL` and the two credentials.
 
 The provider is a single deployable. The admin, entity, and biometric modules are logical
 boundaries, not separate services — one image, one port, one thing to run.

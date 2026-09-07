@@ -112,7 +112,7 @@ flowchart TB
 
     Postgres[("PostgreSQL :5432")]
     Redis[("Redis :6379")]
-    MinIO[("MinIO :9000<br/>S3-compatible object store")]
+    Blobs[("SeaweedFS :8333<br/>S3-compatible object store")]
   end
 
   subgraph Extension["Extension — Biometric Credential"]
@@ -127,11 +127,11 @@ flowchart TB
 
   Biometric --> Engine
   Engine --> PgVector
-  Engine --> MinIO
+  Engine --> Blobs
 
   Provider --> Postgres
   Provider --> Redis
-  Provider --> MinIO
+  Provider --> Blobs
 
   style Core fill:#1a1a2e,stroke:#4a90d9,stroke-width:2px,color:#ffffff
   style Extension fill:#2e1a2e,stroke:#d94a90,stroke-width:2px,color:#ffffff,stroke-dasharray: 5 5
@@ -152,7 +152,7 @@ flowchart TB
 | **kiosk** | Hardware + Next.js / native | n/a | Biometric kiosk device — uses `client_credentials` to call the Biometric RS |
 | **postgres** | PostgreSQL 18 + pgvector | 5432 | Users, groups, roles, scopes, APIs, clients, tokens, embeddings |
 | **redis** | Redis 8 | 6379 | Sessions, login/consent challenges, token denylist, rate limits |
-| **minio** | MinIO (S3-compatible) | 9000 | Blob storage — enrollment/verification images, profile photos, audit snapshots. Keeps large binaries out of Postgres. |
+| **seaweedfs** | SeaweedFS (S3-compatible) | 8333 | Blob storage — profile photos, and enrollment/verification images once the biometric module lands. Keeps large binaries out of Postgres. Any S3 API answers: MinIO, Garage, or AWS S3. |
 | **nginx** | Nginx Alpine | 80/443 | Reverse proxy, TLS termination, path-based routing |
 
 ---
@@ -569,7 +569,7 @@ flowchart LR
     Engine["engine<br/>:8000 (internal)"]
     PG[("postgres :5432")]
     RD[("redis :6379")]
-    MN[("minio :9000")]
+    MN[("seaweedfs :8333")]
 
     Nginx --> Provider
     Nginx --> Dashboard
@@ -619,7 +619,7 @@ network.
 | Kiosk auth | `client_credentials` against the AuthZ Server | Kiosks are first-class OAuth clients; no user impersonation |
 | Biometric engine | Internal-only Docker network | Face data is never directly reachable from the internet |
 | Vector search | pgvector | Face embedding similarity search without a separate vector DB |
-| Object storage | MinIO (S3-compatible) | Blobs live in object storage, Postgres keeps the row + object key. Swappable for S3, R2, or GCS without code changes. |
+| Object storage | Anything speaking S3 | Blobs live in object storage, Postgres keeps the row + object key. The provider targets the API, not an implementation, so the compose default (SeaweedFS, Apache-2.0) swaps for MinIO, Garage, S3, R2, or GCS by changing two environment variables. |
 
 ---
 
