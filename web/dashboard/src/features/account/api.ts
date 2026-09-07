@@ -33,6 +33,30 @@ export function useUpdateProfile(api: AxiosInstance) {
   });
 }
 
+export function useUploadPhoto(api: AxiosInstance) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const body = new FormData();
+      body.append("file", file);
+      const response = await api.put<Profile>("/entity/profile/photo", body);
+      return response.data;
+    },
+    onSuccess: (profile) => queryClient.setQueryData(["profile"], profile),
+  });
+}
+
+export function useRemovePhoto(api: AxiosInstance) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async () => {
+      const response = await api.delete<Profile>("/entity/profile/photo");
+      return response.data;
+    },
+    onSuccess: (profile) => queryClient.setQueryData(["profile"], profile),
+  });
+}
+
 export function useTotpStatus(api: AxiosInstance) {
   return useQuery({ queryKey: ["totp"], queryFn: () => get<TotpStatus>(api, "/entity/totp") });
 }
