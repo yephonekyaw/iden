@@ -106,6 +106,6 @@ round trip on every request, which is the thing offline validation exists to avo
 where it earns that cost.
 
 Introspection requires a **confidential** client, and a client may only introspect tokens issued to
-itself (RFC 7662 §4). A token belonging to someone else comes back `{"active": false}` — the same
+itself (RFC 7662 Section 4). A token belonging to someone else comes back `{"active": false}` — the same
 answer an unknown token gets, so the endpoint cannot be used to discover what exists. If your API is
 a separate client from the one that obtained the token, offline validation is the path open to you.

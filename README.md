@@ -689,7 +689,7 @@ Phases 0–6 are broken down file-by-file in [provider/PLAN.md](provider/PLAN.md
 phase that introduces the code — `uv run pytest` from `provider/` runs the suite.
 
 Issues found in review are tracked in
-[provider/PLAN.md § Known issues](provider/PLAN.md#known-issues); six are fixed, the rest are
+[provider/PLAN.md — Known issues](provider/PLAN.md#known-issues); six are fixed, the rest are
 scheduled. **IDEN is not yet ready for a deployment reachable by anyone but its developers** — there
 are no rate limits at the reverse proxy yet, and IDEN's own limits assume one in front of it.
 
@@ -713,14 +713,14 @@ are fixed and pinned by `tests/test_conformance.py`, which names the clause each
 
 | | Specification | What was wrong | What it is now |
 |---|---|---|---|
-| **C-1** | RFC 9068 §2.1 | Access tokens carried no `typ` header and nothing checked one, so a token was identified only by the claims it happened to have. `/oauth2/userinfo` and `/oauth2/introspect` read `claims["jti"]` unconditionally — an ID token has none, so presenting one there raised `KeyError` and answered **500** where 401 belongs. | Access tokens are signed `at+jwt`, logout tokens `logout+jwt`, and every consumer states which it accepts. `id_token_hint` still takes an ID token, because that is the one place an ID token is the correct credential. |
-| **C-2** | OIDC Core §5.3.1 | `/oauth2/userinfo` accepted `GET` only | `GET` and `POST`, and `POST` also accepts the token as an `access_token` form field (RFC 6750 §2.2). The header wins when both are present. |
-| **C-3** | RP-Initiated Logout 1.0 §2 | `/oauth2/logout` accepted `GET` only | Both. `POST` is what keeps `id_token_hint` out of browser history and the `Referer` header. |
-| **C-4** | RFC 6749 §2.3.1 | Basic credentials were base64-decoded but never form-urldecoded | Both halves are unquoted. Latent before — IDEN's own secrets are URL-safe — and it bit the first time an operator imported one containing a reserved character. |
-| **C-5** | RFC 6750 §3.1 | The `403` from `require_scope` carried no `WWW-Authenticate` | `Bearer error="insufficient_scope"`, naming the scope that would satisfy it. |
-| **C-6** | RFC 6750 §3 | Every `401` answered `WWW-Authenticate: Basic`, including from a protected resource — telling the client to retry with *client* credentials rather than re-authenticating the user | The scheme follows what failed: `Basic` for `invalid_client`, `Bearer` for a refused token. |
-| **C-7** | OIDC Discovery 1.0 §3 | `request_parameter_supported`, `request_uri_parameter_supported` and `claims_parameter_supported` were omitted — **and all three default to `true`**, so discovery advertised request objects IDEN does not implement | All three declared `false`, with `response_modes_supported: ["query"]`. The omissions are now statements. |
-| **C-8** | OIDC Core §11 | Refresh tokens were issued whenever `refresh_token` was in the client's `allowed_grants`, so a client that never asked for offline access got it and one that did ask was never told | `offline_access` is requested, consented to, and reported in the granted scope. The grant is still what the client *may* do; the scope is what this request asked for. |
+| **C-1** | RFC 9068 Section 2.1 | Access tokens carried no `typ` header and nothing checked one, so a token was identified only by the claims it happened to have. `/oauth2/userinfo` and `/oauth2/introspect` read `claims["jti"]` unconditionally — an ID token has none, so presenting one there raised `KeyError` and answered **500** where 401 belongs. | Access tokens are signed `at+jwt`, logout tokens `logout+jwt`, and every consumer states which it accepts. `id_token_hint` still takes an ID token, because that is the one place an ID token is the correct credential. |
+| **C-2** | OIDC Core Section 5.3.1 | `/oauth2/userinfo` accepted `GET` only | `GET` and `POST`, and `POST` also accepts the token as an `access_token` form field (RFC 6750 Section 2.2). The header wins when both are present. |
+| **C-3** | RP-Initiated Logout 1.0 Section 2 | `/oauth2/logout` accepted `GET` only | Both. `POST` is what keeps `id_token_hint` out of browser history and the `Referer` header. |
+| **C-4** | RFC 6749 Section 2.3.1 | Basic credentials were base64-decoded but never form-urldecoded | Both halves are unquoted. Latent before — IDEN's own secrets are URL-safe — and it bit the first time an operator imported one containing a reserved character. |
+| **C-5** | RFC 6750 Section 3.1 | The `403` from `require_scope` carried no `WWW-Authenticate` | `Bearer error="insufficient_scope"`, naming the scope that would satisfy it. |
+| **C-6** | RFC 6750 Section 3 | Every `401` answered `WWW-Authenticate: Basic`, including from a protected resource — telling the client to retry with *client* credentials rather than re-authenticating the user | The scheme follows what failed: `Basic` for `invalid_client`, `Bearer` for a refused token. |
+| **C-7** | OIDC Discovery 1.0 Section 3 | `request_parameter_supported`, `request_uri_parameter_supported` and `claims_parameter_supported` were omitted — **and all three default to `true`**, so discovery advertised request objects IDEN does not implement | All three declared `false`, with `response_modes_supported: ["query"]`. The omissions are now statements. |
+| **C-8** | OIDC Core Section 11 | Refresh tokens were issued whenever `refresh_token` was in the client's `allowed_grants`, so a client that never asked for offline access got it and one that did ask was never told | `offline_access` is requested, consented to, and reported in the granted scope. The grant is still what the client *may* do; the scope is what this request asked for. |
 
 ### Tier 2 — Standards beyond the core
 
@@ -732,8 +732,8 @@ Four of these are now implemented. The rest are listed with what they would buy.
 |---|---|
 | **RFC 8414** — Authorization Server Metadata | `/.well-known/oauth-authorization-server`, serving the same document as the OIDC one. A pure OAuth 2.0 client with no OIDC layer looks only there and would otherwise conclude the server has no metadata at all. |
 | **RFC 9207** — Authorization Response `iss` | `iss` on every authorization response, success *and* error, plus `authorization_response_iss_parameter_supported` in metadata. Defends against mix-up attacks where a client talks to more than one provider; a client that validated it only on success would have closed half the hole. |
-| **RFC 7662 §4** | A client may only introspect its own tokens. Anything issued to another client answers `{"active": false}` — the same answer an unknown token gets, so the endpoint reveals nothing about what exists. |
-| **RFC 7009 §2.1** | `token_type_hint` orders the lookups instead of being ignored. It never decides which lookups are *allowed*, so a client that guesses wrong still gets its token revoked. |
+| **RFC 7662 Section 4** | A client may only introspect its own tokens. Anything issued to another client answers `{"active": false}` — the same answer an unknown token gets, so the endpoint reveals nothing about what exists. |
+| **RFC 7009 Section 2.1** | `token_type_hint` orders the lookups instead of being ignored. It never decides which lookups are *allowed*, so a client that guesses wrong still gets its token revoked. |
 
 **Still open:**
 
@@ -741,7 +741,7 @@ Four of these are now implemented. The rest are listed with what they would buy.
 |---|---|---|
 | **RFC 8707** — Resource Indicators | A `resource` parameter narrowing a token to one audience | This is [KI-9](provider/PLAN.md#known-issues) with a specification attached: today a token requesting `admin:` and `entity:` scopes carries both audiences, and a compromised resource server can replay it at the other. The cost is on the client side — the dashboard would hold one token per audience and choose per call. |
 | **RFC 8628** — Device Authorization Grant | A third grant for input-constrained devices | The natural fit for Phase 8. A kiosk with a keyboard is fine on `client_credentials`; one without is what this grant is for. |
-| OIDC Core §5.4 — `address`, `phone` | The two standard claim scopes IDEN does not release | Both map onto organization-defined profile fields already; this is a matter of reserving the scope names and wiring `claim_scope`. |
+| OIDC Core Section 5.4 — `address`, `phone` | The two standard claim scopes IDEN does not release | Both map onto organization-defined profile fields already; this is a matter of reserving the scope names and wiring `claim_scope`. |
 
 ### Tier 3 — Deliberate non-goals
 
@@ -773,7 +773,7 @@ than the argument for having written the list.
   organization-defined custom profile fields are modelled.~~ **Settled:** a user may change anything
   about themselves that does not change what they are allowed to do; profile fields are defined by
   administrators at runtime, with per-field read/write permissions deciding what self-service means.
-  See [provider/PLAN.md § Phase 4](provider/PLAN.md#phase-4--entity-rs-self-service).
+  See [provider/PLAN.md — Phase 4](provider/PLAN.md#phase-4--entity-rs-self-service).
 - **Biometric kiosk handoff** — how a kiosk-enrolled person is later prompted (and authenticated) to
   complete their profile via the Dashboard SPA.
 - **Biometric engine** — model selection, GPU vs CPU deployment, accuracy/latency targets.
@@ -784,7 +784,7 @@ than the argument for having written the list.
   sync rather than store it authoritatively. For now `user_writable=false` plus admin API writes is
   the integration point.
 - **Audit log retention** — the log is a Postgres table today (see
-  [provider/README.md § The Audit Log](provider/README.md#the-audit-log)). Unresolved: how long rows
+  [provider/README.md — The Audit Log](provider/README.md#the-audit-log)). Unresolved: how long rows
   are kept, and whether an append-only external store is worth it for tamper evidence — a database
   administrator can edit a table.
 - **Federation** — whether IDEN should ever broker an upstream IdP (Google, Microsoft, a campus

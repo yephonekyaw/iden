@@ -168,7 +168,7 @@ async def handle_request_validation_error(
     where every other error has a string.
     """
     if _is_oauth(request):
-        # A client library reading RFC 6749 §5.2 will not recognise anything
+        # A client library reading RFC 6749 Section 5.2 will not recognise anything
         # else, and a missing `grant_type` is exactly `invalid_request`.
         return JSONResponse(
             status_code=400,
@@ -233,11 +233,11 @@ for _exception in UNAVAILABLE:
 async def handle_redirectable_error(
     request: Request, exc: RedirectableError
 ) -> RedirectResponse:
-    """Deliver the error to the client's redirect_uri — RFC 6749 §4.1.2.1.
+    """Deliver the error to the client's redirect_uri — RFC 6749 Section 4.1.2.1.
 
     Only reachable after client_id and redirect_uri have been validated.
     """
-    # `iss` rides on the error response too — RFC 9207 §2 requires it on every
+    # `iss` rides on the error response too — RFC 9207 Section 2 requires it on every
     # authorization response, and a client that validates it on success but not
     # on failure has only closed half the mix-up.
     params = {
@@ -252,15 +252,15 @@ async def handle_redirectable_error(
 
 @app.exception_handler(OAuthError)
 async def handle_oauth_error(request: Request, exc: OAuthError) -> JSONResponse:
-    """RFC 6749 §5.2 fixes this shape; a client library will not understand
+    """RFC 6749 Section 5.2 fixes this shape; a client library will not understand
     the project's own error contract here.
 
     The `WWW-Authenticate` scheme follows what failed, not the status code.
     `invalid_client` is a *client* that did not authenticate, so `Basic` tells
-    it to retry with its credentials (RFC 6749 §5.2). `invalid_token` is a
+    it to retry with its credentials (RFC 6749 Section 5.2). `invalid_token` is a
     protected resource refusing a *user's* token, and answering `Basic` there
     told the client to present client credentials instead of sending the person
-    back through a login — the opposite of the recovery it needs (RFC 6750 §3).
+    back through a login — the opposite of the recovery it needs (RFC 6750 Section 3).
     """
     headers = None
     if exc.status_code in (401, 403):

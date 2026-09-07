@@ -145,6 +145,6 @@ The provider sets `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer
 `IDEN_ENV=prod` — `Strict-Transport-Security` on every response. If your proxy adds its own copy of
 any of these, remove one of the two. Two headers stating one policy is a place for them to disagree.
 
-Responses carrying a token are `Cache-Control: no-store` (RFC 6749 §5.1). The two exceptions are
+Responses carrying a token are `Cache-Control: no-store` (RFC 6749 Section 5.1). The two exceptions are
 discovery and JWKS, at `public, max-age=300`, because every resource server fetches the key set and
 making it uncacheable would put IDEN in the path of every token validation your APIs do.

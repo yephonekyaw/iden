@@ -31,7 +31,7 @@ AUDITED_PREFIXES = ("/admin", "/entity", "/api/v1/auth", "/oauth2/revoke")
 READ_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
 
 # The exception to the read/write split: RP-initiated logout is a GET by
-# specification (OIDC RP-Initiated Logout §2), and it destroys a session.
+# specification (OIDC RP-Initiated Logout Section 2), and it destroys a session.
 ALWAYS_AUDITED = frozenset({"/oauth2/logout"})
 
 # Compared with punctuation stripped, so `client_secret` and `clientSecret` are

@@ -188,7 +188,7 @@ typescript-eslint with `no-explicit-any` and `no-non-null-assertion` as errors, 
 A CI job mirroring the Python one: `pnpm lint`, `pnpm typecheck`, `pnpm build`.
 
 `GUIDELINES.md` gains a frontend section — the feature-folder rule, no `any`, no barrel re-exports,
-why-only comments — so its §1 "organize by feature, not by layer" has a stated frontend reading.
+why-only comments — so its Section 1 "organize by feature, not by layer" has a stated frontend reading.
 
 ### Done when
 

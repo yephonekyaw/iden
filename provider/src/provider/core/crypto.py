@@ -44,8 +44,8 @@ def active_kid() -> str:
 
 # The JOSE `typ` header each kind of token carries. Every token IDEN signs says
 # what it is, and every consumer says what it will accept — which is what stops
-# one being presented where another belongs (RFC 9068 §2.1, OIDC Back-Channel
-# Logout 1.0 §2.4). Without it the only thing separating an ID token from an
+# one being presented where another belongs (RFC 9068 Section 2.1, OIDC Back-Channel
+# Logout 1.0 Section 2.4). Without it the only thing separating an ID token from an
 # access token at a protected resource is which claims it happens to have.
 ACCESS_TOKEN_TYP = "at+jwt"
 ID_TOKEN_TYP = "JWT"
@@ -91,7 +91,7 @@ def verify_jwt(
 
     if typ is not None:
         # Case-insensitive, and an absent `typ` is a mismatch rather than a pass:
-        # RFC 8725 §3.11 treats the header as a claim about the token, so the
+        # RFC 8725 Section 3.11 treats the header as a claim about the token, so the
         # only safe reading of silence is "not the type you asked for".
         declared = header.get("typ")
         if not isinstance(declared, str) or declared.lower() != typ.lower():

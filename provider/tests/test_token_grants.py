@@ -90,7 +90,7 @@ class TestRefreshRotation:
     async def test_scope_narrowing_applies_to_one_response_only(self, client):
         """KI-2. `scope` narrows the response; it must not shrink the grant.
 
-        The refresh token represents the original grant (RFC 6749 §6). A client
+        The refresh token represents the original grant (RFC 6749 Section 6). A client
         that once asked for less has to be able to get the rest back, or a single
         narrow request silently downgrades it forever.
         """
@@ -109,7 +109,7 @@ class TestRefreshRotation:
         assert "admin:users:read" in restored["scope"].split()
 
     async def test_scope_cannot_be_widened_beyond_the_original_grant(self, client):
-        """RFC 6749 §6 — a refresh must not gain scopes the original lacked."""
+        """RFC 6749 Section 6 — a refresh must not gain scopes the original lacked."""
         tokens = await get_tokens(
             client, scope="openid offline_access admin:users:read"
         )
@@ -325,7 +325,7 @@ class TestRevocation:
         assert (await refresh(client, tokens["refresh_token"])).status_code == 400
 
     async def test_public_client_may_revoke_its_own_token(self, client):
-        """KI-1. Permitted by RFC 7009 §2.1 — the caller already holds the token,
+        """KI-1. Permitted by RFC 7009 Section 2.1 — the caller already holds the token,
         so there is nothing to learn, and nothing is disclosed either way."""
         tokens = await get_tokens(client)
 
@@ -359,7 +359,7 @@ class TestRevocation:
         assert response.status_code == 401
 
     async def test_unknown_token_still_returns_200(self, client):
-        """RFC 7009 §2.2 — otherwise this endpoint reports which tokens exist."""
+        """RFC 7009 Section 2.2 — otherwise this endpoint reports which tokens exist."""
         response = await client.post(
             "/oauth2/revoke", data={"token": "nonsense", "client_id": "dashboard"}
         )
@@ -425,7 +425,7 @@ class TestIntrospection:
     async def test_a_client_cannot_introspect_another_clients_token(
         self, client, kiosk
     ):
-        """RFC 7662 §4. Any confidential client could previously read the
+        """RFC 7662 Section 4. Any confidential client could previously read the
         contents of any token IDEN had issued, including who it was for and
         what it could do."""
         _, secret = kiosk
@@ -522,7 +522,7 @@ class TestIntrospection:
 
     async def test_public_client_cannot_introspect(self, client):
         """KI-1. The response describes someone else's token, and a client_id is
-        public by definition — so it is not a credential (RFC 7662 §2.1)."""
+        public by definition — so it is not a credential (RFC 7662 Section 2.1)."""
         tokens = await get_tokens(client)
 
         response = await client.post(

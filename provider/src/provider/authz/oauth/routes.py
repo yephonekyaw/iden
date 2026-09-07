@@ -148,11 +148,11 @@ def _auth_ui(path: str, challenge_id: str, **extra: str) -> RedirectResponse:
         "`prompt=none` never shows UI. When interaction would have been needed it "
         "returns `login_required`, `consent_required`, or "
         "`account_selection_required` to `redirect_uri` instead (OIDC Core "
-        "§3.1.2.6) — this is how a browser application checks silently whether "
+        "Section 3.1.2.6) — this is how a browser application checks silently whether "
         "someone is still signed in.\n\n"
         "`client_id` and `redirect_uri` errors render as JSON rather than "
         "redirecting: before those two are validated the URI is unverified, and "
-        "redirecting to it would make this an open redirector (RFC 6749 §3.1.2.3).\n\n"
+        "redirecting to it would make this an open redirector (RFC 6749 Section 3.1.2.3).\n\n"
         "**Required scope:** none — this is how tokens are obtained."
     ),
     responses={
@@ -245,7 +245,7 @@ async def authorize(
 
     # A hint naming someone other than the person signed in is not an error --
     # it means this client is asking about a different account, so the session
-    # in hand is not the one it wants (OIDC Core §3.1.3.1).
+    # in hand is not the one it wants (OIDC Core Section 3.1.3.1).
     if login_session is not None and _hint_mismatch(id_token_hint, login_session):
         login_session = None
 
@@ -314,7 +314,7 @@ async def authorize(
 
 
 def _client_auth(request: Request, client_id: str | None, client_secret: str | None):
-    """client_secret_basic takes precedence over client_secret_post — RFC 6749 §2.3.1."""
+    """client_secret_basic takes precedence over client_secret_post — RFC 6749 Section 2.3.1."""
     header = request.headers.get("authorization", "")
     scheme, _, encoded = header.partition(" ")
 
@@ -324,7 +324,7 @@ def _client_auth(request: Request, client_id: str | None, client_secret: str | N
         except ValueError as exc:
             raise InvalidClient("Malformed Basic authorization header.") from exc
         name, _, secret = decoded.partition(":")
-        # RFC 6749 §2.3.1 encodes both halves with `application/x-www-form-
+        # RFC 6749 Section 2.3.1 encodes both halves with `application/x-www-form-
         # urlencoded` *before* base64, so they have to be decoded after. IDEN's
         # own secrets are URL-safe and unaffected; an imported one containing a
         # reserved character failed as `invalid_client` with nothing to suggest
@@ -421,7 +421,7 @@ async def _authorization_code_grant(
 
     # Two conditions, and they say different things. `allowed_grants` is what
     # this client is *configured* to do; `offline_access` is what was asked for
-    # and consented to on this request (OIDC Core §11). Issuing on the first
+    # and consented to on this request (OIDC Core Section 11). Issuing on the first
     # alone meant a client that never asked for offline access got it anyway,
     # and one that did ask was never told whether it had been granted.
     refresh = None
@@ -510,7 +510,7 @@ async def _rotate(
         raise InvalidGrant("The user is no longer active.")
 
     # `record.scope` is the *original* grant and stays that way across every
-    # rotation. A `scope` parameter narrows this one response (RFC 6749 §6
+    # rotation. A `scope` parameter narrows this one response (RFC 6749 Section 6
     # forbids widening, and an intersection cannot widen) without shrinking the
     # grant itself — otherwise a client that once asked for less could never
     # get the rest back.
@@ -606,12 +606,12 @@ async def _verify_access_token(raw: str | None, redis) -> dict:
 
     Audience is deliberately not checked here: an access token's `aud` names the
     resource APIs its scopes belong to, while /userinfo is IDEN describing the
-    user to the client. Requiring `openid` is the real gate (OIDC Core §5.3).
+    user to the client. Requiring `openid` is the real gate (OIDC Core Section 5.3).
 
     The **type** is checked, and that is what audience would otherwise have to
     stand in for. An ID token is signed by IDEN, names the same person, and has
     no `jti` — so before this it reached the `claims["jti"]` below and answered
-    500 where 401 belongs (RFC 9068 §2.1).
+    500 where 401 belongs (RFC 9068 Section 2.1).
     """
     if not raw:
         raise OAuthError(
@@ -644,9 +644,9 @@ USERINFO_DOCS = {
     "description": (
         "Returns the claims released by the granted scopes: `sub` always, plus "
         "`profile` and `email` claims when those scopes were granted.\n\n"
-        "Available as both `GET` and `POST`, as OIDC Core §5.3.1 requires. The "
+        "Available as both `GET` and `POST`, as OIDC Core Section 5.3.1 requires. The "
         "`POST` form accepts the token in the `access_token` form field as well "
-        "as in the header (RFC 6750 §2.2), which is what conformance suites and "
+        "as in the header (RFC 6750 Section 2.2), which is what conformance suites and "
         "several relying-party libraries send by default.\n\n"
         "**Required scope:** `openid`"
     ),
@@ -714,11 +714,11 @@ async def userinfo_post(
     description=(
         "RFC 7009. A refresh token revokes its whole family; an access token is "
         "added to the `jti` denylist until it would have expired anyway.\n\n"
-        "Always returns `200`, even for an unknown token — RFC 7009 §2.2 requires "
+        "Always returns `200`, even for an unknown token — RFC 7009 Section 2.2 requires "
         "it, so that this endpoint cannot be used to probe which tokens exist.\n\n"
-        "Public clients may revoke their **own** tokens (RFC 7009 §2.1); the "
+        "Public clients may revoke their **own** tokens (RFC 7009 Section 2.1); the "
         "caller must already hold the token, so there is nothing to learn.\n\n"
-        "`tokenTypeHint` is honoured as an ordering hint (RFC 7009 §2.1): it "
+        "`tokenTypeHint` is honoured as an ordering hint (RFC 7009 Section 2.1): it "
         "decides which lookup runs first, never which ones are allowed, so a "
         "wrong hint costs a little time rather than the revocation.\n\n"
         "**Required scope:** none — client authentication only."
@@ -755,7 +755,7 @@ async def revoke(
         except jwt.PyJWTError:
             return False
         if claims.get("client_id") != client.client_id:
-            # Someone else's token. RFC 7009 §2.1 says answer 200 regardless, so
+            # Someone else's token. RFC 7009 Section 2.1 says answer 200 regardless, so
             # this reports "handled" without having revoked anything.
             return True
         await tokens.denylist_access_token(redis, claims["jti"], claims["exp"])
@@ -785,11 +785,11 @@ async def revoke(
         "should validate offline instead of calling this on every request.\n\n"
         "**Requires a confidential client.** The response describes someone "
         "else's token, so a `client_id` alone is not enough — it is public by "
-        "definition (RFC 7662 §2.1).\n\n"
+        "definition (RFC 7662 Section 2.1).\n\n"
         "**A client may only introspect its own tokens.** Anything issued to "
         'another client answers `{"active": false}` — the same answer an '
         "expired or unknown token gets, so the endpoint reveals nothing about "
-        "what exists (RFC 7662 §4).\n\n"
+        "what exists (RFC 7662 Section 4).\n\n"
         "Both access tokens and refresh tokens are accepted; `tokenTypeHint` "
         "orders the lookups.\n\n"
         "**Required scope:** none — client authentication only."
@@ -818,7 +818,7 @@ async def introspect(
 
         # Someone else's token is not this caller's business. Reported as
         # inactive rather than refused, so the answer is indistinguishable from
-        # a token that never existed (RFC 7662 §4).
+        # a token that never existed (RFC 7662 Section 4).
         if claims.get("client_id") != client.client_id:
             return IntrospectionResponse(active=False)
 
@@ -875,7 +875,7 @@ LOGOUT_DOCS = {
         "refresh tokens the session produced, and delivers a **logout token** to "
         "every client that registered a `backchannelLogoutUri` and was signed "
         "into during this session (OIDC Back-Channel Logout 1.0).\n\n"
-        "Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 §2 "
+        "Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 Section 2 "
         "requires. Prefer `POST`: it keeps `id_token_hint` out of browser "
         "history and out of the `Referer` header of whatever comes next.\n\n"
         "Access tokens already issued stay valid until they expire — they are "

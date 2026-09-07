@@ -31,7 +31,7 @@ A validation failure names the fields:
 ## The OAuth shape
 
 `/oauth2/token`, `/revoke`, `/introspect`, and error redirects from `/authorize` use the format fixed
-by [RFC 6749 §5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2), because a client library will
+by [RFC 6749 Section 5.2](https://www.rfc-editor.org/rfc/rfc6749#section-5.2), because a client library will
 not understand anything else:
 
 ```json
@@ -40,7 +40,7 @@ not understand anything else:
 
 A malformed request to these endpoints — a missing `grant_type`, say — comes back as
 `invalid_request` in the same shape, never as IDEN's validation error. A client library reading
-§5.2 has no way to read anything else.
+Section 5.2 has no way to read anything else.
 
 Errors from `/authorize` arrive as query parameters on your redirect URI, not as a response body —
 unless `client_id` or `redirect_uri` was itself invalid, in which case IDEN answers with JSON rather

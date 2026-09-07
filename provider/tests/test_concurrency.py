@@ -38,7 +38,7 @@ async def test_a_second_redemption_blocks_until_the_first_commits(
 ):
     """KI-3. Single use has to survive a race, not merely a sequence — that is
     the property that makes an intercepted authorization code survivable
-    (RFC 6749 §4.1.2)."""
+    (RFC 6749 Section 4.1.2)."""
     code = generate_token()
     db.add(
         AuthorizationCode(

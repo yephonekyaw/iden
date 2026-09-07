@@ -23,7 +23,7 @@ def now() -> datetime:
 async def audiences_for(session: AsyncSession, values: set[str]) -> list[str]:
     """The `aud` of an access token is the audience of every API owning a
     granted scope, so a resource server can reject tokens minted for someone
-    else (RFC 9068 §3).
+    else (RFC 9068 Section 3).
 
     Falls back to the issuer when only OIDC scopes were granted: the token
     describes the user to IDEN itself and reaches no other API.
@@ -73,7 +73,7 @@ async def mint_access_token(
         claims["acr"] = acr
     if amr:
         claims["amr"] = amr
-    # RFC 9068 §2.2.1. A resource server cannot demand a *recent* sign-in for a
+    # RFC 9068 Section 2.2.1. A resource server cannot demand a *recent* sign-in for a
     # sensitive action without knowing when the sign-in happened, and it only
     # ever sees the access token — the ID token belongs to the client.
     if authenticated_at:
@@ -95,7 +95,7 @@ def mint_id_token(
     extra_claims: dict[str, Any] | None = None,
 ) -> str:
     """The ID token describes the authentication event to the client that asked
-    for it — hence `aud` is the client, not an API (OIDC Core §2)."""
+    for it — hence `aud` is the client, not an API (OIDC Core Section 2)."""
     issued_at = now()
     claims = {
         "iss": settings.iden_issuer,
@@ -128,7 +128,7 @@ def mint_id_token(
 
 
 def identity_claims(user: User, scopes: set[str]) -> dict[str, Any]:
-    """Claims released by scope — OIDC Core §5.4. Shared with /userinfo so the
+    """Claims released by scope — OIDC Core Section 5.4. Shared with /userinfo so the
     two can never disagree."""
     claims: dict[str, Any] = {}
 

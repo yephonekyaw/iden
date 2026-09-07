@@ -17,7 +17,7 @@ class CodeChallengeMethod(StrEnum):
 
 
 class Prompt(StrEnum):
-    """`prompt` values on /authorize — OIDC Core §3.1.2.1.
+    """`prompt` values on /authorize — OIDC Core Section 3.1.2.1.
 
     `SELECT_ACCOUNT` is accepted and treated as re-authentication: IDEN holds
     one account per session, so there is nothing to select between, and

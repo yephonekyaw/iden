@@ -2,7 +2,7 @@ from pydantic import BaseModel, Field
 
 
 class OpenIDConfiguration(BaseModel):
-    """OpenID Provider Metadata — OIDC Discovery 1.0 §3.
+    """OpenID Provider Metadata — OIDC Discovery 1.0 Section 3.
 
     Plain snake_case field names: this document's keys are fixed by the spec,
     so it is the one place the project does not camelCase its JSON.
@@ -39,7 +39,7 @@ class OpenIDConfiguration(BaseModel):
     claims_supported: list[str]
 
     # Declared rather than omitted. Each of these defaults to `true` when absent
-    # (OIDC Discovery 1.0 §3), so silence here advertised support for request
+    # (OIDC Discovery 1.0 Section 3), so silence here advertised support for request
     # objects, request URIs, and the `claims` parameter — none of which IDEN
     # implements. A conforming client would have believed it.
     response_modes_supported: list[str] = Field(
@@ -59,7 +59,7 @@ class OpenIDConfiguration(BaseModel):
     )
     revocation_endpoint_auth_methods_supported: list[str]
     introspection_endpoint_auth_methods_supported: list[str] = Field(
-        description="Confidential clients only — `none` is deliberately absent (RFC 7662 §2.1)."
+        description="Confidential clients only — `none` is deliberately absent (RFC 7662 Section 2.1)."
     )
 
 

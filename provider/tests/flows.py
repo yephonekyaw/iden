@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlparse
 
 from tests.conftest import ADMIN_EMAIL, ADMIN_PASSWORD, REDIRECT_URI
 
-# `offline_access` is what asks for a refresh token (OIDC Core §11), so it
+# `offline_access` is what asks for a refresh token (OIDC Core Section 11), so it
 # belongs in the default any test about refreshing starts from. A test about
 # *not* getting one overrides `scope` to leave it out.
 DEFAULT_SCOPE = (

@@ -52,7 +52,7 @@ class TestErrorContract:
 
     async def test_a_malformed_oauth_request_stays_rfc_6749(self, client, catalogue):
         """FastAPI's validation error would hand a client library a body it has
-        no way to read. RFC 6749 §5.2 calls this `invalid_request`."""
+        no way to read. RFC 6749 Section 5.2 calls this `invalid_request`."""
         response = await client.post("/oauth2/token", data={})
 
         assert response.status_code == 400

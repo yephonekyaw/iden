@@ -42,7 +42,7 @@ def _headers_for(path: str) -> dict[str, str]:
     if path in CACHEABLE_PATHS:
         headers["cache-control"] = f"public, max-age={CACHEABLE_MAX_AGE}"
     else:
-        # RFC 6749 §5.1 requires both on any response carrying a token. Every
+        # RFC 6749 Section 5.1 requires both on any response carrying a token. Every
         # other response either carries a credential or is cheap to recompute,
         # so the blanket rule is simpler than a list of exceptions.
         headers["cache-control"] = "no-store"

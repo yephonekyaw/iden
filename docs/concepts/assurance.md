@@ -87,4 +87,4 @@ An application seeing this should send the person back through `/oauth2/authoriz
 !!! warning "This only works because access tokens carry `auth_time`"
     Your API never sees the ID token — that belongs to the application. If the sign-in time were only
     in the ID token, no resource server could enforce freshness at all. IDEN puts `auth_time` in
-    access tokens for exactly this reason ([RFC 9068 §2.2.1](https://www.rfc-editor.org/rfc/rfc9068)).
+    access tokens for exactly this reason ([RFC 9068 Section 2.2.1](https://www.rfc-editor.org/rfc/rfc9068)).

@@ -24,7 +24,7 @@ def header_of(token: str) -> dict:
 
 
 class TestTokenType:
-    """C-1 · RFC 9068 §2.1 — every token says what it is.
+    """C-1 · RFC 9068 Section 2.1 — every token says what it is.
 
     Before this, nothing distinguished an access token from an ID token by
     *type*. Confusion was caught incidentally by `aud` at `/admin/*`, and not at
@@ -91,7 +91,7 @@ class TestTokenType:
 
 
 class TestUserInfoMethods:
-    """C-2 · OIDC Core §5.3.1 — GET and POST, and the token may arrive in either."""
+    """C-2 · OIDC Core Section 5.3.1 — GET and POST, and the token may arrive in either."""
 
     async def test_post_is_accepted_with_a_bearer_header(self, client):
         tokens = await get_tokens(client)
@@ -105,7 +105,7 @@ class TestUserInfoMethods:
         assert response.json()["sub"]
 
     async def test_post_is_accepted_with_a_form_encoded_token(self, client):
-        """RFC 6750 §2.2. Several relying-party libraries send it this way."""
+        """RFC 6750 Section 2.2. Several relying-party libraries send it this way."""
         tokens = await get_tokens(client)
 
         response = await client.post(
@@ -129,7 +129,7 @@ class TestUserInfoMethods:
 
 
 class TestLogoutMethods:
-    """C-3 · RP-Initiated Logout 1.0 §2 — POST keeps the hint out of history."""
+    """C-3 · RP-Initiated Logout 1.0 Section 2 — POST keeps the hint out of history."""
 
     async def test_post_ends_the_session(self, client):
         await get_tokens(client)  # leaves a session cookie on the client
@@ -157,7 +157,7 @@ class TestLogoutMethods:
 
 
 class TestBasicCredentialEncoding:
-    """C-4 · RFC 6749 §2.3.1 — both halves are form-urlencoded before base64."""
+    """C-4 · RFC 6749 Section 2.3.1 — both halves are form-urlencoded before base64."""
 
     @pytest.fixture
     async def reserved(self, db, catalogue) -> tuple[str, str]:
@@ -220,7 +220,7 @@ class TestBasicCredentialEncoding:
 
 
 class TestChallengeHeaders:
-    """C-5 and C-6 · RFC 6750 §3 — the challenge says what to do about it."""
+    """C-5 and C-6 · RFC 6750 Section 3 — the challenge says what to do about it."""
 
     async def test_insufficient_scope_is_named_in_the_header(self, client, token_for):
         """C-5. Without this a client cannot tell "you lack this scope" from any
@@ -265,7 +265,7 @@ class TestChallengeHeaders:
 
 
 class TestMetadataDeclarations:
-    """C-7 · OIDC Discovery 1.0 §3 — the omissions defaulted to `true`."""
+    """C-7 · OIDC Discovery 1.0 Section 3 — the omissions defaulted to `true`."""
 
     async def test_unimplemented_features_are_declared_false(self, client):
         body = (await client.get("/.well-known/openid-configuration")).json()
@@ -330,7 +330,7 @@ class TestIssuerIdentification:
 
 
 class TestOfflineAccess:
-    """C-8 · OIDC Core §11 — a refresh token is asked for, not assumed."""
+    """C-8 · OIDC Core Section 11 — a refresh token is asked for, not assumed."""
 
     async def test_a_refresh_token_is_issued_when_asked_for(self, client):
         tokens = await get_tokens(client, scope="openid offline_access")
@@ -369,7 +369,7 @@ class TestOfflineAccess:
 
 
 class TestTokenTypeHint:
-    """RFC 7009 §2.1 — accepted and acted on, rather than accepted and ignored."""
+    """RFC 7009 Section 2.1 — accepted and acted on, rather than accepted and ignored."""
 
     async def test_a_correct_hint_revokes(self, client):
         tokens = await get_tokens(client)

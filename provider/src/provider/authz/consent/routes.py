@@ -27,7 +27,7 @@ router = APIRouter(prefix="/api/v1/auth", tags=["authentication"])
         "Records the user's decision and returns where to send the browser.\n\n"
         "Approval persists a consent grant so the same scopes are not asked for "
         "again. Denial returns the user to the client with `error=access_denied` "
-        "as required by RFC 6749 §4.1.2.1.\n\n"
+        "as required by RFC 6749 Section 4.1.2.1.\n\n"
         "**Required scope:** none — requires an existing session cookie."
     ),
     responses={
@@ -54,7 +54,7 @@ async def consent(
         params = {
             "error": "access_denied",
             "error_description": "The user refused the request.",
-            # An authorization response like any other — RFC 9207 §2.
+            # An authorization response like any other — RFC 9207 Section 2.
             "iss": settings.iden_issuer,
         }
         if state := challenge.params.get("state"):

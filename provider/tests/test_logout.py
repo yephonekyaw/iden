@@ -138,7 +138,7 @@ class TestLogoutToken:
         assert logout_service.BACKCHANNEL_LOGOUT_EVENT in claims["events"]
 
     async def test_carries_no_nonce(self, client, listening, deliveries):
-        """OIDC Back-Channel Logout §2.4 forbids it: with a nonce, a stolen
+        """OIDC Back-Channel Logout Section 2.4 forbids it: with a nonce, a stolen
         logout token could be replayed as proof of a fresh authentication."""
         await get_tokens(client)
         await client.get("/oauth2/logout", follow_redirects=False)

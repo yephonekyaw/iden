@@ -28,7 +28,7 @@ Set these explicitly if your library asks:
 | PKCE | **Required**, `S256`. Not optional, even for confidential clients. |
 | Client auth | `client_secret_basic`, `client_secret_post`, or `none` for public clients |
 | ID token signing | `RS256` |
-| Refresh tokens | Request the **`offline_access`** scope (OIDC Core §11). The client must also allow the `refresh_token` grant — the grant is what it *may* do, the scope is what this request asked for. Ask for neither and you get no refresh token. |
+| Refresh tokens | Request the **`offline_access`** scope (OIDC Core Section 11). The client must also allow the `refresh_token` grant — the grant is what it *may* do, the scope is what this request asked for. Ask for neither and you get no refresh token. |
 | Front-channel logout | Not supported — use [back-channel](single-sign-out.md) |
 
 ## Browser single-page app

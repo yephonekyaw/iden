@@ -187,7 +187,7 @@ are Flask- and Django-only, so it would buy an adapter layer rather than an impl
 ### 0.3 Configuration — `core/config.py`
 
 Extend the existing `Settings` with everything later phases need. Full table in
-[README.md § Configuration](README.md#configuration). Groups:
+[README.md — Configuration](README.md#configuration). Groups:
 
 - **App** — `iden_env`, `iden_log_level`, `iden_api_prefix`, `iden_allowed_admin_origins` *(existing)*
 - **Issuer** — `iden_issuer`, `iden_auth_ui_base_url`
@@ -327,8 +327,8 @@ the phase where the OAuth concepts actually get learned, so build the services b
 |---|---|
 | `pkce.py` | `verify_challenge(verifier, challenge, method)` — `S256` only; `plain` is rejected. ~10 lines. |
 
-Write the RFC section into a comment wherever behaviour is non-obvious (PKCE: RFC 7636 §4.6;
-redirect_uri matching: RFC 6749 §3.1.2.3; token error codes: RFC 6749 §5.2). Hand-rolling means the
+Write the RFC section into a comment wherever behaviour is non-obvious (PKCE: RFC 7636 Section 4.6;
+redirect_uri matching: RFC 6749 Section 3.1.2.3; token error codes: RFC 6749 Section 5.2). Hand-rolling means the
 spec is the reference, and a reader should not have to go looking for which rule a line enforces.
 | `session_store.py` | Redis-backed login session: `sub`, `amr` list, `authenticated_at`, sliding 24h TTL. Keyed by an opaque id held in an `HttpOnly` `Secure` `SameSite=Lax` cookie. |
 | `challenge_store.py` | Redis-backed 10-minute, single-use challenges carrying the pending `/authorize` parameters across the redirect to `auth-ui` and back. |
@@ -352,7 +352,7 @@ Pruning is silent — an over-broad request yields a narrower token, never an er
 role/group graph in one query with eager loading; this runs on every token issuance and is the
 obvious N+1 trap.
 
-**`token_service.py`** — claims per [README.md § Tokens & Claims](README.md#tokens--claims). `acr` is derived from the
+**`token_service.py`** — claims per [README.md — Tokens & Claims](README.md#tokens--claims). `acr` is derived from the
 session's `amr` list at issuance time, never stored. Access tokens carry `aud` = the audience of the
 API owning the granted scopes; if granted scopes span several APIs, `aud` is a list.
 
@@ -470,7 +470,7 @@ Recorded so the code and this plan do not drift apart:
   decided by `/authorize`, the only endpoint holding the full request. Fewer places know the rules.
 - **`/oauth2/userinfo` does not use `require_scope`.** That helper derives an audience from the
   scope's prefix, which is meaningless for `openid`. Userinfo verifies the token itself and gates on
-  the `openid` scope instead — OIDC Core §5.3.
+  the `openid` scope instead — OIDC Core Section 5.3.
 - **CORS middleware moved up from Phase 6.** The Auth UI is a separate origin and sends the session
   cookie, so credentialed CORS is what makes login work at all rather than a hardening extra.
 - **A token for the wrong API returns `401`, not `403`.** Audience is validated as part of the token,
@@ -638,7 +638,7 @@ let anyone assume the session. That is the same reason it is safe to log.
 
 | Parameter | Behaviour |
 |---|---|
-| `prompt=none` | Never show UI. If there is no session, the session fails `acr_values`/`max_age`, or consent is missing, redirect back with `login_required`, `interaction_required`, or `consent_required` (OIDC Core §3.1.2.6). **Must not create a challenge** — a challenge is interaction. |
+| `prompt=none` | Never show UI. If there is no session, the session fails `acr_values`/`max_age`, or consent is missing, redirect back with `login_required`, `interaction_required`, or `consent_required` (OIDC Core Section 3.1.2.6). **Must not create a challenge** — a challenge is interaction. |
 | `prompt=login` | Force re-authentication even with a live session. Records a fresh `amr`/`authenticated_at`; the existing session is reused, not replaced, so other applications stay signed in. |
 | `prompt=consent` | Ask again even when a consent grant exists. Does not delete the stored grant unless the user changes it. |
 | `prompt=select_account` | Same as `login` for now, and documented as such: IDEN has no multi-account session. Recognised rather than rejected so conforming clients do not break. |
@@ -679,7 +679,7 @@ does not otherwise need. Record the failure and move on.
 ### 3.4 The end-session endpoint — `/oauth2/logout`
 
 Already exists and already validates `post_logout_redirect_uri`. It gains `id_token_hint` (which
-identifies the session and the client), `client_id`, and `state`, and it now triggers §3.3 before
+identifies the session and the client), `client_id`, and `state`, and it now triggers Section 3.3 before
 clearing the cookie.
 
 Deleting the session must happen **after** the fan-out is dispatched but must not wait on its
@@ -712,7 +712,7 @@ attempt any of this without them. `admin/clients/` accepts and returns the two n
 and `tests/test_recovery.py` pin them. One thing the plan did not anticipate: `require_fresh_auth`
 reads `auth_time`, and access tokens did not carry it — only ID tokens did. A resource server never
 sees an ID token, so freshness was unenforceable until access tokens gained the claim (RFC 9068
-§2.2.1).
+Section 2.2.1).
 
 **Goal:** what a signed-in person can do for themselves, plus the organization-defined profile
 schema that makes IDEN usable by a university and a company without either one forking it.
@@ -901,7 +901,7 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
     expressing one policy is one more place for them to disagree.
   - **HSTS in production only.** Sent from `http://localhost` it pins *every* project on localhost
     to HTTPS in the developer's browser, which is slow to discover and tedious to undo.
-  - **`Cache-Control: no-store` (with the RFC 6749 §5.1 `Pragma: no-cache`) by default**, closing a
+  - **`Cache-Control: no-store` (with the RFC 6749 Section 5.1 `Pragma: no-cache`) by default**, closing a
     gap open since Phase 1: token responses carried no cache directives at all. Discovery and JWKS
     are the exception at `public, max-age=300` — every resource server fetches the key set, and
     making it uncacheable would put IDEN in the path of every token validation. That age doubles as
@@ -915,7 +915,7 @@ running, a user can enrol a face and then log in with `amr: ["face"]`.
   sites: the raising code was right, only the serialization was inconsistent. `WWW-Authenticate` is
   preserved, because RFC 6750 and RFC 9470 put the machine-readable part of a 401 and a step-up
   there. A malformed request to `/oauth2/*` answers RFC 6749 `invalid_request` instead — a client
-  library reading §5.2 has no way to read anything else.
+  library reading Section 5.2 has no way to read anything else.
 - ~~**Test coverage review.**~~ Done. `pytest-cov` measures it; the config in `pyproject.toml` says
   why there is deliberately **no threshold** — a gate teaches people to write tests that touch lines
   rather than tests that check behaviour. The review found two gaps worth filling and one bug:
@@ -1147,7 +1147,7 @@ ones with a failing test first — see ground rule 9.
 
 | | Issue | What changed | Pinned by |
 |---|---|---|---|
-| **KI-1** | Introspection leaked token contents to unauthenticated callers | `/oauth2/introspect` now requires a **confidential** client via `authenticate_endpoint_client(..., require_confidential=True)`. `/oauth2/revoke` still admits public clients — RFC 7009 §2.1 allows it, the caller must already hold the token, and the existing owner check stops one client revoking another's. | `test_token_grants.py::TestIntrospection::test_public_client_cannot_introspect`, `::test_one_client_cannot_revoke_another_clients_token` |
+| **KI-1** | Introspection leaked token contents to unauthenticated callers | `/oauth2/introspect` now requires a **confidential** client via `authenticate_endpoint_client(..., require_confidential=True)`. `/oauth2/revoke` still admits public clients — RFC 7009 Section 2.1 allows it, the caller must already hold the token, and the existing owner check stops one client revoking another's. | `test_token_grants.py::TestIntrospection::test_public_client_cannot_introspect`, `::test_one_client_cannot_revoke_another_clients_token` |
 | **KI-2** | Narrowing a refresh token's scope was permanent | `RefreshToken.scope` now always holds the **original grant**; a `scope` parameter narrows that one response without shrinking the grant. Re-resolution against current permissions is unchanged. | `::test_scope_narrowing_applies_to_one_response_only` |
 | **KI-3** | Single-use enforcement was check-then-write | `consume_code` and `consume_refresh_token` take a row lock (`.with_for_update()`), so a second caller blocks until the first commits and then sees the burnt row. | `tests/test_concurrency.py` — both tests hold the first transaction open and assert the second blocks; both were confirmed to fail without the lock |
 | **KI-4** | Consent recorded requested scopes, not granted ones | The consent route resolves the request first and stores what was actually granted, so a scope pruned for lack of permission is not silently pre-consented. | `test_consent.py::test_consent_records_what_was_granted_not_what_was_asked` |
@@ -1221,7 +1221,7 @@ detection needs the row.
 6. ~~KI-14~~ ✅ and ~~KI-11~~ ✅ (as a documentation fix) with Phase 6 hardening.
 7. ~~KI-10~~ ✅ with the conformance pass, which closed all eight Tier 1 gaps from the
    [README](../README.md#tier-1--conformance-gaps--closed) and adopted RFC 8414, RFC 9207,
-   RFC 7662 §4 and RFC 7009 §2.1. **KI-9** remains open and deliberately so — see below.
+   RFC 7662 Section 4 and RFC 7009 Section 2.1. **KI-9** remains open and deliberately so — see below.
 
 **Deferred deliberately, before Phase 6.** None of the seven open issues blocks a later phase, so
 they were reviewed and left standing rather than fixed first. What that decision rests on:

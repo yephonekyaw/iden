@@ -440,7 +440,7 @@ described in [web/README.md](web/README.md) and planned in [web/PLAN.md](web/PLA
 
 ### Organize by feature, not by layer
 
-§1 applies unchanged. A resource lives in one directory:
+Section 1 applies unchanged. A resource lives in one directory:
 
 ```text
 features/<resource>/
@@ -461,7 +461,7 @@ one is wrong, the fix belongs in `provider/`.
 
 ### No `any`, no `!`
 
-§4's "type hints everywhere, avoid `Any`" reads as `no-explicit-any` and `no-non-null-assertion`,
+Section 4's "type hints everywhere, avoid `Any`" reads as `no-explicit-any` and `no-non-null-assertion`,
 both errors in `eslint.config.js`. Genuinely unknown data is `unknown` and narrowed at the boundary.
 
 ### Server state belongs to TanStack Query

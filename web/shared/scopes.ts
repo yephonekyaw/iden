@@ -41,7 +41,7 @@ export const ENTITY_SCOPES = [
 /**
  * Not in the DB and never carry an audience — see `scope_resolver.OIDC_SCOPES`.
  *
- * `offline_access` is what asks for a refresh token (OIDC Core §11). The
+ * `offline_access` is what asks for a refresh token (OIDC Core Section 11). The
  * dashboard needs one: `automaticSilentRenew` renews from it, and without the
  * scope the provider issues none and the session ends at the first access
  * token's expiry.

@@ -97,7 +97,7 @@ def require_scope(*required: str, audience: str | None = None):
         try:
             # Only an access token opens a resource server. Before this check the
             # sole thing separating one from an ID token here was which claims it
-            # happened to carry (RFC 9068 §4).
+            # happened to carry (RFC 9068 Section 4).
             claims = verify_jwt(raw, audience=audience, typ=ACCESS_TOKEN_TYP)
         except jwt.PyJWTError as exc:
             raise HTTPException(
@@ -116,7 +116,7 @@ def require_scope(*required: str, audience: str | None = None):
         granted = set(claims.get("scope", "").split())
         missing = set(required) - granted
         if missing:
-            # RFC 6750 §3.1: `insufficient_scope`, naming what would satisfy it.
+            # RFC 6750 Section 3.1: `insufficient_scope`, naming what would satisfy it.
             # Without the header a client cannot tell this 403 from any other
             # without reading the prose.
             raise HTTPException(

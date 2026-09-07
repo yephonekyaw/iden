@@ -21,7 +21,7 @@ async def get_client(session: AsyncSession, client_id: str | None) -> Client | N
 
 
 def redirect_uri_registered(client: Client, redirect_uri: str | None) -> bool:
-    """Exact string comparison — RFC 6749 §3.1.2.3.
+    """Exact string comparison — RFC 6749 Section 3.1.2.3.
 
     Not a prefix or hostname match: sub-path and query tricks on a permissive
     comparison are how authorization codes get exfiltrated.
@@ -41,11 +41,11 @@ async def authenticate_endpoint_client(
     Unlike the token endpoint this checks no grant type — these endpoints are not
     a grant. `require_confidential` is the difference between the two callers:
 
-    - **Introspection must have it.** RFC 7662 §2.1 requires the endpoint be
+    - **Introspection must have it.** RFC 7662 Section 2.1 requires the endpoint be
       protected, and a `client_id` alone is not a credential — it is public by
       definition. Without this, naming any public client returns the contents of
       any token presented.
-    - **Revocation does not.** RFC 7009 §2.1 lets a public client revoke its own
+    - **Revocation does not.** RFC 7009 Section 2.1 lets a public client revoke its own
       tokens, and the caller must already hold the token to revoke it, so there
       is nothing to learn. The caller-side check that the token belongs to this
       client is what keeps one client from revoking another's.
@@ -73,7 +73,7 @@ async def authenticate_endpoint_client(
 async def authenticate_client(
     session: AsyncSession, client_id: str | None, client_secret: str | None, grant: str
 ) -> Client:
-    """Client authentication for the token endpoint — RFC 6749 §2.3."""
+    """Client authentication for the token endpoint — RFC 6749 Section 2.3."""
     client = await get_client(session, client_id)
     if client is None:
         raise InvalidClient("Unknown client.")
@@ -134,10 +134,10 @@ async def consume_code(
     redirect_uri: str | None,
     code_verifier: str | None,
 ) -> AuthorizationCode:
-    """Validate and burn an authorization code — RFC 6749 §4.1.3, RFC 7636 §4.6."""
+    """Validate and burn an authorization code — RFC 6749 Section 4.1.3, RFC 7636 Section 4.6."""
     # Locked for the duration of the transaction: the check on `used_at` below
     # and the write that burns it must not interleave with another redemption,
-    # or a stolen code could be spent twice (RFC 6749 §4.1.2).
+    # or a stolen code could be spent twice (RFC 6749 Section 4.1.2).
     record = await session.scalar(
         select(AuthorizationCode)
         .where(AuthorizationCode.code_hash == hash_token(code))
@@ -147,7 +147,7 @@ async def consume_code(
         raise InvalidGrant("Unknown authorization code.")
 
     if record.used_at is not None:
-        # RFC 6749 §4.1.2: a code presented twice is assumed compromised.
+        # RFC 6749 Section 4.1.2: a code presented twice is assumed compromised.
         raise InvalidGrant("This authorization code has already been used.")
 
     if record.expires_at <= now():

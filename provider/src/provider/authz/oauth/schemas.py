@@ -4,7 +4,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class TokenResponse(BaseModel):
-    """RFC 6749 §5.1. Snake_case and no aliasing — the wire format is fixed by
+    """RFC 6749 Section 5.1. Snake_case and no aliasing — the wire format is fixed by
     the spec, not by this project's conventions."""
 
     access_token: str
@@ -23,7 +23,7 @@ class TokenResponse(BaseModel):
 
 
 class UserInfoResponse(BaseModel):
-    """Claims released by granted scope — OIDC Core §5.3.
+    """Claims released by granted scope — OIDC Core Section 5.3.
 
     Extra keys are allowed through: an organization defines its own fields at
     runtime, so the claim set is not knowable when this class is written.
@@ -39,7 +39,7 @@ class UserInfoResponse(BaseModel):
 
 
 class IntrospectionResponse(BaseModel):
-    """RFC 7662 §2.2. `active` is the only guaranteed field."""
+    """RFC 7662 Section 2.2. `active` is the only guaranteed field."""
 
     active: bool
     scope: str | None = None
@@ -53,7 +53,7 @@ class IntrospectionResponse(BaseModel):
 
 
 class OAuthErrorResponse(BaseModel):
-    """RFC 6749 §5.2."""
+    """RFC 6749 Section 5.2."""
 
     error: str
     error_description: str

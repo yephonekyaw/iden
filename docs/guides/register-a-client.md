@@ -59,7 +59,7 @@ Stable; choose something you will still recognise.
 **`allowedGrants`** — include `refresh_token` if you want long-lived sessions without repeated
 sign-ins. That is only half of it: your application must also request the **`offline_access`** scope
 at `/authorize`. The grant says what this client is permitted to do; the scope says what a particular
-request asked for and the person agreed to (OIDC Core §11).
+request asked for and the person agreed to (OIDC Core Section 11).
 
 **`redirectUris`** — where IDEN sends the person back. Matched **exactly**: not a prefix, not a
 pattern, not ignoring the query string.

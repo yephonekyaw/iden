@@ -21,7 +21,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       issuer: process.env.IDEN_ISSUER,
       clientId: process.env.IDEN_CLIENT_ID,
       clientSecret: process.env.IDEN_CLIENT_SECRET,
-      // `offline_access` is what asks for a refresh token (OIDC Core §11).
+      // `offline_access` is what asks for a refresh token (OIDC Core Section 11).
       // Drop it and sign-in still works; the session simply ends when the
       // access token expires.
       authorization: { params: { scope: "openid profile email offline_access" } },

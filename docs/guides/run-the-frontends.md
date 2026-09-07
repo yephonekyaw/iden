@@ -59,7 +59,7 @@ pnpm typecheck
 pnpm build
 ```
 
-The same three run in CI. Conventions are in [GUIDELINES.md § Frontend Code][guidelines]; the visual
+The same three run in CI. Conventions are in [GUIDELINES.md — Frontend Code][guidelines]; the visual
 system is `DESIGN.md`, transcribed once into `web/shared/tokens/theme.css` — every colour and size
 resolves there rather than being written inline.
 
@@ -67,7 +67,7 @@ resolves there rather than being written inline.
 
 Whichever origin serves the dashboard has to be named in three places that are all compared exactly,
 and getting one wrong is the usual cause of a dashboard that redirects forever. The settings, and how
-to change them, are in [Install it for your organization § Configure](install.md#3-configure).
+to change them, are in [Install it for your organization — Configure](install.md#3-configure).
 
 ## When something is wrong
 

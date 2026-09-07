@@ -101,7 +101,7 @@ async def _metadata(session: DBSessionDep) -> OpenIDConfiguration:
             "none",
         ],
         # No `none`: introspection describes someone else's token, and a
-        # client_id alone is public by definition (RFC 7662 §2.1).
+        # client_id alone is public by definition (RFC 7662 Section 2.1).
         introspection_endpoint_auth_methods_supported=[
             "client_secret_basic",
             "client_secret_post",

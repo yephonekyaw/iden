@@ -87,9 +87,9 @@ export interface paths {
          *
          *     Redirects to the hosted Auth UI when the browser has no session, when the session does not meet the requested `acr_values` or `max_age`, or when consent is needed. Otherwise issues a code and returns to `redirect_uri` — which is single sign-on: a second application reaching this endpoint with a live session gets a code without a prompt.
          *
-         *     `prompt=none` never shows UI. When interaction would have been needed it returns `login_required`, `consent_required`, or `account_selection_required` to `redirect_uri` instead (OIDC Core §3.1.2.6) — this is how a browser application checks silently whether someone is still signed in.
+         *     `prompt=none` never shows UI. When interaction would have been needed it returns `login_required`, `consent_required`, or `account_selection_required` to `redirect_uri` instead (OIDC Core Section 3.1.2.6) — this is how a browser application checks silently whether someone is still signed in.
          *
-         *     `client_id` and `redirect_uri` errors render as JSON rather than redirecting: before those two are validated the URI is unverified, and redirecting to it would make this an open redirector (RFC 6749 §3.1.2.3).
+         *     `client_id` and `redirect_uri` errors render as JSON rather than redirecting: before those two are validated the URI is unverified, and redirecting to it would make this an open redirector (RFC 6749 Section 3.1.2.3).
          *
          *     **Required scope:** none — this is how tokens are obtained.
          */
@@ -139,7 +139,7 @@ export interface paths {
          * Claims about the signed-in user
          * @description Returns the claims released by the granted scopes: `sub` always, plus `profile` and `email` claims when those scopes were granted.
          *
-         *     Available as both `GET` and `POST`, as OIDC Core §5.3.1 requires. The `POST` form accepts the token in the `access_token` form field as well as in the header (RFC 6750 §2.2), which is what conformance suites and several relying-party libraries send by default.
+         *     Available as both `GET` and `POST`, as OIDC Core Section 5.3.1 requires. The `POST` form accepts the token in the `access_token` form field as well as in the header (RFC 6750 Section 2.2), which is what conformance suites and several relying-party libraries send by default.
          *
          *     **Required scope:** `openid`
          */
@@ -149,7 +149,7 @@ export interface paths {
          * Claims about the signed-in user
          * @description Returns the claims released by the granted scopes: `sub` always, plus `profile` and `email` claims when those scopes were granted.
          *
-         *     Available as both `GET` and `POST`, as OIDC Core §5.3.1 requires. The `POST` form accepts the token in the `access_token` form field as well as in the header (RFC 6750 §2.2), which is what conformance suites and several relying-party libraries send by default.
+         *     Available as both `GET` and `POST`, as OIDC Core Section 5.3.1 requires. The `POST` form accepts the token in the `access_token` form field as well as in the header (RFC 6750 Section 2.2), which is what conformance suites and several relying-party libraries send by default.
          *
          *     **Required scope:** `openid`
          */
@@ -173,11 +173,11 @@ export interface paths {
          * Revoke a token
          * @description RFC 7009. A refresh token revokes its whole family; an access token is added to the `jti` denylist until it would have expired anyway.
          *
-         *     Always returns `200`, even for an unknown token — RFC 7009 §2.2 requires it, so that this endpoint cannot be used to probe which tokens exist.
+         *     Always returns `200`, even for an unknown token — RFC 7009 Section 2.2 requires it, so that this endpoint cannot be used to probe which tokens exist.
          *
-         *     Public clients may revoke their **own** tokens (RFC 7009 §2.1); the caller must already hold the token, so there is nothing to learn.
+         *     Public clients may revoke their **own** tokens (RFC 7009 Section 2.1); the caller must already hold the token, so there is nothing to learn.
          *
-         *     `tokenTypeHint` is honoured as an ordering hint (RFC 7009 §2.1): it decides which lookup runs first, never which ones are allowed, so a wrong hint costs a little time rather than the revocation.
+         *     `tokenTypeHint` is honoured as an ordering hint (RFC 7009 Section 2.1): it decides which lookup runs first, never which ones are allowed, so a wrong hint costs a little time rather than the revocation.
          *
          *     **Required scope:** none — client authentication only.
          */
@@ -201,9 +201,9 @@ export interface paths {
          * Inspect a token
          * @description RFC 7662. Present mainly for consumers that cannot validate a JWT locally — IDEN's own modules and any resource server with JWKS access should validate offline instead of calling this on every request.
          *
-         *     **Requires a confidential client.** The response describes someone else's token, so a `client_id` alone is not enough — it is public by definition (RFC 7662 §2.1).
+         *     **Requires a confidential client.** The response describes someone else's token, so a `client_id` alone is not enough — it is public by definition (RFC 7662 Section 2.1).
          *
-         *     **A client may only introspect its own tokens.** Anything issued to another client answers `{"active": false}` — the same answer an expired or unknown token gets, so the endpoint reveals nothing about what exists (RFC 7662 §4).
+         *     **A client may only introspect its own tokens.** Anything issued to another client answers `{"active": false}` — the same answer an expired or unknown token gets, so the endpoint reveals nothing about what exists (RFC 7662 Section 4).
          *
          *     Both access tokens and refresh tokens are accepted; `tokenTypeHint` orders the lookups.
          *
@@ -227,7 +227,7 @@ export interface paths {
          * End the session everywhere
          * @description Single sign-out. Clears the browser session and its cookie, revokes the refresh tokens the session produced, and delivers a **logout token** to every client that registered a `backchannelLogoutUri` and was signed into during this session (OIDC Back-Channel Logout 1.0).
          *
-         *     Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 §2 requires. Prefer `POST`: it keeps `id_token_hint` out of browser history and out of the `Referer` header of whatever comes next.
+         *     Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 Section 2 requires. Prefer `POST`: it keeps `id_token_hint` out of browser history and out of the `Referer` header of whatever comes next.
          *
          *     Access tokens already issued stay valid until they expire — they are self-contained by design, and their ten-minute lifetime is the trade that buys offline validation. Refresh tokens do not, so nothing can be renewed after this.
          *
@@ -241,7 +241,7 @@ export interface paths {
          * End the session everywhere
          * @description Single sign-out. Clears the browser session and its cookie, revokes the refresh tokens the session produced, and delivers a **logout token** to every client that registered a `backchannelLogoutUri` and was signed into during this session (OIDC Back-Channel Logout 1.0).
          *
-         *     Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 §2 requires. Prefer `POST`: it keeps `id_token_hint` out of browser history and out of the `Referer` header of whatever comes next.
+         *     Available as both `GET` and `POST`, as RP-Initiated Logout 1.0 Section 2 requires. Prefer `POST`: it keeps `id_token_hint` out of browser history and out of the `Referer` header of whatever comes next.
          *
          *     Access tokens already issued stay valid until they expire — they are self-contained by design, and their ten-minute lifetime is the trade that buys offline validation. Refresh tokens do not, so nothing can be renewed after this.
          *
@@ -364,7 +364,7 @@ export interface paths {
          * Approve or deny a consent request
          * @description Records the user's decision and returns where to send the browser.
          *
-         *     Approval persists a consent grant so the same scopes are not asked for again. Denial returns the user to the client with `error=access_denied` as required by RFC 6749 §4.1.2.1.
+         *     Approval persists a consent grant so the same scopes are not asked for again. Denial returns the user to the client with `error=access_denied` as required by RFC 6749 Section 4.1.2.1.
          *
          *     **Required scope:** none — requires an existing session cookie.
          */
@@ -2242,7 +2242,7 @@ export interface components {
         };
         /**
          * IntrospectionResponse
-         * @description RFC 7662 §2.2. `active` is the only guaranteed field.
+         * @description RFC 7662 Section 2.2. `active` is the only guaranteed field.
          */
         IntrospectionResponse: {
             /** Active */
@@ -2328,7 +2328,7 @@ export interface components {
         };
         /**
          * OAuthErrorResponse
-         * @description RFC 6749 §5.2.
+         * @description RFC 6749 Section 5.2.
          */
         OAuthErrorResponse: {
             /** Error */
@@ -2338,7 +2338,7 @@ export interface components {
         };
         /**
          * OpenIDConfiguration
-         * @description OpenID Provider Metadata — OIDC Discovery 1.0 §3.
+         * @description OpenID Provider Metadata — OIDC Discovery 1.0 Section 3.
          *
          *     Plain snake_case field names: this document's keys are fixed by the spec,
          *     so it is the one place the project does not camelCase its JSON.
@@ -2427,7 +2427,7 @@ export interface components {
             revocation_endpoint_auth_methods_supported: string[];
             /**
              * Introspection Endpoint Auth Methods Supported
-             * @description Confidential clients only — `none` is deliberately absent (RFC 7662 §2.1).
+             * @description Confidential clients only — `none` is deliberately absent (RFC 7662 Section 2.1).
              */
             introspection_endpoint_auth_methods_supported: string[];
         };
@@ -2994,7 +2994,7 @@ export interface components {
         };
         /**
          * TokenResponse
-         * @description RFC 6749 §5.1. Snake_case and no aliasing — the wire format is fixed by
+         * @description RFC 6749 Section 5.1. Snake_case and no aliasing — the wire format is fixed by
          *     the spec, not by this project's conventions.
          */
         TokenResponse: {
@@ -3119,7 +3119,7 @@ export interface components {
         };
         /**
          * UserInfoResponse
-         * @description Claims released by granted scope — OIDC Core §5.3.
+         * @description Claims released by granted scope — OIDC Core Section 5.3.
          *
          *     Extra keys are allowed through: an organization defines its own fields at
          *     runtime, so the claim set is not knowable when this class is written.

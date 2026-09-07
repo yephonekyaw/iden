@@ -150,14 +150,14 @@ app.get("/logout", async (request, response) => {
 // --------------------------------------------------------------------------
 
 /**
- * Back-channel logout — OIDC Back-Channel Logout 1.0 §2.5.
+ * Back-channel logout — OIDC Back-Channel Logout 1.0 Section 2.5.
  *
  * IDEN posts here server to server when a session this client was part of ends.
  * There is no browser involved, no cookie, and nothing to redirect: the only
  * thing that makes this request trustworthy is the signature on the token, so
  * verifying it properly is the whole job.
  *
- * The response must carry no cache headers and, per §2.8, a failure must not be
+ * The response must carry no cache headers and, per Section 2.8, a failure must not be
  * a redirect — the provider is a program reading a status code.
  */
 app.post("/backchannel-logout", async (request, response) => {

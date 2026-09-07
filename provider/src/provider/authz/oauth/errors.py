@@ -1,6 +1,6 @@
 """OAuth protocol errors.
 
-These do **not** use the project's JSON error contract: RFC 6749 §5.2 fixes the
+These do **not** use the project's JSON error contract: RFC 6749 Section 5.2 fixes the
 shape as `{"error": ..., "error_description": ...}`, and a client library will
 not understand anything else.
 """
@@ -22,7 +22,7 @@ class OAuthError(Exception):
 
 
 class RedirectableError(OAuthError):
-    """An error to deliver to the client's redirect_uri — RFC 6749 §4.1.2.1.
+    """An error to deliver to the client's redirect_uri — RFC 6749 Section 4.1.2.1.
 
     Only raised *after* client_id and redirect_uri have been validated. Before
     that point the URI is unverified and sending anything to it would turn the

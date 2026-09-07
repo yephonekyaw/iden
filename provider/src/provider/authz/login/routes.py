@@ -40,7 +40,7 @@ OIDC_SCOPE_DESCRIPTIONS = {
     "openid": "Sign you in.",
     "profile": "Your name and username.",
     "email": "Your email address.",
-    # OIDC Core §11 requires consent for this one specifically: it is the
+    # OIDC Core Section 11 requires consent for this one specifically: it is the
     # difference between access while you are here and access while you are not.
     "offline_access": "Stay signed in when you are not using the application.",
 }

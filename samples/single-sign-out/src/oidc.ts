@@ -133,7 +133,7 @@ export interface LogoutClaims extends JWTPayload {
 }
 
 /**
- * Verify a logout token — OIDC Back-Channel Logout 1.0 §2.6.
+ * Verify a logout token — OIDC Back-Channel Logout 1.0 Section 2.6.
  *
  * The two checks easiest to skip are the two that matter. `events` is what
  * makes this a logout token rather than an ID token, and the **absence of

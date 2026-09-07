@@ -134,7 +134,7 @@ uv run pytest tests/test_scope_resolver.py -q
 
 They use their own `iden_test` database (created and dropped per run) and Redis logical database 15,
 so they never touch your development data. The app is driven in-process over ASGI — no server to
-start. See [PLAN.md § Testing](PLAN.md#testing) for how the fixtures work.
+start. See [PLAN.md — Testing](PLAN.md#testing) for how the fixtures work.
 
 **Coverage**, when you want to know what is not exercised:
 
@@ -335,7 +335,7 @@ The point of `service.py` being FastAPI-free is that domain logic stays testable
 `scope_resolver.py` is called from three different modules precisely because it knows nothing about
 HTTP.
 
-This is the layout described in [`CODING_STYLE.md` § 1](../CODING_STYLE.md#1-project-structure) and
+This is the layout described in [`GUIDELINES.md` section 1](../GUIDELINES.md#1-project-structure) and
 `.claude/CLAUDE.md`; the directories above are its concrete form for this service.
 
 ---

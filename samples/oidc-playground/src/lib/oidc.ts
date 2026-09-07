@@ -209,8 +209,8 @@ export interface Called {
 }
 
 /**
- * OIDC Core §5.3.1 defines both methods. `POST` also accepts the token as a
- * form field (RFC 6750 §2.2), which is what several relying-party libraries
+ * OIDC Core Section 5.3.1 defines both methods. `POST` also accepts the token as a
+ * form field (RFC 6750 Section 2.2), which is what several relying-party libraries
  * send by default — so the playground can send it either way.
  */
 export async function userinfo(input: {

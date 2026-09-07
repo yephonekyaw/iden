@@ -4,7 +4,7 @@
 
 Addressed to an API. Your resource server validates it offline and reads it.
 
-The JOSE header carries **`typ: at+jwt`** (RFC 9068 §2.1). Check it. It is what distinguishes an
+The JOSE header carries **`typ: at+jwt`** (RFC 9068 Section 2.1). Check it. It is what distinguishes an
 access token from an ID token by kind rather than by which claims each happens to have — every token
 IDEN signs says what it is, and every endpoint says what it accepts.
 
@@ -63,4 +63,4 @@ replayed as proof that someone just authenticated.
 Not a JWT. An opaque random string, meaningless outside IDEN, stored only as a hash.
 
 Issued only when the **`offline_access`** scope was granted and the client allows the
-`refresh_token` grant (OIDC Core §11).
+`refresh_token` grant (OIDC Core Section 11).

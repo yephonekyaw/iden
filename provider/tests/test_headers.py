@@ -20,7 +20,7 @@ class TestSecurityHeaders:
         assert response.headers["x-content-type-options"] == "nosniff"
 
     async def test_a_token_response_is_never_stored(self, client, kiosk, catalogue):
-        """RFC 6749 §5.1 — a cached token response is a token in a proxy."""
+        """RFC 6749 Section 5.1 — a cached token response is a token in a proxy."""
         client_row, secret = kiosk
         response = await client.post(
             "/oauth2/token",

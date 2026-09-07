@@ -49,7 +49,7 @@ async def verify_totp(session: AsyncSession, user: User, code: str) -> None:
         raise TotpNotEnrolled
 
     # valid_window=1 accepts the adjacent 30s step, covering ordinary clock drift
-    # between the phone and the server (RFC 6238 §6).
+    # between the phone and the server (RFC 6238 Section 6).
     if not pyotp.TOTP(credential.secret).verify(code, valid_window=1):
         raise InvalidTotpCode
 

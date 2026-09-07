@@ -28,7 +28,7 @@ DELIVERY_TIMEOUT = 5.0
 
 
 def mint_logout_token(client: Client, *, subject: uuid.UUID, sid: str) -> str:
-    """A logout token — OIDC Back-Channel Logout 1.0 §2.4.
+    """A logout token — OIDC Back-Channel Logout 1.0 Section 2.4.
 
     Three rules keep it from being mistaken for an ID token, and none is
     stylistic: the `logout+jwt` header says what it is, `events` marks what it
