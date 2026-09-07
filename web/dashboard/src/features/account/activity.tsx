@@ -171,7 +171,7 @@ export function SessionsRoute() {
         </RowCard>
       )}
 
-      <p className="mt-4 text-caption text-muted-foreground">
+      <p className="mt-4 max-w-prose text-caption text-muted-foreground">
         Revoking a session ends it here and revokes its refresh tokens, so that device cannot reach
         anything again without signing in. Applications that registered for sign-out notices are
         told straight away; the rest find out when they next ask for a token.
