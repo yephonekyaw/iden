@@ -1,20 +1,21 @@
 import {
   Button,
   ConfirmDialog,
-  ErrorState,
   Field,
   IdenError,
   Input,
+  Row,
+  RowCard,
   SecretRevealOnce,
-  Spinner,
+  StatusDot,
 } from "@iden/shared";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useApi } from "../../app/api";
 import { useStepUp } from "../../app/session";
 import { PageHeader } from "../../app/shell";
-import { useTotpStatus, type TotpEnrollment, type TotpStatus } from "./api";
+import { useProfile, useTotpStatus, type TotpEnrollment, type TotpStatus } from "./api";
 
 export function SecurityRoute() {
   return (
@@ -23,13 +24,63 @@ export function SecurityRoute() {
         title="Security"
         lede="Your password, the address you sign in with, and your authenticator app."
       />
-      <div className="flex max-w-xl flex-col gap-12">
-        <PasswordSection />
-        <EmailSection />
-        <TotpSection />
-      </div>
+      <RowCard className="max-w-3xl">
+        <PasswordSetting />
+        <EmailSetting />
+        <TotpSetting />
+      </RowCard>
     </>
   );
+}
+
+/**
+ * One thing about how you sign in: what is true now on the left, the way to
+ * change it on the right, and the form only once you have asked for it.
+ *
+ * The page used to be three forms open at once, which made it about filling
+ * them in. It is read far more often than it is used — the question people
+ * arrive with is "is my authenticator on?", not "what is my new password?" —
+ * so the answers come first and the forms come on request.
+ */
+function Setting({
+  title,
+  status,
+  action,
+  children,
+}: {
+  title: string;
+  status: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <Row className="px-6 py-5">
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h2 className="text-title-sm text-ink">{title}</h2>
+          <div aria-live="polite" className="mt-1 text-body-sm text-muted-foreground">
+            {status}
+          </div>
+        </div>
+        {action ? <div className="flex shrink-0 items-center gap-2">{action}</div> : null}
+      </div>
+      {children ? <div className="mt-6 max-w-md">{children}</div> : null}
+    </Row>
+  );
+}
+
+/** The open/close button every setting shares. */
+function Toggle({ open, onOpenChange, label }: OpenState & { label: string }) {
+  return (
+    <Button size="sm" variant={open ? "ghost" : "outline"} onClick={() => onOpenChange(!open)}>
+      {open ? "Cancel" : label}
+    </Button>
+  );
+}
+
+interface OpenState {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
 }
 
 /**
@@ -55,8 +106,9 @@ function StepUpNotice({ problem }: { problem: IdenError | null }) {
   );
 }
 
-function PasswordSection() {
+function PasswordSetting() {
   const api = useApi();
+  const [open, setOpen] = useState(false);
   const [currentPassword, setCurrent] = useState("");
   const [newPassword, setNext] = useState("");
 
@@ -71,80 +123,92 @@ function PasswordSection() {
     onSuccess: () => {
       setCurrent("");
       setNext("");
+      setOpen(false);
     },
   });
 
   const problem = change.error instanceof IdenError ? change.error : null;
+  const ended = change.data?.sessionsEnded ?? 0;
 
   return (
-    <section>
-      <h2 className="text-title-lg text-ink">Password</h2>
-      <form
-        noValidate
-        className="mt-4 flex flex-col gap-5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          change.mutate();
-        }}
-      >
-        <Field label="Current password">
-          {(props) => (
-            <Input
-              {...props}
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(event) => setCurrent(event.target.value)}
-            />
-          )}
-        </Field>
-        <Field
-          label="New password"
-          hint="At least 12 characters."
-          error={
-            problem?.code === "same_password"
-              ? "Choose a password you haven't used here."
-              : undefined
-          }
+    <Setting
+      title="Password"
+      status={
+        change.isSuccess && !open
+          ? `Changed. ${ended} other session${ended === 1 ? "" : "s"} signed out.`
+          : "Changing it signs out every other session you have open."
+      }
+      action={<Toggle open={open} onOpenChange={setOpen} label="Change password" />}
+    >
+      {open ? (
+        <form
+          noValidate
+          className="flex flex-col gap-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            change.mutate();
+          }}
         >
-          {(props) => (
-            <Input
-              {...props}
-              type="password"
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(event) => setNext(event.target.value)}
-            />
-          )}
-        </Field>
+          <Field label="Current password">
+            {(props) => (
+              <Input
+                {...props}
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setCurrent(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field
+            label="New password"
+            hint="At least 12 characters."
+            error={
+              problem?.code === "same_password"
+                ? "Choose a password you haven't used here."
+                : undefined
+            }
+          >
+            {(props) => (
+              <Input
+                {...props}
+                type="password"
+                autoComplete="new-password"
+                value={newPassword}
+                onChange={(event) => setNext(event.target.value)}
+              />
+            )}
+          </Field>
 
-        <StepUpNotice problem={problem} />
+          <StepUpNotice problem={problem} />
 
-        {problem && !problem.stepUpMaxAge && problem.code !== "same_password" ? (
-          <p role="alert" className="text-body-sm text-error">
-            {problem.code === "wrong_password"
-              ? "That current password is not right."
-              : problem.message}
-          </p>
-        ) : null}
+          {problem && !problem.stepUpMaxAge && problem.code !== "same_password" ? (
+            <p role="alert" className="text-body-sm text-error">
+              {problem.code === "wrong_password"
+                ? "That current password is not right."
+                : problem.message}
+            </p>
+          ) : null}
 
-        <div className="flex items-center gap-4">
-          <Button type="submit" variant="default" disabled={change.isPending}>
+          <Button
+            type="submit"
+            variant="default"
+            className="self-start"
+            disabled={change.isPending}
+          >
             {change.isPending ? "Changing…" : "Change password"}
           </Button>
-          <span aria-live="polite" className="text-caption text-muted-foreground">
-            {change.isSuccess
-              ? `Password changed. ${change.data.sessionsEnded} other session${change.data.sessionsEnded === 1 ? "" : "s"} signed out.`
-              : ""}
-          </span>
-        </div>
-      </form>
-    </section>
+        </form>
+      ) : null}
+    </Setting>
   );
 }
 
-function EmailSection() {
+function EmailSetting() {
   const api = useApi();
+  const profile = useProfile(api);
+  const queryClient = useQueryClient();
+  const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [currentPassword, setPassword] = useState("");
 
@@ -156,76 +220,92 @@ function EmailSection() {
       });
       return response.data;
     },
-    onSuccess: () => setPassword(""),
+    onSuccess: () => {
+      setPassword("");
+      setOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["profile"] });
+    },
   });
 
   const problem = change.error instanceof IdenError ? change.error : null;
 
   return (
-    <section>
-      <h2 className="text-title-lg text-ink">Sign-in address</h2>
-      <p className="mt-1 text-body-sm text-muted-foreground">
-        Changing this changes the address you sign in with, and signs out your other sessions.
-      </p>
-      <form
-        noValidate
-        className="mt-4 flex flex-col gap-5"
-        onSubmit={(event) => {
-          event.preventDefault();
-          change.mutate();
-        }}
-      >
-        <Field
-          label="New email address"
-          error={
-            problem?.code === "email_taken"
-              ? "That address already belongs to an account."
-              : undefined
-          }
+    <Setting
+      title="Sign-in address"
+      status={
+        profile.data ? (
+          <>
+            You sign in as <span className="text-body-strong">{profile.data.email}</span>. A new
+            address starts unverified.
+          </>
+        ) : (
+          "The address you sign in with."
+        )
+      }
+      action={<Toggle open={open} onOpenChange={setOpen} label="Change address" />}
+    >
+      {open ? (
+        <form
+          noValidate
+          className="flex flex-col gap-5"
+          onSubmit={(event) => {
+            event.preventDefault();
+            change.mutate();
+          }}
         >
-          {(props) => (
-            <Input
-              {...props}
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
-          )}
-        </Field>
-        <Field label="Your password">
-          {(props) => (
-            <Input
-              {...props}
-              type="password"
-              autoComplete="current-password"
-              value={currentPassword}
-              onChange={(event) => setPassword(event.target.value)}
-            />
-          )}
-        </Field>
+          <Field
+            label="New email address"
+            hint="Changing this signs out your other sessions."
+            error={
+              problem?.code === "email_taken"
+                ? "That address already belongs to an account."
+                : undefined
+            }
+          >
+            {(props) => (
+              <Input
+                {...props}
+                type="email"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            )}
+          </Field>
+          <Field label="Your password">
+            {(props) => (
+              <Input
+                {...props}
+                type="password"
+                autoComplete="current-password"
+                value={currentPassword}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            )}
+          </Field>
 
-        <StepUpNotice problem={problem} />
+          <StepUpNotice problem={problem} />
 
-        {problem && !problem.stepUpMaxAge && problem.code !== "email_taken" ? (
-          <p role="alert" className="text-body-sm text-error">
-            {problem.code === "wrong_password" ? "That password is not right." : problem.message}
-          </p>
-        ) : null}
+          {problem && !problem.stepUpMaxAge && problem.code !== "email_taken" ? (
+            <p role="alert" className="text-body-sm text-error">
+              {problem.code === "wrong_password" ? "That password is not right." : problem.message}
+            </p>
+          ) : null}
 
-        <div className="flex items-center gap-4">
-          <Button type="submit" variant="default" disabled={change.isPending}>
+          <Button
+            type="submit"
+            variant="default"
+            className="self-start"
+            disabled={change.isPending}
+          >
             {change.isPending ? "Changing…" : "Change address"}
           </Button>
-          <span aria-live="polite" className="text-caption text-muted-foreground">
-            {change.isSuccess ? "Address changed." : ""}
-          </span>
-        </div>
-      </form>
-    </section>
+        </form>
+      ) : null}
+    </Setting>
   );
 }
 
-function TotpSection() {
+function TotpSetting() {
   const api = useApi();
   const status = useTotpStatus(api);
   const queryClient = useQueryClient();
@@ -259,40 +339,94 @@ function TotpSection() {
       setRemoving(false);
       void queryClient.invalidateQueries({ queryKey: ["totp"] });
     },
+    // Closed on failure too. What this route refuses with is a step-up
+    // challenge, and its answer — the button that sends you back through
+    // sign-in — is on the page underneath the dialog.
+    onError: () => setRemoving(false),
   });
 
-  if (status.isPending) return <Spinner label="Checking your authenticator" />;
-  if (status.isError)
-    return <ErrorState error={status.error} onRetry={() => void status.refetch()} />;
+  if (!status.data) {
+    return (
+      <Setting
+        title="Authenticator app"
+        status={status.isError ? "Could not check whether this is set up." : "Checking…"}
+        action={
+          status.isError ? (
+            <Button size="sm" onClick={() => void status.refetch()}>
+              Try again
+            </Button>
+          ) : null
+        }
+      />
+    );
+  }
 
   const removeProblem = remove.error instanceof IdenError ? remove.error : null;
   const confirmProblem = confirm.error instanceof IdenError ? confirm.error : null;
 
-  return (
-    <section>
-      <h2 className="text-title-lg text-ink">Authenticator app</h2>
+  if (status.data.enrolled) {
+    return (
+      <Setting
+        title="Authenticator app"
+        status={
+          <span className="flex flex-wrap items-center gap-x-2">
+            <StatusDot tone="success" label="On" />
+            You'll be asked for a code when an application requires two factors.
+          </span>
+        }
+        action={
+          <>
+            <Button size="sm" onClick={() => setRemoving(true)}>
+              Remove
+            </Button>
+            <ConfirmDialog
+              open={removing}
+              onOpenChange={setRemoving}
+              title="Remove your authenticator?"
+              body="Applications that require two factors will not let you in until you set up a new one."
+              confirmLabel="Remove authenticator"
+              pending={remove.isPending}
+              onConfirm={() => remove.mutate()}
+            />
+          </>
+        }
+      >
+        {removeProblem ? (
+          removeProblem.stepUpMaxAge ? (
+            <StepUpNotice problem={removeProblem} />
+          ) : (
+            <p role="alert" className="text-body-sm text-error">
+              {removeProblem.message}
+            </p>
+          )
+        ) : null}
+      </Setting>
+    );
+  }
 
-      {status.data.enrolled ? (
-        <>
-          <p className="mt-1 text-body-sm text-body">
-            Set up and in use. You'll be asked for a code when an application requires two factors.
-          </p>
-          <StepUpNotice problem={removeProblem} />
-          <Button className="mt-4" variant="outline" onClick={() => setRemoving(true)}>
-            Remove authenticator
+  return (
+    <Setting
+      title="Authenticator app"
+      status={
+        <span className="flex flex-wrap items-center gap-x-2">
+          <StatusDot tone="muted" label="Off" />
+          An authenticator app gives you a second factor for applications that ask for one.
+        </span>
+      }
+      action={
+        enrollment ? (
+          <Button size="sm" variant="ghost" onClick={() => setEnrollment(null)}>
+            Cancel
           </Button>
-          <ConfirmDialog
-            open={removing}
-            onOpenChange={setRemoving}
-            title="Remove your authenticator?"
-            body="Applications that require two factors will not let you in until you set up a new one."
-            confirmLabel="Remove authenticator"
-            pending={remove.isPending}
-            onConfirm={() => remove.mutate()}
-          />
-        </>
-      ) : enrollment ? (
-        <div className="mt-4 flex flex-col gap-5">
+        ) : (
+          <Button size="sm" disabled={enroll.isPending} onClick={() => enroll.mutate()}>
+            {enroll.isPending ? "Preparing…" : "Set up"}
+          </Button>
+        )
+      }
+    >
+      {enrollment ? (
+        <div className="flex flex-col gap-5">
           <p className="text-body-sm text-body">
             Scan this with your authenticator app, then enter the code it shows.
           </p>
@@ -323,31 +457,16 @@ function TotpSection() {
               />
             )}
           </Field>
-          <div className="flex gap-3">
-            <Button variant="default" disabled={confirm.isPending} onClick={() => confirm.mutate()}>
-              {confirm.isPending ? "Checking…" : "Turn on"}
-            </Button>
-            <Button variant="ghost" onClick={() => setEnrollment(null)}>
-              Cancel
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <>
-          <p className="mt-1 text-body-sm text-body">
-            Not set up. An authenticator app gives you a second factor for applications that ask for
-            one.
-          </p>
           <Button
-            className="mt-4"
             variant="default"
-            disabled={enroll.isPending}
-            onClick={() => enroll.mutate()}
+            className="self-start"
+            disabled={confirm.isPending}
+            onClick={() => confirm.mutate()}
           >
-            {enroll.isPending ? "Preparing…" : "Set up authenticator"}
+            {confirm.isPending ? "Checking…" : "Turn on"}
           </Button>
-        </>
-      )}
-    </section>
+        </div>
+      ) : null}
+    </Setting>
   );
 }
