@@ -98,6 +98,10 @@ class User(Base, TimestampMixin):
     username: Mapped[str] = mapped_column(String(64), unique=True)
     password_hash: Mapped[str] = mapped_column(String(255))
     display_name: Mapped[str | None] = mapped_column(String(255))
+    # The file name of the profile photo in blob storage, not a URL. The bytes
+    # live in the object store; this row only knows what they are called, and
+    # the name changes on every upload so replacing a photo retires its URL.
+    picture_key: Mapped[str | None] = mapped_column(String(64))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

@@ -12,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from provider.core.config import settings
 from provider.core.crypto import ACCESS_TOKEN_TYP, sign_jwt
 from provider.core.security import generate_token, hash_token
+from provider.shared import avatars
 from provider.shared.models import Client, RefreshToken, ResourceApi, Scope, User
 
 
@@ -134,6 +135,7 @@ def identity_claims(user: User, scopes: set[str]) -> dict[str, Any]:
     if "profile" in scopes:
         claims["name"] = user.display_name
         claims["preferred_username"] = user.username
+        claims["picture"] = avatars.public_url(user.picture_key)
 
     if "email" in scopes:
         claims["email"] = user.email

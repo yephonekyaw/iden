@@ -21,3 +21,8 @@ class ValueTaken(ConflictError):
 class InvalidFieldValue(ValidationError):
     code = "invalid_profile_value"
     message = "That value does not fit the field."
+
+
+class PhotoTooLarge(ValidationError):
+    code = "photo_too_large"
+    message = "That file is too large for a profile photo."

@@ -4,12 +4,15 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from provider.core import images
+from provider.core.storage import Storage
 from provider.entity.profile.errors import (
     FieldNotWritable,
     InvalidFieldValue,
     UnknownField,
     ValueTaken,
 )
+from provider.shared import avatars
 from provider.shared import profile as values
 from provider.shared.models import ProfileField, User, UserProfileValue
 
@@ -119,3 +122,35 @@ async def claims_for(session: AsyncSession, user: User, scopes: set[str]) -> dic
             released[field.claim_name] = values.render(field, row.value)
 
     return released
+
+
+async def set_photo(
+    session: AsyncSession, user: User, storage: Storage, data: bytes
+) -> None:
+    """Replace this person's profile photo with the uploaded file.
+
+    Written to the store, then pointed at, then the old file removed. In that
+    order a crash anywhere leaves an unreferenced object rather than a row
+    naming a file that is not there.
+    """
+    name = avatars.new_name()
+    await storage.put(
+        avatars.object_key(name), images.to_avatar(data), images.AVATAR_CONTENT_TYPE
+    )
+
+    previous = user.picture_key
+    user.picture_key = name
+    await session.commit()
+
+    if previous:
+        await storage.delete(avatars.object_key(previous))
+
+
+async def clear_photo(session: AsyncSession, user: User, storage: Storage) -> None:
+    previous = user.picture_key
+    if previous is None:
+        return
+
+    user.picture_key = None
+    await session.commit()
+    await storage.delete(avatars.object_key(previous))

@@ -13,6 +13,13 @@ class ProfileResponse(CamelCaseBaseModel):
     email: str
     username: str
     display_name: str | None
+    picture_url: str | None = Field(
+        description=(
+            "Where the profile photo is served from, or null when none is set. "
+            "The name in the URL changes whenever the photo does, so the value "
+            "is safe to cache forever."
+        )
+    )
     email_verified: bool
     fields: dict[str, Any] = Field(
         description="Organization-defined values, keyed by field key."

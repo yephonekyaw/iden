@@ -45,6 +45,7 @@ from provider.entity.sessions.routes import (  # noqa: E402
     router as entity_sessions_router,
 )
 from provider.entity.totp.routes import router as entity_totp_router  # noqa: E402
+from provider.media.routes import router as media_router  # noqa: E402
 
 router.include_router(discovery_router)
 router.include_router(oauth_router)
@@ -67,6 +68,8 @@ router.include_router(entity_totp_router)
 router.include_router(entity_sessions_router)
 router.include_router(entity_connections_router)
 router.include_router(entity_permissions_router)
+
+router.include_router(media_router)
 
 
 class LivenessResponse(CamelCaseBaseModel):

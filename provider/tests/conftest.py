@@ -27,6 +27,7 @@ from provider.core.config import settings
 from provider.core.db import Base, get_db_session
 from provider.core.redis import get_redis
 from provider.core.security import hash_secret
+from provider.core.storage import get_storage
 from provider.shared.enums import ClientType, GrantType
 from provider.shared.models import Client, ClientScope, ResourceApi, Scope, User
 
@@ -171,8 +172,34 @@ async def kiosk(db, catalogue) -> tuple[Client, str]:
     return client, secret
 
 
+class MemoryStorage:
+    """The blob store, in a dict.
+
+    The suite already needs PostgreSQL and Redis; a third container to hold two
+    hundred bytes of test JPEG would be a poor trade. This is the reason
+    `core.storage.Storage` is a protocol rather than the S3 client itself.
+    """
+
+    def __init__(self) -> None:
+        self.objects: dict[str, bytes] = {}
+
+    async def put(self, key: str, data: bytes, content_type: str) -> None:
+        self.objects[key] = data
+
+    async def get(self, key: str) -> bytes | None:
+        return self.objects.get(key)
+
+    async def delete(self, key: str) -> None:
+        self.objects.pop(key, None)
+
+
 @pytest.fixture
-async def client(engine, redis, monkeypatch) -> AsyncGenerator[AsyncClient]:
+def storage() -> MemoryStorage:
+    return MemoryStorage()
+
+
+@pytest.fixture
+async def client(engine, redis, storage, monkeypatch) -> AsyncGenerator[AsyncClient]:
     """An HTTP client wired to the app in-process — no live server, no port."""
     from provider.core import audit
     from provider.core.app import app
@@ -185,6 +212,7 @@ async def client(engine, redis, monkeypatch) -> AsyncGenerator[AsyncClient]:
 
     app.dependency_overrides[get_db_session] = override_db
     app.dependency_overrides[get_redis] = lambda: redis
+    app.dependency_overrides[get_storage] = lambda: storage
     # The audit middleware runs outside the dependency system, so its session
     # factory has to be redirected separately — otherwise it writes to the
     # developer's own database while the rest of the test uses iden_test.
