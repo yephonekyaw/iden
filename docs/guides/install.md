@@ -1,43 +1,71 @@
 # Install IDEN for your organization
 
-A working deployment, from a clone to a signed-in administrator, with a check on every part of it
-before anyone else is let in.
+This page takes you from an empty directory to a working deployment with a signed-in administrator,
+and then checks every part of it before anyone else is let in.
 
-For a five-minute look at the server alone, see [Run it locally](quickstart.md). This page is the
-whole system.
+Budget **about thirty minutes**: ten to get it running, twenty to walk through the verification at
+the end. Everything runs in Docker, so the only thing you install on the host is Docker itself.
+
+!!! tip "Just want to look at the server?"
+    [Run it locally](quickstart.md) starts the provider alone in about five minutes, without the
+    frontends. Come back here when you want the whole system.
 
 ## What you are installing
 
-| | | |
-|---|---|---|
-| **provider** | 8000 | The application. OIDC, administration, and self-service in one process. |
-| **auth-ui** | 4000 | The hosted login. The only place a password is typed. |
-| **dashboard** | 3000 | Administration and self-service. What each person sees is decided by their permissions. |
-| **PostgreSQL 18** | 5432 | People, permissions, clients, tokens. |
-| **Redis 8** | 6379 | Sessions, pending sign-ins, rate limits. |
+Six containers. `docker compose` builds and wires all of them.
 
-One organization per deployment. There is no tenant column anywhere, and the administrators are your
-staff rather than a vendor's — see [Single-organization by design][single-org].
+| Service | Port | What it is |
+|---|---|---|
+| **provider** | 8000 | The application itself. OIDC, administration, and self-service in one process. |
+| **auth-ui** | 4000 | The hosted sign-in page. The only place a password is ever typed. |
+| **dashboard** | 3000 | Administration and self-service. What each person sees is decided by their permissions. |
+| **PostgreSQL 18** | 5432 | People, permissions, clients, tokens. The data that matters. |
+| **Redis 8** | 6379 | Sessions, pending sign-ins, the token denylist, rate-limit counters. |
+| **SeaweedFS** | 8333 | S3-compatible object storage for profile photos. Optional — see below. |
+
+A seventh service, `migrate`, runs the database migrations to completion and then exits. It is a
+separate service rather than a startup step inside the provider so that running two provider replicas
+does not run the migrations twice, concurrently, against the same database.
+
+!!! info "The object store is optional"
+    Leave `IDEN_S3_ENDPOINT_URL` empty and IDEN runs without it — profile photo endpoints answer
+    `503` and every other feature works normally. The compose file includes SeaweedFS because it is
+    Apache-2.0 and runs as a single process, but the provider speaks the S3 API and nothing else, so
+    MinIO, Garage, or AWS S3 work by changing the endpoint and credentials.
+
+One deployment serves **one organization**. There is no tenant concept anywhere, and your own staff
+are the administrators rather than a vendor's — see [Single-organization by design](../index.md).
 
 ## Before you start
 
-- **Docker** with Compose. That is enough for everything below.
-- A hostname, if this is going anywhere but your laptop. Fill it in at step 3 rather than changing it
-  later — the issuer is compared exactly, and moving it invalidates every token and session.
+**Docker with Compose.** That is the only requirement. `docker compose version` should answer.
+
+**Decide your hostname now.** If this is going anywhere but your laptop, settle on the URL people
+will use before step 3, not after. The issuer is baked into every token and compared character for
+character, so changing it later invalidates every token and session in circulation.
+
+Throughout this page, `https://iden.example.org` stands for that hostname. On a laptop the defaults
+already work and you can leave every value alone.
 
 ---
 
 ## 1. Get the code
 
 ```bash
-git clone https://github.com/iden-project/iden.git
+git clone https://github.com/yephonekyaw/iden.git
 cd iden
 ```
 
-## 2. Generate signing keys
+Every command below runs from this directory unless it says otherwise.
 
-IDEN signs every token with an RSA key you own. It refuses to start without one, and it will not
-invent one for you — a key that appears by magic is a key nobody knows the provenance of.
+## 2. Generate a signing key
+
+IDEN signs every token it issues with an RSA private key that you own. It **refuses to start without
+one**, and it will not generate one silently — a key that appears by magic is a key whose provenance
+nobody can account for.
+
+Build the provider image first, then run the key generator inside it. This way you do not need Python
+on the host:
 
 ```bash
 docker compose -f deploy/docker-compose.yml build provider
@@ -47,52 +75,92 @@ docker run --rm -v "$PWD/provider/keys:/keys" -e IDEN_SIGNING_KEY_DIR=/keys \
 ```
 
 ```text
-Wrote signing key: /keys/iden-20260825.pem (kid: iden-20260825)
+Wrote signing key: /keys/iden-20260907.pem (kid: iden-20260907)
 ```
 
-The filename stem becomes the key's `kid`, and keys sort by name — which is what makes rotation a
-matter of adding a file rather than a migration. Back this directory up. Losing it signs everyone
-out permanently.
+**Check it worked:** `ls provider/keys/` shows one `.pem` file.
 
-!!! warning "Production keys belong in a secret store"
+The filename stem becomes the key's `kid`, and keys sort by name — which is what makes
+[rotation](../reference/configuration.md#rotating-a-signing-key) a matter of adding a file rather
+than running a migration.
+
+!!! danger "Back this directory up, separately from the database"
+    Anyone who can read these keys can mint a token for anyone. Losing them signs everyone out
+    permanently. Keep them out of the image, mount them read-only, and back them up somewhere you
+    would be comfortable keeping a password.
+
     `gen_keys` is for getting started. In production, mount the key from wherever your organization
     already keeps secrets, and never commit it.
 
 ## 3. Configure
 
-Everything the deployment needs is in `deploy/docker-compose.yml`. On a laptop it works unchanged.
-For a real hostname, four values have to agree:
+Everything the deployment needs is in `deploy/docker-compose.yml`.
 
-```yaml
-environment: &provider-env
-  IDEN_ENV: prod                                   # marks the session cookie Secure
-  IDEN_ISSUER: https://iden.example.org
-  IDEN_AUTH_UI_BASE_URL: https://iden.example.org
-  IDEN_ALLOWED_ADMIN_ORIGINS: '["https://iden.example.org"]'
-```
+=== "On a laptop"
 
-and both frontends get the same issuer:
+    Nothing to do. The defaults point at `localhost` and every port is published. Skip to step 4.
 
-```yaml
-auth-ui:
-  environment:
-    IDEN_ISSUER: https://iden.example.org
-dashboard:
-  environment:
-    IDEN_ISSUER: https://iden.example.org
-```
+=== "On a real hostname"
 
-| Setting | Why it is compared exactly |
+    Four values have to name the same origin. They live in the `&provider-env` block:
+
+    ```yaml
+    environment: &provider-env
+      IDEN_ENV: prod                                   # marks the session cookie Secure
+      IDEN_ISSUER: https://iden.example.org
+      IDEN_AUTH_UI_BASE_URL: https://iden.example.org
+      IDEN_ALLOWED_ADMIN_ORIGINS: '["https://iden.example.org"]'
+    ```
+
+    And both frontends need the issuer too, since they are static builds that read it at container
+    start:
+
+    ```yaml
+    auth-ui:
+      environment:
+        IDEN_ISSUER: https://iden.example.org
+    dashboard:
+      environment:
+        IDEN_ISSUER: https://iden.example.org
+    ```
+
+    A fifth value — the `dashboard` client's registered redirect URIs — is set in the database rather
+    than the compose file. Step 6 covers it.
+
+### Why these are compared exactly
+
+Getting one of them wrong produces a sign-in loop rather than an error message, which is why they are
+worth reading carefully.
+
+| Setting | What compares it |
 |---|---|
-| `IDEN_ISSUER` | Every client library validates the `iss` claim against it, character for character. |
-| `IDEN_AUTH_UI_BASE_URL` | Where `/authorize` sends people to sign in. The paths `/auth/login`, `/auth/consent` and `/auth/reset` are fixed. |
-| `IDEN_ALLOWED_ADMIN_ORIGINS` | Credentialed CORS forbids a wildcard, so every origin the dashboard is served from is named. |
-| The `dashboard` client's redirect URIs | Matched exactly — no wildcards, no trailing-slash forgiveness. Set at step 5. |
+| `IDEN_ISSUER` | Every client library validates the `iss` claim against it, character for character. It is the identity of this deployment. |
+| `IDEN_AUTH_UI_BASE_URL` | Where `/oauth2/authorize` sends people to sign in. The paths `/auth/login`, `/auth/consent` and `/auth/reset` are fixed and appended to it. |
+| `IDEN_ALLOWED_ADMIN_ORIGINS` | Credentialed CORS forbids a wildcard, so every browser origin that calls the provider directly must be named. |
+| The `dashboard` client's redirect URIs | Matched exactly — no wildcards, no prefix matching, no trailing-slash forgiveness. |
 
-Behind one hostname you want a reverse proxy in front of all three: the provider owns the protocol
-paths, auth-ui owns `/auth/*`, the dashboard owns the rest. A reference configuration is in
-`deploy/nginx/iden.conf.example`; TLS and flood protection stay yours, and
-[Deployment](../operations/deployment.md) explains why.
+### Naming your organization
+
+Both frontends show whose sign-in page this is. Set it on `auth-ui` and `dashboard`:
+
+```yaml
+environment:
+  IDEN_ORG_NAME: "Example University"
+  IDEN_ORG_LOGO_URL: "https://example.org/logo.svg"   # optional
+```
+
+The organization takes the larger type and IDEN drops to a caption beneath it. Leave `IDEN_ORG_NAME`
+empty and IDEN stands alone. Both are read at container start rather than baked in at build time, so
+one image serves any deployment.
+
+### Putting it behind one hostname
+
+To serve all three applications from a single origin you want a reverse proxy in front of them: the
+provider owns the protocol paths (`/oauth2/*`, `/.well-known/*`, `/admin/*`, `/entity/*`, `/health`),
+auth-ui owns `/auth/*`, and the dashboard owns everything else.
+
+A working reference configuration is `deploy/nginx/iden.conf.example`. TLS certificates and flood
+protection stay yours — [Deployment](../operations/deployment.md#behind-a-proxy) explains why.
 
 ## 4. Start everything
 
@@ -100,19 +168,35 @@ paths, auth-ui owns `/auth/*`, the dashboard owns the rest. A reference configur
 docker compose -f deploy/docker-compose.yml up -d --build
 ```
 
-Migrations run to completion before the provider starts, as their own service — so scaling the
-provider does not run them twice against the same database.
+The first build takes a few minutes. Startup then runs in a fixed order: PostgreSQL, Redis and
+SeaweedFS come up and report healthy, `migrate` creates the schema and exits, and only then does the
+provider start.
+
+**Check it worked:**
 
 ```bash
 docker compose -f deploy/docker-compose.yml ps
 ```
 
-All five services up, `provider` healthy.
+Six services running, and `migrate` shown as `exited (0)`. If `migrate` exited non-zero, nothing else
+will work — read `docker compose -f deploy/docker-compose.yml logs migrate` before going on.
+
+Then ask the provider itself:
+
+```bash
+curl -s http://localhost:8000/health
+```
+
+```json
+{"status": "ok", "database": "ok", "redis": "ok"}
+```
+
+`degraded` here names the dependency that is not answering.
 
 ## 5. Create the first administrator
 
-The schema exists but is empty. The seed fills it: IDEN's own permissions, the two starting roles,
-one administrator, and the two clients.
+The schema exists but is empty. The seed fills it: IDEN's own permission catalogue, the two starting
+roles, one administrator, and two clients.
 
 ```bash
 docker compose -f deploy/docker-compose.yml exec provider python -m scripts.seed
@@ -120,25 +204,46 @@ docker compose -f deploy/docker-compose.yml exec provider python -m scripts.seed
 
 ```text
 Seeded 25 system scopes across 2 APIs.
-  admin@localhost / _qajl3wRjjx6QsuXMO9YY5tw
-  kiosk client_secret: 7ZJbgK2um1y9QeliyysqElTJ-SUhC_8R8aXRygrmUgM
+
+  Bootstrap administrator — shown once, change it after first login
+    email:    admin@localhost
+    password: _qajl3wRjjx6QsuXMO9YY5tw
+
+  Kiosk client secret — shown once, it is hashed in the database
+    client_id:     kiosk
+    client_secret: 7ZJbgK2um1y9QeliyysqElTJ-SUhC_8R8aXRygrmUgM
 ```
 
-**Write both down now.** They are hashed on the way into the database and cannot be recovered.
+!!! warning "Write both down before you close the terminal"
+    They are hashed on the way into the database and cannot be recovered. If you lose the
+    administrator password, the only way back in is a fresh database.
 
-| What it created | |
+    You can set the password yourself instead of having one generated — put
+    `IDEN_BOOTSTRAP_ADMIN_PASSWORD` in the provider's environment before seeding.
+
+### What it created
+
+| | Detail |
 |---|---|
-| **Two APIs** | `admin` and `entity`, with all 25 of their permissions |
+| **Two APIs** | `admin` and `entity`, with all 25 of their [permissions](../reference/scopes.md) |
 | **Two roles** | `administrator` (everything) and `member` (self-service only) |
-| **One person** | The bootstrap administrator |
-| **`dashboard`** | A public client for the browser: PKCE, consent skipped as a first-party app |
-| **`kiosk`** | A confidential client, for machine-to-machine access |
+| **One person** | The bootstrap administrator, holding the `administrator` role |
+| **`dashboard`** | A public client for the browser: PKCE, and consent skipped as a first-party app |
+| **`kiosk`** | A confidential client for machine-to-machine access |
 
-The seed is idempotent — re-run it any time, including after an upgrade that ships new permissions.
-It creates nothing structural; that is [Alembic's job](../contributing/migrations.md).
+The seed is **idempotent** — re-run it any time, including after an upgrade that ships new
+permissions. Running it again on a seeded database prints `Nothing new to create` and leaves existing
+credentials untouched. It creates nothing structural; that is
+[Alembic's job](../contributing/migrations.md).
 
-On anything but a laptop, the `dashboard` client's redirect URIs still point at localhost. Fix that
-before signing in, from the Clients page or:
+## 6. Point the dashboard client at your hostname
+
+Skip this on a laptop — the seeded client already allows `http://localhost:3000/callback` and
+`http://localhost:5173/callback`.
+
+Anywhere else, the `dashboard` client's redirect URIs still name localhost, and the sign-in will loop
+until they name your origin. Fix it from the dashboard's **Clients** page once you are in, or
+directly:
 
 ```bash
 curl -X PATCH https://iden.example.org/admin/clients/{id} \
@@ -146,11 +251,15 @@ curl -X PATCH https://iden.example.org/admin/clients/{id} \
   -d '{"redirectUris": ["https://iden.example.org/callback"]}'
 ```
 
-## 6. Sign in
+## 7. Sign in
 
-Open <http://localhost:3000>. You are redirected to the login, and back to the dashboard afterwards.
+Open <http://localhost:3000> — or your own hostname.
 
-Change the bootstrap password immediately, under **Security**. A password that was printed to a
+You are redirected to the sign-in page, and back to the dashboard afterwards. That round trip is the
+whole system working: the dashboard is an ordinary OIDC client of the provider, with no special path
+of its own.
+
+**Change the bootstrap password immediately**, under **Security**. A password that was printed to a
 terminal and pasted into a chat window is not a password.
 
 ---
@@ -164,18 +273,21 @@ system, and the order matters — later rows depend on earlier ones.
 
 | Do this | You should see |
 |---|---|
-| Open the dashboard signed out | The login, showing which application is asking |
+| Open the dashboard signed out | The sign-in page, naming the application that is asking |
 | Sign in with the bootstrap password | The dashboard, with an **Administration** section in the sidebar |
-| **Security** → set up an authenticator, scan, confirm | Two-factor on |
-| Sign out, sign in again | The code step appears after the password |
+| **Security** → set up an authenticator, scan the QR code, confirm | Two-factor on |
+| Sign out, then sign in again | The code step now appears after the password |
 | **Sessions** | This browser listed as current, with `Password + Authenticator app` |
+
+That fourth row is worth pausing on. Once an authenticator is enrolled, IDEN asks for the code on
+**every** sign-in, whatever the application requested — see [Assurance](../concepts/assurance.md).
 
 ### Self-service
 
 | Do this | You should see |
 |---|---|
 | **Profile** → change your display name → Save changes | "Saved." |
-| **Security** → change your password | It asks you to confirm your password first, then reports how many other sessions were signed out |
+| **Security** → change your password | It asks you to confirm your current password first, then reports how many other sessions were signed out |
 | **Permissions** | Every permission you hold, each showing where it came from |
 
 That last screen is the one worth looking at twice. It answers *why can this person do that?* — and
@@ -200,13 +312,14 @@ A system that only works when you do the right thing has not been tested.
 
 | Do this | You should see |
 |---|---|
-| Sign in as the new user, with only the `member` role | No **Administration** section at all |
+| Sign in as the new user, who holds only the `member` role | No **Administration** section at all |
 | As that user, open `/admin/users` directly | An explanation, not a broken page |
 | As an administrator, open **Roles** → `administrator` | Marked built in, and not editable |
 | Try to delete an API whose scopes are in use | A refusal naming what still depends on it |
+| Try to remove the `administrator` role from your own account | A `409` refusal — you are the last one |
 | Enter a wrong password five times quickly | A countdown, not a generic error |
 
-The last two are the ones people skip. The refusals are the product.
+The last three are the ones people skip. The refusals are the product.
 
 ---
 
@@ -214,48 +327,53 @@ The last two are the ones people skip. The refusals are the product.
 
 In the order that avoids rework:
 
-1. **Profile fields** — what you record about people beyond name and email. Everyone's profile form
-   is built from this, so define it before you add people. See
-   [Define your profile schema](profile-schema.md).
-2. **APIs and scopes** — register each backend that will trust IDEN, and define the permissions it
-   understands. See [Validate tokens in your API](protect-an-api.md).
-3. **Roles** — bundle those permissions into job functions. Name them after the job, not the
-   permissions.
+1. **[Profile fields](profile-schema.md)** — what you record about people beyond name and email.
+   Everyone's profile form is built from this, so define it before you add anyone.
+2. **[APIs and scopes](protect-an-api.md)** — register each backend that will trust IDEN, and define
+   the permissions it understands.
+3. **Roles** — bundle those permissions into job functions. Name them after the job, not after the
+   permissions they happen to contain.
 4. **Groups** — your departments and teams. Give them roles; membership does the rest.
 5. **People** — add them, put them in groups. Direct grants exist for genuine exceptions, not as the
    normal path.
-6. **Your applications** — register each one and choose what it may request. See
-   [Register your application](register-a-client.md).
+6. **[Your applications](register-a-client.md)** — register each one and choose what it may request.
 
 ## Before you let anyone else in
 
-Work through [Before you expose it](../operations/security-checklist.md). The short version: TLS with
-`IDEN_ENV=prod`, a proxy doing flood protection, the bootstrap password changed, and the signing keys
-backed up somewhere that is not this server.
+Work through [Before you expose it](../operations/security-checklist.md) in full. The short version:
+TLS with `IDEN_ENV=prod`, a proxy doing flood protection, the bootstrap password changed, and the
+signing keys backed up somewhere that is not this server.
 
 ## Common problems
 
 ??? failure "`No signing keys in /keys`"
     Step 2 was skipped, or the keys directory did not exist when Docker mounted it — in which case
-    Docker created an empty one. Generate the key, then `docker compose restart provider`.
+    Docker helpfully created an empty one. Generate the key, then
+    `docker compose -f deploy/docker-compose.yml restart provider`.
 
 ??? failure "`No schema found. Run alembic upgrade head first.`"
-    The `migrate` service has not finished, or failed. `docker compose logs migrate` says which. The
-    seed refuses to half-fill a database rather than leaving you with one that half-matches the code.
+    The `migrate` service has not finished, or failed. `docker compose -f deploy/docker-compose.yml
+    logs migrate` says which. The seed refuses to half-fill a database rather than leaving you with
+    one that half-matches the code.
 
 ??? failure "The dashboard redirects forever and never signs in"
-    `IDEN_ISSUER`, `IDEN_ALLOWED_ADMIN_ORIGINS` and the `dashboard` client's redirect URIs do not all
-    name the same origin. All three are compared exactly. The browser console usually names which
-    one — a CORS refusal or an `invalid_request` on the redirect URI.
+    The usual cause, and almost always one of three settings not naming the same origin:
+    `IDEN_ISSUER`, `IDEN_ALLOWED_ADMIN_ORIGINS`, and the `dashboard` client's redirect URIs. All
+    three are compared exactly.
+
+    The browser console names which one — a CORS refusal points at the origin list, an
+    `invalid_request` on the redirect points at the client.
 
 ??? failure "Signing in works, then the dashboard immediately signs out again"
-    Usually the clock. Access tokens live about ten minutes, and a container whose time has drifted
-    issues tokens that are already expired.
+    Usually the clock. Access tokens live ten minutes, and a container whose time has drifted issues
+    tokens that are already expired. Check `date` inside the provider container against the host.
 
 ??? failure "`connection refused` on 5432"
-    Postgres has not finished starting. `docker compose ps` should show it healthy before the
-    provider tries.
+    PostgreSQL has not finished starting. `docker compose -f deploy/docker-compose.yml ps` should
+    show it healthy before the provider tries.
+
+??? failure "Profile photo upload answers `503`"
+    No object store is attached. Either set `IDEN_S3_ENDPOINT_URL` and its credentials, or accept it
+    — every other feature works without one.
 
 More in [Troubleshooting](troubleshooting.md).
-
-[single-org]: https://github.com/iden-project/iden#single-organization-by-design

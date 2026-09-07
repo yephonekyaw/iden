@@ -1,32 +1,42 @@
 # Run the frontends
 
-Working on the two browser applications themselves. To *deploy* them, see
-[Install it for your organization](install.md) — this page is about the development loop.
+The development loop for the two browser applications themselves. To *deploy* them, see
+[Install it for your organization](install.md) — this page is about editing them and seeing the
+change.
 
-IDEN ships two of them. They are what turns the API into something a person can use.
+IDEN ships two. They are what turns the API into something a person can use, and both are ordinary
+OIDC clients of the provider with no privileged path of their own.
 
-| App | Development port | What it does |
-|---|---|---|
-| **auth-ui** | 4000 | The hosted login. `/oauth2/authorize` redirects here for the password step, TOTP, and consent. It is the only place a password is typed. |
-| **dashboard** | 5173 | Administration and self-service in one app. What you see is decided by the scopes in your token. |
+| App | Dev port | Container port | What it does |
+|---|---|---|---|
+| **auth-ui** | 4000 | 4000 | The hosted sign-in page. `/oauth2/authorize` redirects here for the password step, TOTP, consent, and password recovery. The only place a password is typed. |
+| **dashboard** | 5173 | 3000 | Administration and self-service in one app. What you see is decided by the scopes in your token. |
 
-Both are React on Vite in the `web/` pnpm workspace, sharing a `shared` package: the design tokens,
-the generated API types, one axios client, and the components that render identity data. See
-[web/README.md][web-readme] for the layout.
+Both are React on Vite in the `web/` pnpm workspace, sharing an `@iden/shared` package: the design
+tokens, the generated API types, one axios client, and the components that render identity data.
+[`web/README.md`](https://github.com/yephonekyaw/iden/blob/dev/web/README.md) has the layout.
 
-## Start the provider
+The dev ports differ from the container ports for the dashboard, and both are already accounted for:
+5173 and 3000 are in the CORS allowlist and in the seeded `dashboard` client's redirect URIs, so
+either works without configuration.
+
+## 1. Start the provider
 
 The frontends have nothing to show without it. From `provider/`:
 
 ```bash
-docker compose -f ../deploy/docker-compose.yml up -d postgres redis
+docker compose -f ../deploy/docker-compose.yml up -d postgres redis seaweedfs
+
 uv run python -m scripts.gen_keys    # once — the provider will not start without a key
 uv run alembic upgrade head
 uv run python -m scripts.seed        # prints the bootstrap password, once
 uv run provider                      # http://localhost:8000
 ```
 
-## Start the frontends
+Leave `seaweedfs` out if you are not working on profile photos; those endpoints will answer `503` and
+nothing else changes. [Run it locally](quickstart.md) explains these steps in more detail.
+
+## 2. Start the frontends
 
 From `web/`:
 
@@ -35,9 +45,27 @@ pnpm install
 pnpm dev
 ```
 
-auth-ui serves on 4000 and the dashboard on 5173. Both ports work out of the box — 4000 is
-`IDEN_AUTH_UI_BASE_URL`, and 5173 is already in the CORS allowlist and in the `dashboard` client's
-redirect URIs. Open <http://localhost:5173> and you are sent through a real sign-in.
+`pnpm dev` runs both apps in parallel. auth-ui serves on 4000 and the dashboard on 5173, both with
+`strictPort` — if a port is taken, Vite fails rather than quietly moving, because a moved port breaks
+the redirect URI.
+
+Open <http://localhost:5173> and you are sent through a real sign-in: the dashboard redirects to
+`/oauth2/authorize`, the provider redirects to auth-ui on 4000, and you come back with a code.
+
+### Pointing them somewhere else
+
+Both read their configuration at runtime, not at build time, so one image serves any deployment. In
+`pnpm dev` that comes from Vite env vars; in a container it comes from `/config.js`, written by the
+entrypoint.
+
+| Variable | Effect |
+|---|---|
+| `VITE_IDEN_ISSUER` | The provider's origin. Must be in `IDEN_ALLOWED_ADMIN_ORIGINS`, since every call is credentialed. |
+| `VITE_IDEN_ORG_NAME` | Whose sign-in page this is. Takes the larger type; IDEN drops to a caption beneath it. |
+| `VITE_IDEN_ORG_LOGO` | Optional, sits beside the name. |
+
+Each app has an `.env.example` next to its `package.json` — copy it to `.env` and edit. The container
+equivalents drop the `VITE_` prefix: `IDEN_ISSUER`, `IDEN_ORG_NAME`, `IDEN_ORG_LOGO_URL`.
 
 ## Types come from the server
 
@@ -48,8 +76,12 @@ hand:
 pnpm gen:api
 ```
 
-It reads the schema out of the FastAPI application directly rather than over HTTP, so it works
-without a running server. Re-run it after changing any provider schema, and commit the result.
+It reads the schema out of the FastAPI application directly rather than over HTTP, so it works with
+no server, database, or Redis running. Re-run it after changing any provider schema, and commit the
+result — `web/shared/api/schema.d.ts` is checked in.
+
+If a type is wrong, the fix is in `provider/`. Editing the generated file is undone by the next
+person who runs the generator.
 
 ## Before you commit
 
@@ -59,21 +91,32 @@ pnpm typecheck
 pnpm build
 ```
 
-The same three run in CI. Conventions are in [GUIDELINES.md — Frontend Code][guidelines]; the visual
-system is `DESIGN.md`, transcribed once into `web/shared/tokens/theme.css` — every colour and size
-resolves there rather than being written inline.
-
-## Serving them from somewhere else
-
-Whichever origin serves the dashboard has to be named in three places that are all compared exactly,
-and getting one wrong is the usual cause of a dashboard that redirects forever. The settings, and how
-to change them, are in [Install it for your organization — Configure](install.md#3-configure).
+The same three run in CI (`.github/workflows/web.yml`). Conventions are in
+[GUIDELINES.md — Frontend Code][guidelines]; the visual system is `DESIGN.md`, transcribed once into
+`web/shared/tokens/theme.css` — every colour and size resolves there rather than being written
+inline.
 
 ## When something is wrong
 
-A blank dashboard that keeps redirecting almost always means the issuer, the CORS allowlist and the
-registered redirect URI do not all name the same origin — the browser console says which.
-[Troubleshooting](troubleshooting.md) covers the rest.
+??? failure "The dashboard redirects forever and never signs in"
+    The issuer, the CORS allowlist, and the registered redirect URI do not all name the same origin.
+    All three are compared exactly, and the browser console says which one — a CORS refusal points at
+    `IDEN_ALLOWED_ADMIN_ORIGINS`, an `invalid_request` on the redirect points at the client.
 
-[web-readme]: https://github.com/iden-project/iden/blob/main/web/README.md
-[guidelines]: https://github.com/iden-project/iden/blob/main/GUIDELINES.md
+    The settings, and how to change them, are in
+    [Install it for your organization](install.md#3-configure).
+
+??? failure "Vite refuses to start: port is already in use"
+    `strictPort` is deliberate. Something else holds 4000 or 5173 — usually the containerized
+    frontends from an earlier `docker compose up -d`. Stop them with
+    `docker compose -f ../deploy/docker-compose.yml stop auth-ui dashboard`.
+
+??? failure "Every API call fails with a CORS error"
+    The origin you are serving from is not in `IDEN_ALLOWED_ADMIN_ORIGINS`. Credentialed requests
+    forbid a wildcard, so it has to be named, and the provider has to be restarted after a change.
+
+??? failure "Sign-in works but the dashboard shows no Administration section"
+    That is the permission system working. The sidebar is built from the scopes in your token — sign
+    in as someone holding the `administrator` role.
+
+[guidelines]: https://github.com/yephonekyaw/iden/blob/dev/GUIDELINES.md

@@ -97,6 +97,7 @@ nav:
           - Validate tokens in your API: guides/protect-an-api.md
           - Handle single sign-out: guides/single-sign-out.md
           - Troubleshooting: guides/troubleshooting.md
+      - Sample applications: guides/sample-applications.md
       - Define your profile schema: guides/profile-schema.md
   - Reference:
       - reference/index.md

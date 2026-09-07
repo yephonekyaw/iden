@@ -3,6 +3,18 @@
 Task-shaped instructions. Each assumes you have read the [concepts](../concepts/index.md) it depends
 on, and links back where it matters.
 
+## Getting IDEN running
+
+Two paths, depending on what you are doing.
+
+- **[Install it for your organization](install.md)** — the whole system in containers, from a clone
+  to a signed-in administrator, with a check on every part before anyone else is let in. About thirty
+  minutes.
+- **[Run it locally](quickstart.md)** — the server alone, on your own machine, in about five minutes.
+  For reading the code, running the tests, or pointing an integration at something you control.
+- **[Run the frontends](run-the-frontends.md)** — the development loop for the sign-in page and the
+  dashboard themselves.
+
 ## Integrating an application
 
 Start here if you are connecting something you built to IDEN.
@@ -18,11 +30,14 @@ Start here if you are connecting something you built to IDEN.
 6. **[Handle single sign-out](single-sign-out.md)** — so that signing out means something.
 7. **[Troubleshooting](troubleshooting.md)** — symptom first, then what IDEN is telling you.
 
-## Running and administering IDEN
+**[Sample applications](sample-applications.md)** are three working integrations you can run: a
+playground that shows the raw protocol, a pair of apps sharing one session, and a stock Auth.js
+setup. Reading one is often faster than reading about one.
 
-- **[Install it for your organization](install.md)** — the whole system, from a clone to a
-  signed-in administrator, with a check on every part before anyone else is let in.
-- **[Run it locally](quickstart.md)** — the server alone, in about five minutes.
-- **[Run the frontends](run-the-frontends.md)** — the development loop for the login and the
-  dashboard themselves.
-- **[Define your profile schema](profile-schema.md)** — the fields your organization collects.
+## Administering IDEN
+
+- **[Define your profile schema](profile-schema.md)** — the fields your organization collects about
+  people, beyond name and email.
+
+Then [Before you expose it](../operations/security-checklist.md), which is the list to work through
+before anyone outside your own machine can reach the deployment.
