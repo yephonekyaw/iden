@@ -302,7 +302,7 @@ export function Code({
       <pre
         className={cn(
           "font-identity overflow-x-auto px-4 py-3 text-code whitespace-pre-wrap break-all",
-          tone === "error" ? "text-error" : "text-on-dark",
+          tone === "error" ? "text-error-soft" : "text-on-dark",
         )}
       >
         {value}

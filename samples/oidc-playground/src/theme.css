@@ -8,13 +8,15 @@
  * styling the playground, and both are yours to delete.
  *
  * Tokens and responses stay on the dark panels a debugger deserves; everything
- * around them is paper, ink and one loud accent. */
+ * around them is paper, ink and one warm accent. The colour is earth rather
+ * than neon: the force here comes from the 3px rules and the offset shadows,
+ * so a clay and an ochre carry it without anything having to be bright. */
 
 @theme {
-  --color-primary: #ff5c39;
-  --color-primary-active: #e6421f;
+  --color-primary: #cc785c;
+  --color-primary-active: #b05f43;
   --color-primary-disabled: #ddd6c6;
-  /* Ink on coral, not white: brutalism keeps one text colour and lets the
+  /* Ink on clay, not white: brutalism keeps one text colour and lets the
      background do the shouting. */
   --color-on-primary: #14110d;
 
@@ -38,13 +40,14 @@
   --color-hairline-soft: #14110d;
   --color-hairline-dark: #3a3428;
 
-  --color-success: #2fbf71;
-  --color-warning: #ffd23f;
-  --color-error: #ff3b30;
-  --color-accent-teal: #3ddad7;
-  --color-accent-amber: #ffd23f;
+  --color-success: #7d9270;
+  --color-warning: #d0ab53;
+  --color-error: #a9483a;
+  /* Brick is legible on paper and invisible on the dark panels, so the panels
+     get the one lighter tint in the palette. */
+  --color-error-soft: #e0947e;
 
-  --font-display: "Archivo", "Helvetica Neue", system-ui, -apple-system, sans-serif;
+  --font-display: "Archivo", "Arial Black", "Helvetica Neue", system-ui, sans-serif;
   --font-sans: "Space Grotesk", "Helvetica Neue", system-ui, -apple-system, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
 

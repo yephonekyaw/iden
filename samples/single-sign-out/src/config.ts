@@ -21,14 +21,14 @@ const APPS: Record<string, AppIdentity> = {
     id: "portal",
     name: "Campus Portal",
     tagline: "Timetable, grades, and everything else nobody reads.",
-    accent: "#ff5c39",
+    accent: "#cc785c",
     port: 5200,
   },
   library: {
     id: "library",
     name: "Library",
     tagline: "Loans, holds, and a fine you had forgotten about.",
-    accent: "#3ddad7",
+    accent: "#6f938c",
     port: 5201,
   },
 };
