@@ -15,15 +15,24 @@ the summary.
 | 4 | Self-service — profile, org-defined fields, credentials, TOTP, recovery | ✅ Done |
 | 5 | Biometrics — enrollment, verification, liveness | On hold |
 | 6 | Hardening — Docker, security headers, error contract, probes, coverage review | ✅ Done |
-| 7 | Front ends — the sign-in UI and the dashboard | Planned |
+| 7 | Frontends — the sign-in UI and the dashboard | ✅ Done |
 | 8 | Kiosk — device registration and enrollment | Planned |
+
+Phase 7 shipped both browser applications: `auth-ui` (password, TOTP, consent and recovery) and the
+dashboard (self-service plus all seven admin resources, each gated on its read scope). Their own
+phased plan, with the same *Status* notes, is
+[`web/PLAN.md`](https://github.com/yephonekyaw/iden/blob/dev/web/PLAN.md). What is outstanding there
+is a visual review: the screens have been verified functionally and in containers, not walked through
+in a browser with a designer's eye.
 
 Migrations, the audit log, and rate limiting were all pulled forward out of Phase 6. Each was
 scheduled late and each got more expensive with every phase that passed — history not written is
 lost, and an unmigrated schema needs manual surgery.
 
 Phase 5 is on hold rather than next: the biometric module is the only part with an external
-dependency, and everything it plugs into already exists.
+dependency, and everything it plugs into already exists. Phase 7 was taken ahead of it for the same
+reason in reverse — the provider had no human-usable surface, and a system nobody can sign into is
+hard to evaluate.
 
 ## Open issues
 

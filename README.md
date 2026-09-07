@@ -626,7 +626,7 @@ network.
 ## Quick Start
 
 ```bash
-git clone https://github.com/iden-project/iden.git
+git clone https://github.com/yephonekyaw/iden.git
 cd iden
 
 # IDEN signs tokens with a key you own, and refuses to start without one.

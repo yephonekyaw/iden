@@ -51,15 +51,20 @@ The trade is that IDEN cannot host two organizations. If you need that, run two 
 
 ## What it supports today
 
-| | |
+| Capability | Where it stands |
 |---|---|
 | **Sign-in** | Password, and TOTP as a second factor. Face recognition is designed for and not yet built. |
 | **OAuth flows** | Authorization code with PKCE, and client credentials. Nothing else — see [Tokens](concepts/tokens.md#why-only-two-flows). |
 | **Single sign-on** | One session across every application, with silent checks, forced re-authentication, and freshness requirements. |
 | **Single sign-out** | Ending a session ends it everywhere, via back-channel logout. |
 | **Permissions** | Defined at runtime by administrators, assigned to people directly, through roles, or through groups. |
-| **Profile fields** | Whatever your organization actually collects — a university and a company need different things. |
+| **Profile fields** | Whatever your organization actually collects — a university and a company need different things. Photos too, given an S3-compatible store. |
 | **Audit** | Every state-changing request, permanently. |
+| **Two browser apps** | A hosted sign-in page and an administration dashboard, both branded with your organization's name and logo. |
+
+The dashboard and the sign-in page are ordinary OIDC clients of the provider, with no privileged path
+of their own — which means the API surface they use is the one you get. Everything they can do,
+[your own applications](guides/register-a-client.md) can do.
 
 ## What it does not do
 

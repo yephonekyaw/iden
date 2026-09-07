@@ -3,6 +3,22 @@
 See [Run it locally](../guides/quickstart.md) for the environment. This page is about working on the
 code.
 
+## The scripts
+
+Four, all run from `provider/` as `uv run python -m scripts.<name>`.
+
+| Script | Does |
+|---|---|
+| `gen_keys` | Writes a date-stamped RSA signing key into `IDEN_SIGNING_KEY_DIR`. Refuses to overwrite an existing one for today. |
+| `seed` | Upserts the system catalogue and the bootstrap clients and administrator. Idempotent, and refuses to run against an unmigrated database. |
+| `reset` | Drops the schema, flushes Redis, migrates, and seeds. Asks first; `--yes` skips the prompt. Refuses when `IDEN_ENV=prod`. |
+| `cleanup` | Deletes expired authorization codes and refresh tokens. `--dry-run` counts instead. Meant for a schedule — see [Deployment](../operations/deployment.md#housekeeping). |
+
+`reset` flushes Redis as well as dropping the schema, and that is the part people forget doing it by
+hand: sessions outlive the rows they point at, so a database-only reset leaves live cookies naming
+users who no longer exist, and the next request fails in a way that looks like a bug rather than a
+stale login.
+
 ## The checks
 
 All four run from `provider/`, and all four are expected to be clean:

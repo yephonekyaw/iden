@@ -22,7 +22,7 @@ signing keys, supported algorithms. Never hardcode endpoint paths; they come fro
 
 Set these explicitly if your library asks:
 
-| | |
+| Setting | IDEN |
 |---|---|
 | Response type | `code` — nothing else |
 | PKCE | **Required**, `S256`. Not optional, even for confidential clients. |

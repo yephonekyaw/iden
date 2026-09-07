@@ -2,7 +2,7 @@
 
 ## What has to run
 
-| | |
+| Component | Why |
 |---|---|
 | **provider** | The application. One process, one port, all modules. |
 | **PostgreSQL 18** | With the `pgvector` extension, for the biometrics that come later. |
@@ -89,7 +89,7 @@ Rotation is filename-ordered; see [Configuration](../reference/configuration.md#
 
 ## Backups
 
-| | |
+| What | Policy |
 |---|---|
 | **PostgreSQL** | The real data. Back it up. |
 | **Signing keys** | Back them up separately, with different access. |
