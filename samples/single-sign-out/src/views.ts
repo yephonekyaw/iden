@@ -7,7 +7,7 @@ import type { Session } from "./sessions.js";
  * No build step and no framework: `pnpm install` then run. For a demo that has
  * to work on somebody else's laptop five minutes before it starts, that matters
  * more than anything a framework would buy. The styling is neo-brutalist —
- * black rules, hard shadows, flat colour — and lives in `public/style.css`.
+ * black rules, hard shadows, flat earth colour — and lives in `public/style.css`.
  */
 
 const escape = (value: unknown): string =>
@@ -24,6 +24,12 @@ function shell(body: string, options: { poll?: boolean } = {}): string {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${escape(config.name)} · IDEN sample</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Archivo 900 for the shouting, Space Grotesk for prose, JetBrains Mono for
+     anything you would copy. Every stack in style.css falls back to a system
+     face, so the demo still looks right on a laptop with no network. -->
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;900&family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/style.css">
 <style>:root { --accent: ${config.accent}; }</style>
 </head>

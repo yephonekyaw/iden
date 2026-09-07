@@ -182,7 +182,7 @@ export function Stage({
           aria-hidden="true"
           className={cn(
             "flex h-9 w-9 shrink-0 items-center justify-center border-[3px] border-ink",
-            "text-title-sm tabular-nums",
+            "font-display text-title-lg font-black tabular-nums",
             done ? "bg-primary text-on-primary" : "bg-canvas text-ink",
           )}
         >
