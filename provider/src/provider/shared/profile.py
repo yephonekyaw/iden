@@ -34,6 +34,14 @@ RESERVED_CLAIMS = frozenset(
         "scope",
         "client_id",
         "token_type",
+        # Standard OIDC claims IDEN emits itself under `profile` and `email`.
+        # A field claiming one of these names would be silently overwritten at
+        # mint time, so it is refused when the field is defined instead.
+        "name",
+        "preferred_username",
+        "picture",
+        "email",
+        "email_verified",
     }
 )
 
