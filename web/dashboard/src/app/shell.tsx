@@ -1,4 +1,5 @@
 import {
+  Avatar,
   Badge,
   Brand,
   cn,
@@ -137,17 +138,7 @@ function Section({
   );
 }
 
-/** The initials the avatar falls back to; there are no uploaded pictures here. */
-function initials(name: string) {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  const first = parts.at(0) ?? "";
-  const last = parts.at(-1) ?? "";
-  if (!first) return "?";
-  const letters = parts.length === 1 ? first.slice(0, 2) : first.slice(0, 1) + last.slice(0, 1);
-  return letters.toUpperCase();
-}
-
-function AccountMenu({ name, email }: { name: string; email: string }) {
+function AccountMenu({ name, email, picture }: { name: string; email: string; picture?: string }) {
   const signOut = useSignOut();
 
   return (
@@ -159,12 +150,11 @@ function AccountMenu({ name, email }: { name: string; email: string }) {
           "data-[state=open]:bg-surface-dark-soft",
         )}
       >
-        <span
-          aria-hidden="true"
-          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-dark-elevated text-caption text-on-dark"
-        >
-          {initials(name || email)}
-        </span>
+        <Avatar
+          name={name || email}
+          src={picture}
+          className="bg-surface-dark-elevated text-on-dark"
+        />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-body-sm text-on-dark">{name || email}</span>
           {name && email ? (
@@ -195,6 +185,10 @@ export function Shell() {
 
   const name = auth.user?.profile.name ?? auth.user?.profile.preferred_username ?? "";
   const email = auth.user?.profile.email ?? "";
+  // From the ID token, like the name beside it, so it lags a photo the person
+  // has just changed until their next sign-in. The profile page shows the
+  // current one, which is where they were looking when they changed it.
+  const picture = auth.user?.profile.picture;
 
   const sections = SECTIONS.map((section) => ({
     ...section,
@@ -253,7 +247,7 @@ export function Shell() {
             open ? "block" : "hidden md:block",
           )}
         >
-          <AccountMenu name={name} email={email} />
+          <AccountMenu name={name} email={email} picture={picture} />
         </div>
       </nav>
 
