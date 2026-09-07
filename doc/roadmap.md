@@ -8,15 +8,15 @@ the summary.
 
 | Phase | Focus | Status |
 |---|---|---|
-| 0 | Foundation — config, database, models, security, seed | ✅ Done |
-| 1 | AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, sign-in | ✅ Done |
-| 2 | Admin — users, groups, roles, APIs, scopes, clients | ✅ Done |
-| 3 | SSO — `prompt`, `max_age`, `sid`, single sign-out | ✅ Done |
-| 4 | Self-service — profile, org-defined fields, credentials, TOTP, recovery | ✅ Done |
-| 5 | Biometrics — enrollment, verification, liveness | On hold |
-| 6 | Hardening — Docker, security headers, error contract, probes, coverage review | ✅ Done |
-| 7 | Frontends — the sign-in UI and the dashboard | ✅ Done |
-| 8 | Kiosk — device registration and enrollment | Planned |
+| 0 | Foundation — config, database, models, security, seed | :material-check-circle-outline: Done |
+| 1 | AuthZ core — discovery, JWKS, authorize + PKCE, token, userinfo, sign-in | :material-check-circle-outline: Done |
+| 2 | Admin — users, groups, roles, APIs, scopes, clients | :material-check-circle-outline: Done |
+| 3 | SSO — `prompt`, `max_age`, `sid`, single sign-out | :material-check-circle-outline: Done |
+| 4 | Self-service — profile, org-defined fields, credentials, TOTP, recovery | :material-check-circle-outline: Done |
+| 5 | Biometrics — enrollment, verification, liveness | :material-pause-circle-outline: On hold |
+| 6 | Hardening — Docker, security headers, error contract, probes, coverage review | :material-check-circle-outline: Done |
+| 7 | Frontends — the sign-in UI and the dashboard | :material-check-circle-outline: Done |
+| 8 | Kiosk — device registration and enrollment | :material-circle-outline: Planned |
 
 Phase 7 shipped both browser applications: `auth-ui` (password, TOTP, consent and recovery) and the
 dashboard (self-service plus all seven admin resources, each gated on its read scope). Their own
