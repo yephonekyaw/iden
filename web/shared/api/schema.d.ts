@@ -291,7 +291,10 @@ export interface paths {
          * Sign in with a password
          * @description Verifies the password, records `pwd` in the session's `amr`, and returns where to go next.
          *
-         *     When the client requested an assurance level the password alone does not reach, the response is `totpRequired` rather than a resume URL.
+         *     The response is `totpRequired` rather than a resume URL in two cases, and they answer to different people:
+         *
+         *     - the client asked for an assurance level a password alone does not reach (`acr_values`), or
+         *     - **this person has an authenticator set up.** Once they do, a password alone stops being enough to sign in as them, whatever the client asked for. A second factor that applied only when an application requested it would protect nobody — whoever holds the password would use an application that does not ask.
          *
          *     **Required scope:** none — this is how a session is established.
          */
@@ -1224,6 +1227,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/entity/profile/photo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set your profile photo
+         * @description Uploads an image and makes it your profile photo, replacing any previous one.
+         *
+         *     The file is decoded, turned upright from its EXIF orientation, cropped square, resized to 512px and re-encoded as WebP. Nothing you upload is stored as it arrived — re-encoding is what discards the metadata a camera records, including where the photo was taken.
+         *
+         *     The new photo is served from a fresh unguessable URL, so the one the previous photo used stops resolving. Clients granted the `profile` scope see the URL as the standard `picture` claim.
+         *
+         *     **Required scope:** `entity:profile:write`
+         */
+        put: operations["set_photo_entity_profile_photo_put"];
+        post?: never;
+        /**
+         * Remove your profile photo
+         * @description Deletes the stored image and clears `pictureUrl`. Removing a photo that is not set succeeds and changes nothing.
+         *
+         *     **Required scope:** `entity:profile:write`
+         */
+        delete: operations["delete_photo_entity_profile_photo_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/entity/credentials/password": {
         parameters: {
             query?: never;
@@ -1462,6 +1497,30 @@ export interface paths {
          *     **Required scope:** `entity:permissions:read`
          */
         get: operations["read_permissions_entity_permissions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/media/avatars/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Fetch a profile photo
+         * @description The image bytes for one profile photo, as WebP.
+         *
+         *     Public: this is the URL IDEN puts in the `picture` claim, and it is fetched by `<img>` tags that cannot send an `Authorization` header. The file name is unguessable and is replaced whenever the photo is, so the previous URL stops resolving.
+         *
+         *     **Required scope:** none — this endpoint is public.
+         */
+        get: operations["read_avatar_media_avatars__name__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1716,6 +1775,14 @@ export interface components {
             client_id?: string | null;
             /** Client Secret */
             client_secret?: string | null;
+        };
+        /** Body_set_photo_entity_profile_photo_put */
+        Body_set_photo_entity_profile_photo_put: {
+            /**
+             * File
+             * @description The image to use. JPEG, PNG, WebP or GIF.
+             */
+            file: string;
         };
         /** Body_token_oauth2_token_post */
         Body_token_oauth2_token_post: {
@@ -2677,6 +2744,11 @@ export interface components {
             username: string;
             /** Displayname */
             displayName: string | null;
+            /**
+             * Pictureurl
+             * @description Where the profile photo is served from, or null when none is set. The name in the URL changes whenever the photo does, so the value is safe to cache forever.
+             */
+            pictureUrl: string | null;
             /** Emailverified */
             emailVerified: boolean;
             /**
@@ -6266,6 +6338,77 @@ export interface operations {
             };
         };
     };
+    set_photo_entity_profile_photo_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_set_photo_entity_profile_photo_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            /** @description The file is not a readable image, or is too large */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+            /** @description This deployment has no file storage configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
+    delete_photo_entity_profile_photo_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileResponse"];
+                };
+            };
+            /** @description This deployment has no file storage configured */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ErrorResponse"];
+                };
+            };
+        };
+    };
     change_password_entity_credentials_password_post: {
         parameters: {
             query?: never;
@@ -6601,6 +6744,52 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PermissionsResponse"];
                 };
+            };
+        };
+    };
+    read_avatar_media_avatars__name__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description The file name from `pictureUrl`. */
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The image. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/webp": unknown;
+                };
+            };
+            /** @description No photo is stored under that name. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description This deployment has no file storage configured. */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
