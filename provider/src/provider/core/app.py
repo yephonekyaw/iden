@@ -293,6 +293,11 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    # Neither of these is CORS-safelisted, so without naming them here a browser
+    # hands the application a 403 or a 429 stripped of the one part that says
+    # what to do about it — the step-up challenge of RFC 9470, and how long to
+    # wait. `allow_headers` does not cover this; it governs the request.
+    expose_headers=["WWW-Authenticate", "Retry-After"],
 )
 
 # Outermost, so the headers reach responses the inner middleware produces on
