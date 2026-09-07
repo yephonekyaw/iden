@@ -159,7 +159,10 @@ class AuditMiddleware:
 
         async def receive_copying_body() -> Message:
             message = await receive()
-            if message["type"] == "http.request":
+            # Stop copying once there is more than the detail extractor will
+            # look at. Without the cap, uploading a photo buys a second copy of
+            # the whole file in memory to derive nothing from.
+            if message["type"] == "http.request" and len(body) <= MAX_BODY_BYTES:
                 body.extend(message.get("body", b""))
             return message
 
