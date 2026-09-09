@@ -2,10 +2,17 @@
 
 The two browser applications that make IDEN usable by people rather than by `curl`.
 
-| App           | Port            | What it is                                                                                           |
-| ------------- | --------------- | ---------------------------------------------------------------------------------------------------- |
-| **auth-ui**   | 4000            | The hosted login. `/oauth2/authorize` redirects here; it is the only place a password is ever typed. |
-| **dashboard** | 3000 (dev 5173) | One SPA for both administrators and ordinary people. Navigation renders from the token's scopes.     |
+| App           | Port            | Path        | What it is                                                                                           |
+| ------------- | --------------- | ----------- | ---------------------------------------------------------------------------------------------------- |
+| **auth-ui**   | 4000            | `/auth/`    | The hosted login. `/oauth2/authorize` redirects here; it is the only place a password is ever typed. |
+| **dashboard** | 3000 (dev 5173) | `/console/` | One SPA for both administrators and ordinary people. Navigation renders from the token's scopes.     |
+
+Both are served from a sub-path, in `pnpm dev` as well as in a container, because a deployment puts
+all three applications on one origin. The dashboard cannot be at the root there: the provider's API
+owns `/admin/*` and the dashboard's own admin screens have the same names.
+
+Each app's path is Vite's `base`. Everything else derives from it — the built asset URLs, React
+Router's `basename`, the OIDC redirect URI — so it is changed in one place and rebuilt.
 
 Both are React 19 + TypeScript on Vite, sharing `@iden/shared` — design tokens, the generated API
 types, one axios client, and the components that render identity data.
@@ -29,11 +36,12 @@ Then from `web/`:
 
 ```bash
 pnpm install
-pnpm dev            # auth-ui on :4000, dashboard on :5173
+pnpm dev            # auth-ui on :4000/auth/, dashboard on :5173/console/
 ```
 
-Open the dashboard. It redirects to `/oauth2/authorize`, which redirects to auth-ui, which brings
-you back signed in.
+Open <http://localhost:5173/console/>. It redirects to `/oauth2/authorize`, which redirects to
+auth-ui, which brings you back signed in. The dev server redirects its own root to the base, so
+<http://localhost:5173> gets you there too.
 
 Or run everything in containers, which serves the dashboard on its production port:
 
