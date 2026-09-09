@@ -13,6 +13,16 @@ class Settings(BaseSettings):
     # must stay empty otherwise: OIDC requires /.well-known/* at the host root.
     iden_api_prefix: str = ""
     iden_allowed_admin_origins: list[str] = []
+    # Addresses whose `X-Forwarded-For` is believed, comma-separated; CIDRs are
+    # accepted. Empty trusts nobody, which is right when nothing sits in front:
+    # the socket peer is then the only honest answer.
+    #
+    # Behind a proxy this is the one place that decides whose claim about the
+    # caller's address is accepted, and both the rate limiter and the audit log
+    # rest on the answer. Name the proxy. Never `*`, which accepts the header
+    # from anyone and makes every per-address limit and every audited address
+    # forgeable.
+    iden_forwarded_allow_ips: str = ""
 
     # Issuer
     iden_issuer: str = "http://localhost:8000"

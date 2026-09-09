@@ -317,4 +317,10 @@ def main():
         port=8000,
         log_config=None,
         reload=settings.iden_env == "dev",
+        # Uvicorn rewrites `scope["client"]` from `X-Forwarded-For` when the peer
+        # is trusted, which is why neither the rate limiter nor the audit log has
+        # to know a proxy exists. An empty list trusts nobody — uvicorn's own
+        # default trusts loopback, and that is a decision worth making out loud
+        # rather than inheriting.
+        forwarded_allow_ips=settings.iden_forwarded_allow_ips or [],
     )

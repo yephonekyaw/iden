@@ -27,10 +27,15 @@ from provider.core.redis import RedisDep
 def client_ip(request: Request) -> str:
     """The address to attribute an attempt to.
 
-    The socket peer, not `X-Forwarded-For`: a header the caller sets is a claim,
-    and trusting it would let anyone spread their attempts across as many
-    imaginary addresses as they like. Behind a proxy this means the limit
-    applies per proxy, which is why the proxy should be doing its own.
+    The socket peer — unless that peer is a trusted proxy, in which case it is
+    the address that proxy claims in `X-Forwarded-For`. `IDEN_FORWARDED_ALLOW_IPS`
+    draws that line and uvicorn applies it before any of this runs, so what
+    arrives here is already the answer.
+
+    Which line is drawn matters more than it looks. Trust nothing and every
+    request behind a proxy shares one bucket, so a limit meant to be per caller
+    becomes a cap on the whole deployment. Trust everything and a header anyone
+    can set decides who they are counted as, which is no limit at all.
     """
     return request.client.host if request.client else "unknown"
 
