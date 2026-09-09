@@ -1,62 +1,160 @@
-# Reference reverse-proxy configuration for a single-host IDEN deployment.
+# Reference reverse proxy for a single-origin IDEN deployment behind a
+# Cloudflare Tunnel. Copy to iden.conf and change the two marked values.
 #
-# Not wired into docker-compose.yml on purpose: certificates are site-specific
-# and the proxy is where flood protection belongs, so the proxy is the
-# operator's — see doc/operations/deployment.md. Copy this, point it at your
-# own upstreams, and terminate TLS in front of it.
+#   browser --HTTPS--> Cloudflare --tunnel--> cloudflared --HTTP--> nginx --> apps
 #
-# The routing below is what the architecture assumes: one origin for everything,
-# with the provider owning the protocol paths, auth-ui owning /auth/*, and the
-# dashboard owning whatever is left.
+# No TLS here on purpose. Cloudflare terminates it at the edge and cloudflared
+# always speaks plain HTTP to the origin, so a `listen 443 ssl` block would
+# never be reached and an http->https redirect would loop forever: cloudflared
+# would follow it back out to Cloudflare and in again. See
+# doc/operations/cloudflare-tunnel.md.
 #
-# One thing to get right: IDEN_ISSUER, IDEN_AUTH_UI_BASE_URL and the client's
-# registered redirect URIs must all name *this* origin. The issuer is compared
-# exactly, and a mismatch breaks the login round-trip in ways that look like a
-# cookie problem.
+# One origin, three applications, and the split is not arbitrary:
+#
+#   /oauth2/*  /.well-known/*  /admin/*  /entity/*  /api/v1/auth/*  /media/*
+#                                                            -> provider
+#   /auth/*                                                  -> auth-ui
+#   /console/*                                               -> dashboard
+#
+# The dashboard is on /console rather than the root because the provider's API
+# already owns /admin/*, and the dashboard's own admin screens have the same
+# names. Both frontends are built with a matching Vite `base`, so their assets
+# are served from /auth/assets and /console/assets and cannot collide.
+#
+# IDEN_ISSUER, IDEN_AUTH_UI_BASE_URL and the dashboard client's redirect URI
+# must all name this origin. The issuer is compared character for character,
+# and a mismatch fails as a sign-in loop rather than an error.
 
-upstream iden_provider  { server provider:8000; }
-upstream iden_auth_ui   { server auth-ui:4000; }
-upstream iden_dashboard { server dashboard:3000; }
+upstream iden_provider  { server provider:8000; keepalive 32; }
+upstream iden_auth_ui   { server auth-ui:4000;  keepalive 16; }
+upstream iden_dashboard { server dashboard:3000; keepalive 16; }
+
+# ---------------------------------------------------------------------------
+# CHANGE ME: the network cloudflared connects from.
+#
+# `docker network inspect <project>_default -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'`
+# prints it. Everything on this range is trusted to state the caller's address,
+# so keep it as narrow as the deployment allows — ideally a network carrying
+# only cloudflared and nginx.
+set_real_ip_from 172.20.0.0/16;
+
+# Cloudflare's own header, not X-Forwarded-For: it always holds exactly one
+# address — the peer Cloudflare itself observed — and the edge overwrites
+# whatever the client sent. Trustworthy here precisely because the tunnel is
+# the only way in; publish a port to the origin and it stops being.
+real_ip_header CF-Connecting-IP;
+
+# The coarse limit. IDEN's own limits are per account and per address and sit
+# behind Python; this one refuses a flood before Python is involved at all.
+# Keyed on $binary_remote_addr, which real_ip has already corrected — without
+# that this would rate-limit the tunnel as a single client, which is to say the
+# entire internet as one bucket.
+limit_req_zone $binary_remote_addr zone=iden_credentials:10m rate=10r/s;
+# Default is 503, which reads as an outage and carries no Retry-After. RFC 6585
+# says 429, and that is what client libraries back off on.
+limit_req_status 429;
 
 server {
-  listen 443 ssl;
-  server_name iden.example.org;
+  # The tunnel decides which hostnames reach this origin, so there is nothing
+  # for nginx to filter on. default_server means a request that arrives with an
+  # unexpected Host is still answered rather than falling through to nowhere.
+  listen 80 default_server;
+  server_name _;
 
-  ssl_certificate     /etc/ssl/certs/iden.crt;
-  ssl_certificate_key /etc/ssl/private/iden.key;
+  # Applies wherever a location does not override it. The one upload IDEN
+  # accepts is a profile photo, and its own limit is IDEN_AVATAR_MAX_BYTES;
+  # nginx's 1m default would refuse a 3 MB photo first, with an HTML error page
+  # instead of the documented JSON one.
+  client_max_body_size 1m;
 
-  # IDEN's own rate limits assume a proxy in front of it doing the coarse work.
-  limit_req_zone $binary_remote_addr zone=iden_auth:10m rate=10r/s;
+  # --- provider: OIDC protocol and both resource servers ---
 
-  # The provider: OIDC protocol, both resource servers, and health.
-  location ~ ^/(oauth2|\.well-known|admin|entity|biometric|health) {
+  # Exact match, so it takes precedence over the /oauth2/ prefix below. Token
+  # exchange verifies a client secret with argon2, which is expensive for the
+  # server in the same way the password endpoints are.
+  location = /oauth2/token {
+    limit_req zone=iden_credentials burst=20 nodelay;
     proxy_pass http://iden_provider;
-    include /etc/nginx/proxy_params;
+    include /etc/nginx/conf.d/proxy.inc;
   }
 
-  # The credential endpoints, where the coarse limit is worth having.
-  location /api/v1/auth/ {
-    limit_req zone=iden_auth burst=20 nodelay;
+  location ^~ /oauth2/ {
     proxy_pass http://iden_provider;
-    include /etc/nginx/proxy_params;
+    include /etc/nginx/conf.d/proxy.inc;
   }
 
-  # The hosted login. These three paths are fixed — the provider redirects to
-  # them by name.
-  location /auth/ {
+  location ^~ /.well-known/ {
+    proxy_pass http://iden_provider;
+    include /etc/nginx/conf.d/proxy.inc;
+  }
+
+  # Where a password is checked. argon2 is deliberately slow, so this is both a
+  # brute-force target and a way to spend the machine's CPU.
+  location ^~ /api/v1/auth/ {
+    limit_req zone=iden_credentials burst=20 nodelay;
+    proxy_pass http://iden_provider;
+    include /etc/nginx/conf.d/proxy.inc;
+  }
+
+  # The admin API. The trailing slash matters: without it this would also
+  # capture /administrators and anything else merely starting with the word.
+  location ^~ /admin/ {
+    proxy_pass http://iden_provider;
+    include /etc/nginx/conf.d/proxy.inc;
+  }
+
+  # The one endpoint that accepts a file.
+  location = /entity/profile/photo {
+    client_max_body_size 6m;
+    proxy_pass http://iden_provider;
+    include /etc/nginx/conf.d/proxy.inc;
+  }
+
+  location ^~ /entity/ {
+    proxy_pass http://iden_provider;
+    include /etc/nginx/conf.d/proxy.inc;
+  }
+
+  # Profile photos. Public by design — this is the URL in the `picture` claim,
+  # fetched by <img> tags that cannot present a token.
+  location ^~ /media/ {
+    proxy_pass http://iden_provider;
+    include /etc/nginx/conf.d/proxy.inc;
+  }
+
+  # --- the frontends ---
+
+  location = /auth { return 301 /auth/; }
+
+  location ^~ /auth/ {
     proxy_pass http://iden_auth_ui;
-    include /etc/nginx/proxy_params;
+    include /etc/nginx/conf.d/proxy.inc;
   }
 
-  # Everything else is the dashboard.
-  location / {
+  location = /console { return 301 /console/; }
+
+  location ^~ /console/ {
     proxy_pass http://iden_dashboard;
-    include /etc/nginx/proxy_params;
+    include /etc/nginx/conf.d/proxy.inc;
   }
-}
 
-server {
-  listen 80;
-  server_name iden.example.org;
-  return 301 https://$host$request_uri;
+  # --- everything else ---
+
+  # The bare origin is the dashboard, which now lives one level down.
+  location = / { return 302 /console/; }
+
+  # Health is for whoever runs this deployment, not for the internet: it says
+  # whether PostgreSQL and Redis are reachable. Point monitoring at the
+  # provider container directly.
+  location = /health      { deny all; }
+  location ^~ /health/    { deny all; }
+
+  # /docs, /redoc and /openapi.json are deliberately absent. The provider
+  # already refuses to serve them when IDEN_ENV=prod; not routing them here
+  # means a deployment that is accidentally still in dev does not publish the
+  # shape of its admin API either.
+
+  # No path but the ones above belongs to anything. Saying so is what stops a
+  # future frontend route from being quietly answered by the API.
+  location / { return 404; }
 }
