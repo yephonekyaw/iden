@@ -16,7 +16,7 @@ COPY dashboard/ dashboard/
 RUN pnpm --filter @iden/dashboard build
 
 FROM nginx:alpine
-COPY --from=build /app/dashboard/dist /usr/share/nginx/html
+COPY --from=build /app/dashboard/dist /usr/share/nginx/html/console
 COPY dashboard/nginx.conf /etc/nginx/conf.d/default.conf
 COPY dashboard/entrypoint.sh /docker-entrypoint.d/40-iden-config.sh
 RUN chmod +x /docker-entrypoint.d/40-iden-config.sh

@@ -31,9 +31,12 @@ from provider.shared.models import (
 )
 from provider.shared.scopes import system_apis, system_roles
 
+# The dashboard is served from /console -- the origin root's /admin/* is this
+# API's, and the app's own admin screens have the same names. Both ports because
+# `pnpm dev` serves on 5173 and the container on 3000.
 DASHBOARD_REDIRECT_URIS = [
-    "http://localhost:5173/callback",
-    "http://localhost:3000/callback",
+    "http://localhost:5173/console/callback",
+    "http://localhost:3000/console/callback",
 ]
 
 

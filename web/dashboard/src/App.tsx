@@ -5,6 +5,7 @@ import { ErrorResponse } from "oidc-client-ts";
 import { useAuth, type ErrorContext } from "react-oidc-context";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { IdenAuthProvider } from "./app/auth";
+import { basePath } from "./app/config";
 import { Shell } from "./app/shell";
 import { ProfileRoute } from "./features/account/profile";
 import { SecurityRoute } from "./features/account/security";
@@ -98,7 +99,7 @@ const router = createBrowserRouter([
       { path: "*", element: <Navigate to="/account/profile" replace /> },
     ],
   },
-]);
+], { basename: basePath });
 
 /**
  * Sits between the OIDC provider and the router: nothing renders until there is

@@ -1,7 +1,7 @@
 import { parseScopes } from "@iden/shared";
 import { useMemo } from "react";
 import { useAuth } from "react-oidc-context";
-import { config } from "./config";
+import { basePath, config } from "./config";
 
 /**
  * The scopes actually granted, read from the token.
@@ -40,7 +40,7 @@ export function useSignOut(): () => Promise<void> {
       await fetch(url, { credentials: "include", redirect: "manual" });
     } finally {
       await auth.removeUser();
-      window.location.assign("/");
+      window.location.assign(`${basePath}/`);
     }
   };
 }

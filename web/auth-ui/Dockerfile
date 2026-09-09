@@ -16,7 +16,7 @@ COPY auth-ui/ auth-ui/
 RUN pnpm --filter @iden/auth-ui build
 
 FROM nginx:alpine
-COPY --from=build /app/auth-ui/dist /usr/share/nginx/html
+COPY --from=build /app/auth-ui/dist /usr/share/nginx/html/auth
 COPY auth-ui/nginx.conf /etc/nginx/conf.d/default.conf
 COPY auth-ui/entrypoint.sh /docker-entrypoint.d/40-iden-config.sh
 RUN chmod +x /docker-entrypoint.d/40-iden-config.sh
