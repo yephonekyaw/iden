@@ -10,12 +10,13 @@ copy when running the provider outside a container.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `IDEN_ENV` | `dev` | `prod` makes the session cookie `Secure`. |
+| `IDEN_ENV` | `dev` | `prod` makes the session cookie `Secure`, sends HSTS, and withholds `/docs`, `/redoc` and `/openapi.json`. |
 | `IDEN_LOG_LEVEL` | `info` |  |
 | `IDEN_API_PREFIX` | *empty* | Mount the whole app under a sub-path. Must stay empty otherwise — OIDC requires `/.well-known/*` at the host root. |
-| `IDEN_ALLOWED_ADMIN_ORIGINS` | `[]` | Origins allowed to send credentialed requests, beyond the Auth UI. |
+| `IDEN_ALLOWED_ADMIN_ORIGINS` | `[]` | Browser origins allowed to send credentialed requests, beyond the Auth UI. Empty is correct when everything is on one origin: same-origin calls are not cross-origin and there is nothing to permit. |
+| `IDEN_FORWARDED_ALLOW_IPS` | *empty* | Addresses whose `X-Forwarded-For` is believed, comma-separated; CIDRs accepted. Empty trusts nobody, which is right with nothing in front. Behind a proxy, **name the proxy's network** — see below. Never `*`. |
 | `IDEN_ISSUER` | `http://localhost:8000` | **The identity of this deployment.** It appears in every token, and clients validate against it. Changing it invalidates everything already issued. |
-| `IDEN_AUTH_UI_BASE_URL` | `http://localhost:4000` | Where `/authorize` sends people to sign in. |
+| `IDEN_AUTH_UI_BASE_URL` | `http://localhost:4000` | The **origin** the Auth UI is served from; `/auth/login`, `/auth/consent` and `/auth/reset` are appended to it. On a single-origin deployment this is the same value as `IDEN_ISSUER`. |
 | `IDEN_DATABASE_URL` | `postgresql+asyncpg://iden:iden@localhost:5432/iden` |  |
 | `IDEN_REDIS_URL` | `redis://localhost:6379/0` | Sessions, pending sign-ins, the denylist, and rate-limit counters. |
 | `IDEN_S3_ENDPOINT_URL` | *empty* | Blob storage, over the S3 API. Empty means none is attached and profile photos are unavailable; nothing else changes. |
@@ -46,7 +47,7 @@ than compiled in — one image serves any deployment. The entrypoint writes thes
 
 | Variable | Default | Notes |
 |---|---|---|
-| `IDEN_ISSUER` | `http://localhost:8000` | The provider's origin. Must appear in `IDEN_ALLOWED_ADMIN_ORIGINS`, since every call these apps make is credentialed. |
+| `IDEN_ISSUER` | `http://localhost:8000` | The provider's origin, which is what these apps call. If it differs from the origin the app itself is served from, that **serving** origin is the one that has to appear in `IDEN_ALLOWED_ADMIN_ORIGINS` — CORS permits the caller, not the callee. |
 | `IDEN_ORG_NAME` | *empty* | Whose sign-in page this is. Takes the larger type wherever both appear, with IDEN as a caption beneath. Empty and IDEN stands alone. |
 | `IDEN_ORG_LOGO_URL` | *empty* | Any URL the browser can reach. Sits beside the name. |
 
@@ -54,7 +55,7 @@ Under `pnpm dev` there is no container, so the same three are read from Vite env
 with a `VITE_` prefix — `VITE_IDEN_ISSUER`, `VITE_IDEN_ORG_NAME`, `VITE_IDEN_ORG_LOGO`. Each app has
 an `.env.example` to copy.
 
-## The three that matter in production
+## The four that matter in production
 
 **`IDEN_ISSUER`** is the identity of the deployment. It goes into every token and every client
 validates against it. Set it to the public HTTPS URL, and treat changing it as invalidating every
@@ -64,7 +65,18 @@ token in circulation.
 mint a token for anyone. Mount it read-only, keep it off the image, and back it up somewhere you
 would be comfortable keeping a password.
 
-**`IDEN_ENV=prod`** makes the session cookie `Secure`, so it is never sent over plain HTTP.
+**`IDEN_ENV=prod`** makes the session cookie `Secure`, so it is never sent over plain HTTP. It also
+withholds the interactive docs, which are the complete shape of the admin API.
+
+**`IDEN_FORWARDED_ALLOW_IPS`** decides who the caller is. IDEN reads the address from the socket
+unless the peer is named here, in which case it takes the address that peer states in
+`X-Forwarded-For`. Both the per-address rate limits and the `ip` column of the audit log rest on the
+answer.
+
+Empty behind a proxy makes every per-address limit a deployment-wide one — `TOKEN_PER_IP` stops
+being 120 requests a minute per caller and becomes 120 a minute in total — and writes the proxy's
+address into every audit row. `*` accepts the header from anyone, which makes both forgeable. Name
+the proxy's network, and no more of it than necessary.
 
 ## Rotating a signing key
 

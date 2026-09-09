@@ -55,17 +55,76 @@ skipping it leaves administrators unable to reach new endpoints.
 
 ## Behind a proxy
 
-Two things IDEN needs from whatever sits in front of it:
+Four things IDEN needs from whatever sits in front of it. The third is the one that is usually
+missed, and the one that fails as an outage rather than an error.
 
-**TLS.** Set `IDEN_ENV=prod` so the session cookie is marked `Secure` and never travels in the clear.
+[Behind a Cloudflare Tunnel](cloudflare-tunnel.md) is this arrangement written out end to end, with
+a tested `nginx` configuration in `deploy/nginx/iden.conf.example`.
 
-**Flood protection.** IDEN rate-limits sign-ins and token exchanges, but it reads the caller's
-address from the socket and never from `X-Forwarded-For` — a header the caller sets is a claim, not
-an observation. Behind a proxy every request appears to come from the proxy, so IDEN's per-address
-limits stop being useful there and its per-account limits carry the weight.
+### TLS
 
-Use the proxy's own limiter for volume. nginx's `limit_req` refuses a connection before Python is
-involved at all, which is far cheaper than anything the application can do.
+Set `IDEN_ENV=prod` so the session cookie is marked `Secure` and never travels in the clear. It also
+withholds `/docs`, `/redoc` and `/openapi.json`, which otherwise publish the complete shape of your
+admin API to anyone who asks.
+
+If TLS is terminated at an edge — a CDN, a tunnel — make sure plain HTTP is redirected there rather
+than at your own proxy. A `Secure` cookie set over an `http://` visit is accepted by the browser and
+then never sent back, which presents as a sign-in loop with no error anywhere.
+
+### One origin, and the paths on it
+
+All three applications belong on one hostname, so that the session cookie is unambiguously
+first-party:
+
+| Path | Serves |
+|---|---|
+| `/.well-known/*`, `/oauth2/*`, `/api/v1/auth/*`, `/admin/*`, `/entity/*`, `/media/*` | provider |
+| `/auth/*` | auth-ui |
+| `/console/*` | dashboard |
+
+Two of these are not free choices. `/.well-known/*` must be at the **host root** — `IDEN_API_PREFIX`
+exists for unusual cases and must otherwise stay empty. And the dashboard cannot be at the root,
+because the provider's API already owns `/admin/*` and the dashboard's own admin screens have the
+same names; on one origin `/admin/users` has to be either the API or the page.
+
+The frontends are built with a Vite `base` matching their path, so their assets live under
+`/auth/assets/` and `/console/assets/`. Serving them from different paths means rebuilding them.
+
+### The caller's address
+
+IDEN attributes a request to an address in two places: the per-address rate limits, and the `ip`
+column of every audit row. Both read the same value, and behind a proxy that value is the proxy —
+unless you say otherwise.
+
+`IDEN_FORWARDED_ALLOW_IPS` names the addresses whose `X-Forwarded-For` is believed. It is empty by
+default, which trusts nobody and is right when nothing sits in front.
+
+!!! warning "Set it, and set it narrowly"
+    Left empty behind a proxy, every request appears to come from one address and the per-address
+    limits become deployment-wide ones. `TOKEN_PER_IP` stops being 120 requests a minute per caller
+    and becomes 120 a minute in total — an outage at a few hundred active sessions. Every audit row
+    records the proxy, so the log can no longer say where anyone signed in from.
+
+    Set to `*`, a header anyone can set decides who they are counted as, and every per-address limit
+    and every audited address becomes forgeable. **Never `*`.** Name the proxy's network.
+
+The proxy must send a matching header. Have it derive the value itself and send **one address**
+rather than appending to a chain — a chain is only read correctly if the trusted list names every
+hop that appended to it, and a missed hop silently yields that proxy's address instead of the
+caller's.
+
+### Flood protection
+
+IDEN's own limits are per account and per address, and they run inside Python. A coarse limit
+belongs in the proxy, where a flood is refused before Python is involved at all.
+
+Whatever limiter you use, it keys on an address too — so it needs the same correction. nginx's
+`limit_req_zone $binary_remote_addr` behind an uncorrected proxy rate-limits the proxy as a single
+client, which is to say the entire internet as one bucket.
+
+Two details worth setting: answer `429` rather than nginx's default `503`, which reads as an outage
+and carries no `Retry-After`; and cover `/oauth2/token` as well as `/api/v1/auth/*`, because token
+exchange verifies a client secret with argon2 in the same way the password routes do.
 
 ## Signing keys
 

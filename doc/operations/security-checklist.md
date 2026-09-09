@@ -9,10 +9,24 @@ Work through this before anyone outside your own machine can reach the deploymen
       against it.
 - [ ] **Signing keys are not in the image**, are mounted read-only, and are backed up separately.
 - [ ] **The bootstrap administrator's password has been changed** from the one the seed printed.
-- [ ] **A reverse proxy is rate-limiting by volume.** IDEN's own limits are per account and per
-      socket address; behind a proxy the second is the proxy.
+- [ ] **`IDEN_FORWARDED_ALLOW_IPS` names the proxy's network, and is not `*`.** It decides whose
+      claim about the caller's address is believed. Empty behind a proxy makes every per-address
+      rate limit a deployment-wide one and writes the proxy into every audit row; `*` makes both
+      forgeable by anyone. Verify it by signing in and reading the `ip` column of the audit log —
+      it must be your own address.
+- [ ] **A reverse proxy is rate-limiting by volume**, and its limiter keys on the corrected address
+      too. An uncorrected proxy limits itself as a single client, which is the whole internet in one
+      bucket.
 - [ ] **`IDEN_ALLOWED_ADMIN_ORIGINS` lists only origins you control.** It permits credentialed
-      cross-origin requests.
+      cross-origin requests. On a single-origin deployment it should be empty — there is no
+      cross-origin request to allow.
+- [ ] **`/docs`, `/redoc` and `/openapi.json` do not answer.** `IDEN_ENV=prod` withholds them; check
+      rather than assume, because they are the complete shape of the admin API.
+- [ ] **No service is published on a public interface.** Bind to loopback or to nothing. Docker
+      publishes ports through its own iptables chain, which a host firewall such as ufw does not
+      cover — so a `ports:` entry can be reachable from the internet on a host you believe is
+      closed. It also leaves a path to the provider that bypasses the proxy, and anything reaching
+      it that way can forge `X-Forwarded-For`.
 - [ ] **Database and Redis are not reachable from outside** the deployment network.
 - [ ] **The proxy does not strip or rewrite IDEN's response headers.** The application sets
       `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, and — when
