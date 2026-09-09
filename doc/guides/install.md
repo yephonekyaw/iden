@@ -17,8 +17,8 @@ Six containers. `docker compose` builds and wires all of them.
 | Service | Port | What it is |
 |---|---|---|
 | **provider** | 8000 | The application itself. OIDC, administration, and self-service in one process. |
-| **auth-ui** | 4000 | The hosted sign-in page. The only place a password is ever typed. |
-| **dashboard** | 3000 | Administration and self-service. What each person sees is decided by their permissions. |
+| **auth-ui** | 4000 | The hosted sign-in page, served under `/auth`. The only place a password is ever typed. |
+| **dashboard** | 3000 | Administration and self-service, served under `/console`. What each person sees is decided by their permissions. |
 | **PostgreSQL 18** | 5432 | People, permissions, clients, tokens. The data that matters. |
 | **Redis 8** | 6379 | Sessions, pending sign-ins, the token denylist, rate-limit counters. |
 | **SeaweedFS** | 8333 | S3-compatible object storage for profile photos. Optional — see below. |
@@ -102,30 +102,29 @@ Everything the deployment needs is in `deploy/docker-compose.yml`.
 
 === "On a real hostname"
 
-    Four values have to name the same origin. They live in the `&provider-env` block:
+    Copy the environment file and edit that — not `docker-compose.yml`, which is tracked and would
+    conflict on your next upgrade:
 
-    ```yaml
-    environment: &provider-env
-      IDEN_ENV: prod                                   # marks the session cookie Secure
-      IDEN_ISSUER: https://iden.example.org
-      IDEN_AUTH_UI_BASE_URL: https://iden.example.org
-      IDEN_ALLOWED_ADMIN_ORIGINS: '["https://iden.example.org"]'
+    ```bash
+    cp deploy/.env.example deploy/.env
     ```
 
-    And both frontends need the issuer too, since they are static builds that read it at container
-    start:
-
-    ```yaml
-    auth-ui:
-      environment:
-        IDEN_ISSUER: https://iden.example.org
-    dashboard:
-      environment:
-        IDEN_ISSUER: https://iden.example.org
+    ```bash
+    IDEN_ENV=prod                              # Secure cookie, HSTS, no /docs
+    IDEN_ISSUER=https://iden.example.org
+    IDEN_AUTH_UI_BASE_URL=https://iden.example.org
+    IDEN_ALLOWED_ADMIN_ORIGINS=[]
     ```
 
-    A fifth value — the `dashboard` client's registered redirect URIs — is set in the database rather
-    than the compose file. Step 6 covers it.
+    All three applications sit on that one origin, so the issuer and the Auth UI base URL are the
+    same value, and the frontends pick it up from the same file.
+
+    `IDEN_ALLOWED_ADMIN_ORIGINS` stays **empty**: it permits *cross*-origin credentialed requests,
+    and on one origin the dashboard's calls are not cross-origin. Name an origin there only for a
+    browser application on some other host that calls the provider directly.
+
+    A fourth value — the `dashboard` client's registered redirect URIs — is set in the database
+    rather than in a file. Step 6 covers it.
 
 ### Why these are compared exactly
 
@@ -135,7 +134,7 @@ worth reading carefully.
 | Setting | What compares it |
 |---|---|
 | `IDEN_ISSUER` | Every client library validates the `iss` claim against it, character for character. It is the identity of this deployment. |
-| `IDEN_AUTH_UI_BASE_URL` | Where `/oauth2/authorize` sends people to sign in. The paths `/auth/login`, `/auth/consent` and `/auth/reset` are fixed and appended to it. |
+| `IDEN_AUTH_UI_BASE_URL` | The origin `/oauth2/authorize` sends people to. The paths `/auth/login`, `/auth/consent` and `/auth/reset` are fixed and appended to it, so this is an origin and never includes `/auth` itself. |
 | `IDEN_ALLOWED_ADMIN_ORIGINS` | Credentialed CORS forbids a wildcard, so every browser origin that calls the provider directly must be named. |
 | The `dashboard` client's redirect URIs | Matched exactly — no wildcards, no prefix matching, no trailing-slash forgiveness. |
 
@@ -155,12 +154,26 @@ one image serves any deployment.
 
 ### Putting it behind one hostname
 
-To serve all three applications from a single origin you want a reverse proxy in front of them: the
-provider owns the protocol paths (`/oauth2/*`, `/.well-known/*`, `/admin/*`, `/entity/*`, `/health`),
-auth-ui owns `/auth/*`, and the dashboard owns everything else.
+All three belong on one origin, so the session cookie is unambiguously first-party:
 
-A working reference configuration is `deploy/nginx/iden.conf.example`. TLS certificates and flood
-protection stay yours — [Deployment](../operations/deployment.md#behind-a-proxy) explains why.
+| Path | Serves |
+|---|---|
+| `/.well-known/*`, `/oauth2/*`, `/api/v1/auth/*`, `/admin/*`, `/entity/*`, `/media/*` | provider |
+| `/auth/*` | auth-ui |
+| `/console/*` | dashboard |
+| `/` | redirects to `/console/` |
+
+Two of those are fixed rather than chosen. Discovery must be at the **host root**, which is why
+`IDEN_API_PREFIX` must stay empty. And the dashboard cannot be at the root: the provider's API owns
+`/admin/*` and the dashboard's own admin screens have the same names, so on one origin
+`/admin/users` has to be either the API or the page.
+
+`deploy/nginx/iden.conf.example` is a tested configuration for exactly this.
+[Deployment](../operations/deployment.md#behind-a-proxy) explains what any proxy has to do —
+particularly `IDEN_FORWARDED_ALLOW_IPS`, without which every caller looks like the proxy.
+
+To put that origin on the internet with no inbound port at all, follow [Behind a Cloudflare
+Tunnel](../operations/cloudflare-tunnel.md).
 
 ## 4. Start everything
 
@@ -238,8 +251,8 @@ credentials untouched. It creates nothing structural; that is
 
 ## 6. Point the dashboard client at your hostname
 
-Skip this on a laptop — the seeded client already allows `http://localhost:3000/callback` and
-`http://localhost:5173/callback`.
+Skip this on a laptop — the seeded client already allows `http://localhost:3000/console/callback`
+and `http://localhost:5173/console/callback`.
 
 Anywhere else, the `dashboard` client's redirect URIs still name localhost, and the sign-in will loop
 until they name your origin. Fix it from the dashboard's **Clients** page once you are in, or
@@ -248,12 +261,12 @@ directly:
 ```bash
 curl -X PATCH https://iden.example.org/admin/clients/{id} \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
-  -d '{"redirectUris": ["https://iden.example.org/callback"]}'
+  -d '{"redirectUris": ["https://iden.example.org/console/callback"]}'
 ```
 
 ## 7. Sign in
 
-Open <http://localhost:3000> — or your own hostname.
+Open <http://localhost:3000/console/> — or your own hostname, which redirects `/` there for you.
 
 You are redirected to the sign-in page, and back to the dashboard afterwards. That round trip is the
 whole system working: the dashboard is an ordinary OIDC client of the provider, with no special path
@@ -313,7 +326,7 @@ A system that only works when you do the right thing has not been tested.
 | Do this | You should see |
 |---|---|
 | Sign in as the new user, who holds only the `member` role | No **Administration** section at all |
-| As that user, open `/admin/users` directly | An explanation, not a broken page |
+| As that user, open `/console/admin/users` directly | An explanation, not a broken page |
 | As an administrator, open **Roles** → `administrator` | Marked built in, and not editable |
 | Try to delete an API whose scopes are in use | A refusal naming what still depends on it |
 | Try to remove the `administrator` role from your own account | A `409` refusal — you are the last one |

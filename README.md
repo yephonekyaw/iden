@@ -641,14 +641,26 @@ docker compose -f deploy/docker-compose.yml exec provider python -m scripts.seed
 ```
 
 ```text
-#   http://localhost:3000                       — Dashboard SPA
+#   http://localhost:3000/console/              — Dashboard SPA
 #   http://localhost:4000/auth/login            — Login UI
 #   http://localhost:8000/oauth2/authorize      — OIDC authorize endpoint
 #   http://localhost:8000/.well-known/openid-configuration
 ```
 
-Each service publishes its own port; putting them behind one origin is the reverse proxy's job, and
-the proxy is yours — see `deploy/nginx/iden.conf.example`.
+Each service publishes its own port on loopback. In a real deployment all three sit on **one
+origin** — the provider at the root, the sign-in page under `/auth`, the dashboard under `/console`
+— which is what `deploy/nginx/iden.conf.example` sets up. To put that origin on the internet with
+no inbound port at all:
+
+```bash
+cp deploy/.env.example deploy/.env          # hostname, tunnel token
+cp deploy/nginx/iden.conf.example deploy/nginx/iden.conf
+
+docker compose -f deploy/docker-compose.yml \
+               -f deploy/docker-compose.tunnel.yml up -d --build
+```
+
+See [Behind a Cloudflare Tunnel](doc/operations/cloudflare-tunnel.md).
 
 ### Verify the Setup
 
@@ -657,7 +669,7 @@ curl http://localhost:8000/.well-known/openid-configuration
 curl http://localhost:8000/.well-known/jwks.json
 ```
 
-Then open the dashboard at <http://localhost:3000> and sign in.
+Then open the dashboard at <http://localhost:3000/console/> and sign in.
 
 The seed prints the bootstrap administrator's password **once** — it is hashed on the way into the
 database and cannot be recovered. Change it immediately after signing in.

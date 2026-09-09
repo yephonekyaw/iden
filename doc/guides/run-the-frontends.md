@@ -7,10 +7,18 @@ change.
 IDEN ships two. They are what turns the API into something a person can use, and both are ordinary
 OIDC clients of the provider with no privileged path of their own.
 
-| App | Dev port | Container port | What it does |
-|---|---|---|---|
-| **auth-ui** | 4000 | 4000 | The hosted sign-in page. `/oauth2/authorize` redirects here for the password step, TOTP, consent, and password recovery. The only place a password is typed. |
-| **dashboard** | 5173 | 3000 | Administration and self-service in one app. What you see is decided by the scopes in your token. |
+| App | Dev port | Container port | Path | What it does |
+|---|---|---|---|---|
+| **auth-ui** | 4000 | 4000 | `/auth/` | The hosted sign-in page. `/oauth2/authorize` redirects here for the password step, TOTP, consent, and password recovery. The only place a password is typed. |
+| **dashboard** | 5173 | 3000 | `/console/` | Administration and self-service in one app. What you see is decided by the scopes in your token. |
+
+Both are served from a **sub-path**, in development as well as in a container, because in a real
+deployment all three applications share one origin. The dashboard cannot sit at the root there: the
+provider's API owns `/admin/*` and the dashboard's own admin screens have the same names.
+
+The path is Vite's `base` in each app's `vite.config.ts`, and everything else follows from it — the
+built asset URLs, React Router's `basename`, the OIDC redirect URI. Change it in one place and
+rebuild; change it anywhere else and the two disagree.
 
 Both are React on Vite in the `web/` pnpm workspace, sharing an `@iden/shared` package: the design
 tokens, the generated API types, one axios client, and the components that render identity data.
@@ -49,8 +57,13 @@ pnpm dev
 `strictPort` — if a port is taken, Vite fails rather than quietly moving, because a moved port breaks
 the redirect URI.
 
-Open <http://localhost:5173> and you are sent through a real sign-in: the dashboard redirects to
-`/oauth2/authorize`, the provider redirects to auth-ui on 4000, and you come back with a code.
+Open <http://localhost:5173/console/> and you are sent through a real sign-in: the dashboard
+redirects to `/oauth2/authorize`, the provider redirects to auth-ui at
+<http://localhost:4000/auth/login>, and you come back to `/console/callback` with a code.
+
+Note the trailing paths. Vite's dev server redirects its root to the `base`, so
+<http://localhost:5173> lands on `/console/` — the same `302` the production proxy sends, which
+means the dev loop and the deployed one agree about where things live.
 
 ### Pointing them somewhere else
 
@@ -60,7 +73,7 @@ entrypoint.
 
 | Variable | Effect |
 |---|---|
-| `VITE_IDEN_ISSUER` | The provider's origin. Must be in `IDEN_ALLOWED_ADMIN_ORIGINS`, since every call is credentialed. |
+| `VITE_IDEN_ISSUER` | The provider's origin — what these apps call. In `pnpm dev` it is a different origin from the app itself, so the app's own origin (5173 or 4000) must be in `IDEN_ALLOWED_ADMIN_ORIGINS`: CORS permits the caller, not the callee. Behind one origin in production, nothing needs listing. |
 | `VITE_IDEN_ORG_NAME` | Whose sign-in page this is. Takes the larger type; IDEN drops to a caption beneath it. |
 | `VITE_IDEN_ORG_LOGO` | Optional, sits beside the name. |
 
