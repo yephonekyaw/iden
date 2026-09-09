@@ -10,16 +10,22 @@ the reason the abstraction is worth having at all.
 
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 import aioboto3
 from botocore.exceptions import ClientError
 from fastapi import Depends
-from types_aiobotocore_s3.client import S3Client
 
 from provider.core.config import settings
 from provider.core.errors import UnavailableError
 from provider.core.logging import logger
+
+if TYPE_CHECKING:
+    # Type stubs, and so a dev dependency. The runtime image is built with
+    # `uv sync --no-dev`, and importing this at module scope meant the provider
+    # container died on start with ModuleNotFoundError. Only ever an
+    # annotation, and annotations are not evaluated at runtime.
+    from types_aiobotocore_s3.client import S3Client
 
 
 class StorageUnavailable(UnavailableError):
