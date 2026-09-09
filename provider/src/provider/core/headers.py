@@ -12,7 +12,9 @@ from provider.core.config import settings
 
 # The provider serves JSON, so nothing may load. The docs UIs are the one
 # exception — they pull Swagger and ReDoc from a CDN — and they render no
-# user data, so a looser policy there costs nothing.
+# user data, so a looser policy there costs nothing. Those routes exist only
+# outside production (see `core.app`); the branch stays because the paths are
+# still reachable everywhere the docs are, which is everywhere they are used.
 API_CSP = "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
 DOCS_CSP = "frame-ancestors 'none'; base-uri 'none'"
 

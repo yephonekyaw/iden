@@ -59,6 +59,13 @@ async def lifespan(app: FastAPI):
     await redis_module.client.aclose()
 
 
+# The interactive docs are a development tool, and a deployment is reachable by
+# anyone the moment it is behind a proxy. `/openapi.json` is the complete shape
+# of the admin API -- every route, every field -- which is a map worth not
+# handing out. `app.openapi()` still builds the schema in process, so
+# `web/scripts/gen-api.sh` keeps working either way.
+_DOCS_ENABLED = settings.iden_env != "prod"
+
 app = FastAPI(
     title="IDEN Core Server",
     version="0.0.1",
@@ -67,6 +74,9 @@ app = FastAPI(
         "See `/.well-known/openid-configuration` for OIDC metadata."
     ),
     lifespan=lifespan,
+    docs_url="/docs" if _DOCS_ENABLED else None,
+    redoc_url="/redoc" if _DOCS_ENABLED else None,
+    openapi_url="/openapi.json" if _DOCS_ENABLED else None,
 )
 
 
