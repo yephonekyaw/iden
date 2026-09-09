@@ -16,6 +16,11 @@ web/**/dist/
 *.sql
 *.sqlite
 
+# Copied from the .example beside them and edited per deployment. deploy/.env
+# holds the tunnel token, which is a credential.
+.env
+deploy/nginx/iden.conf
+
 .DS_Store?
 ehthumbs.db
 Icon?

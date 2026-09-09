@@ -29,14 +29,14 @@ upstream iden_provider  { server provider:8000; keepalive 32; }
 upstream iden_auth_ui   { server auth-ui:4000;  keepalive 16; }
 upstream iden_dashboard { server dashboard:3000; keepalive 16; }
 
-# ---------------------------------------------------------------------------
-# CHANGE ME: the network cloudflared connects from.
+# The network cloudflared connects from. docker-compose.tunnel.yml pins the
+# project's network to this subnet precisely so that this value can be written
+# down rather than looked up after every `up`. Change one and change the other,
+# and keep IDEN_FORWARDED_ALLOW_IPS in deploy/.env in step with both.
 #
-# `docker network inspect <project>_default -f '{{range .IPAM.Config}}{{.Subnet}}{{end}}'`
-# prints it. Everything on this range is trusted to state the caller's address,
-# so keep it as narrow as the deployment allows — ideally a network carrying
-# only cloudflared and nginx.
-set_real_ip_from 172.20.0.0/16;
+# Everything on this range is trusted to state the caller's address, so keep it
+# as narrow as the deployment allows.
+set_real_ip_from 172.31.250.0/24;
 
 # Cloudflare's own header, not X-Forwarded-For: it always holds exactly one
 # address — the peer Cloudflare itself observed — and the edge overwrites
