@@ -5,8 +5,11 @@ import { cn } from "./cn";
 const SPOKES = [0, 45, 90, 135, 180, 225, 270, 315];
 
 /**
- * The IDEN mark: claims converging on one identity, drawn in DESIGN.md's
+ * The accent glyph: claims converging on one identity, drawn in DESIGN.md's
  * radial-spike vernacular. Inherits `currentColor` — it is type, not an image.
+ *
+ * This is punctuation, not the logo — it bullets eyebrows and captions at sizes
+ * where `Logo` would blur into a smudge. The lockup uses `Logo`.
  */
 export function Mark({ className, ...props }: React.ComponentProps<"svg">) {
   return (

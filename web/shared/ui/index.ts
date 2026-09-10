@@ -99,4 +99,5 @@ export { StatusDot } from "./status-dot";
 export { RowCard, Row, ROW_CARD } from "./rows";
 export { ScopeChip, ProvenanceRow, ProvenanceTrace, type ResolvedScope } from "./provenance";
 export { Brand } from "./brand";
+export { Logo } from "./logo";
 export { Mark } from "./mark";

@@ -1,5 +1,6 @@
 import type { Branding } from "../config";
 import { cn } from "./cn";
+import { Logo } from "./logo";
 import { Mark } from "./mark";
 
 /**
@@ -26,7 +27,7 @@ export function Brand({
   if (!organization && !logoUrl) {
     return (
       <span className={cn("inline-flex items-center gap-2.5", className)}>
-        <Mark className={cn("text-primary", page ? "h-5 w-5" : "h-4 w-4")} />
+        <Logo className={cn("text-primary", page ? "h-8 w-8" : "h-6 w-6")} />
         <span
           className={cn(
             "font-display tracking-[0.22em]",

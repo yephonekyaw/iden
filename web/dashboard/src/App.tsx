@@ -1,11 +1,11 @@
-import { Button, ErrorState, Spinner } from "@iden/shared";
+import { Brand, Button, ErrorState, Spinner } from "@iden/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { ErrorResponse } from "oidc-client-ts";
 import { useAuth, type ErrorContext } from "react-oidc-context";
 import { createBrowserRouter, Navigate, RouterProvider } from "react-router";
 import { IdenAuthProvider } from "./app/auth";
-import { basePath } from "./app/config";
+import { basePath, config } from "./app/config";
 import { Shell } from "./app/shell";
 import { ProfileRoute } from "./features/account/profile";
 import { SecurityRoute } from "./features/account/security";
@@ -153,8 +153,15 @@ function wasSignedOut(error: ErrorContext | undefined): boolean {
   );
 }
 
+/** The gate before the shell exists, so the lockup is the only thing naming
+    where the visitor has landed. */
 function Centered({ children }: { children: ReactNode }) {
-  return <div className="flex min-h-dvh items-center justify-center px-6">{children}</div>;
+  return (
+    <div className="flex min-h-dvh flex-col items-center justify-center gap-10 px-6">
+      <Brand branding={config.branding} variant="page" />
+      {children}
+    </div>
+  );
 }
 
 export function App() {
