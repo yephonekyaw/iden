@@ -69,14 +69,41 @@ rebuild.
 
 - A domain on Cloudflare, with the orange cloud enabled.
 - Docker with Compose on the host.
-- A working local deployment. Go through [Install it for your
-  organization](../guides/install.md) first — this page assumes the signing key exists and the
-  database is seeded.
+- The repository cloned on that host.
 
 **Decide the hostname now.** `IDEN_ISSUER` goes into every token and is compared character for
 character. Changing it later invalidates everything already issued.
 
 Throughout, `iden.example.org` stands for yours.
+
+## The order to do it in
+
+This page and [Install it for your organization](../guides/install.md) interleave — the tunnel needs
+a deployment to point at, and the deployment needs its hostname before it is seeded. Follow this
+sequence and neither doubles back on the other.
+
+| | Step | Where |
+|---|---|---|
+| 1 | Clone the repository | [install 1](../guides/install.md#1-get-the-code) |
+| 2 | Generate the signing key | [install 2](../guides/install.md#2-generate-a-signing-key) |
+| 3 | Create the tunnel, copy its token | [below](#1-create-the-tunnel) |
+| 4 | Write `deploy/.env` — hostname, token | [below](#2-configure-the-deployment) |
+| 5 | Copy `iden.conf.example` to `iden.conf` | [below](#2-configure-the-deployment) |
+| 6 | Start everything, **with the tunnel overlay** | [below](#3-start-it) |
+| 7 | Seed the first administrator | [install 5](../guides/install.md#5-create-the-first-administrator) |
+| 8 | Point the `dashboard` client at the hostname | [below](#4-point-the-dashboard-client-at-the-hostname) |
+| 9 | Change Cloudflare's settings | [below](#5-cloudflares-settings) |
+| 10 | Verify, then sign in | [below](#verify-it) · [install 7](../guides/install.md#7-sign-in) |
+| 11 | Work through the security checklist | [checklist](security-checklist.md) |
+| 12 | Take a backup, and restore it once | [backup](backup-and-restore.md#testing-it) |
+
+Steps 1, 2 and 7 are the install guide's; everything else is here. The install guide's own step 3
+and step 4 are replaced by steps 4–6 above, which are the same work with the tunnel in it.
+
+!!! tip "Already running it on a laptop?"
+    Then you have done 1, 2 and 7 already. Start at step 3, and at step 6 add the overlay to the
+    stack you have. The database and the signing key carry over — only the hostname changes, which
+    means redoing step 8.
 
 ---
 

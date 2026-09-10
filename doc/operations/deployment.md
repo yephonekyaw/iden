@@ -184,6 +184,9 @@ Rotation is filename-ordered; see [Configuration](../reference/configuration.md#
 | **Signing keys** | Back them up separately, with different access. |
 | **Redis** | Does not need backing up. Losing it signs everyone out and loses nothing permanent. |
 
+[Backup and restore](backup-and-restore.md) has the commands, the order to restore in, and how to
+test a backup without touching the deployment you are running.
+
 ## Health
 
 Three endpoints, because "is it healthy" is really three questions with different consequences.

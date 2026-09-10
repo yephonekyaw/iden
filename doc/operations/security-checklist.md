@@ -32,7 +32,9 @@ Work through this before anyone outside your own machine can reach the deploymen
       `Content-Security-Policy`, `X-Content-Type-Options`, `Referrer-Policy`, and — when
       `IDEN_ENV=prod` — `Strict-Transport-Security`. A proxy that adds its own copy of any of these
       leaves two policies to disagree with each other.
-- [ ] **Backups exist and have been restored at least once.** An untested backup is a hope.
+- [ ] **Backups exist and have been restored at least once.** An untested backup is a hope — see
+      [Backup and restore](backup-and-restore.md#testing-it), which restores into a throwaway
+      Compose project so the test cannot touch what you are running.
 
 ## Should be true
 

@@ -116,6 +116,7 @@ nav:
       - operations/index.md
       - Deployment: operations/deployment.md
       - Behind a Cloudflare Tunnel: operations/cloudflare-tunnel.md
+      - Backup and restore: operations/backup-and-restore.md
       - Before you expose it: operations/security-checklist.md
   - Contributing:
       - contributing/index.md
