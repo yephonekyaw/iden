@@ -11,6 +11,18 @@ from provider.entity.totp.errors import AlreadyEnrolled, NotEnrolling, WrongCode
 from provider.shared.models import TotpCredential, User
 
 
+def _label_safe(issuer: str) -> str:
+    """Strip what would split an `otpauth` label into the wrong pieces.
+
+    The label is `issuer:account`, and an authenticator app reads everything
+    before the first colon as the issuer — so a colon or a slash inside the
+    issuer arrives as two mangled halves. That is what the issuer URL did:
+    `https://iden.live` showed up as "https: //iden.live". The organization
+    name is operator-supplied, so it gets the same treatment.
+    """
+    return " ".join(issuer.replace(":", " ").replace("/", " ").split())
+
+
 async def _credential(session: AsyncSession, user: User) -> TotpCredential | None:
     return await session.scalar(
         select(TotpCredential).where(TotpCredential.user_id == user.id)
@@ -42,7 +54,7 @@ async def begin(session: AsyncSession, user: User) -> tuple[str, str]:
     await session.commit()
 
     uri = pyotp.TOTP(secret).provisioning_uri(
-        name=user.email, issuer_name=settings.iden_issuer
+        name=user.email, issuer_name=_label_safe(settings.organization_name)
     )
     return secret, uri
 

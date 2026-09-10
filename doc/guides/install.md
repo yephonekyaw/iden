@@ -165,6 +165,10 @@ The organization takes the larger type and IDEN drops to a caption beneath it. L
 empty and IDEN stands alone. Both are read at container start rather than baked in at build time, so
 one image serves any deployment.
 
+Give `IDEN_ORG_NAME` to the `provider` service as well — `deploy/docker-compose.yml` already does.
+It is the name an authenticator app files a TOTP credential under, so someone who enrolls sees
+`Example University: you@example.org` beside their code rather than the issuer URL.
+
 ### Putting it behind one hostname
 
 All three belong on one origin, so the session cookie is unambiguously first-party:

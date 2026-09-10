@@ -28,6 +28,11 @@ class Settings(BaseSettings):
     iden_issuer: str = "http://localhost:8000"
     iden_auth_ui_base_url: str = "http://localhost:4000"
 
+    # Branding. The same IDEN_ORG_NAME the two frontends read, so the name in
+    # the sign-in lockup and the name in someone's authenticator app are one
+    # setting rather than two that can disagree.
+    iden_org_name: str = ""
+
     # Storage
     iden_database_url: str = "postgresql+asyncpg://iden:iden@localhost:5432/iden"
     iden_redis_url: str = "redis://localhost:6379/0"
@@ -86,6 +91,11 @@ class Settings(BaseSettings):
     @property
     def blob_storage_configured(self) -> bool:
         return bool(self.iden_s3_endpoint_url)
+
+    @property
+    def organization_name(self) -> str:
+        """Who people think they are signing in to. IDEN when nothing is set."""
+        return self.iden_org_name or "IDEN"
 
     @property
     def admin_audience(self) -> str:

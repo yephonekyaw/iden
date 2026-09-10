@@ -4,10 +4,13 @@ The governing rule: a person may change anything about themselves that does not
 change what they are allowed to do.
 """
 
+from urllib.parse import unquote, urlparse
+
 import pyotp
 import pytest
 from sqlalchemy import select
 
+from provider.core.config import settings
 from provider.shared.models import ConsentGrant
 from tests.conftest import ADMIN_PASSWORD
 from tests.flows import get_tokens
@@ -138,6 +141,33 @@ class TestTotp:
 
         assert confirmed.status_code == 200
         assert confirmed.json()["enrolled"] is True
+
+    @pytest.mark.parametrize(
+        ("configured", "expected"),
+        [
+            ("Example University", "Example University"),
+            # Nothing configured: IDEN stands alone, as it does in the lockup.
+            ("", "IDEN"),
+            # What this replaced. The issuer URL's "://" split the label, and
+            # the authenticator showed "https: //iden.live" as the name.
+            ("https://iden.live", "https iden.live"),
+        ],
+    )
+    async def test_the_qr_code_is_filed_under_the_organization(
+        self, client, entity_headers, member, monkeypatch, configured, expected
+    ):
+        """Someone reads this label every time they sign in for years, so it
+        names the organization and their account — not the issuer URL."""
+        monkeypatch.setattr(settings, "iden_org_name", configured)
+
+        enrolled = (
+            await client.post("/entity/totp/enroll", headers=entity_headers)
+        ).json()
+
+        label = unquote(urlparse(enrolled["uri"]).path).lstrip("/")
+        issuer, _, account = label.partition(":")
+        assert issuer == expected
+        assert account == member.email
 
     async def test_a_wrong_code_does_not_enroll(self, client, entity_headers):
         await client.post("/entity/totp/enroll", headers=entity_headers)

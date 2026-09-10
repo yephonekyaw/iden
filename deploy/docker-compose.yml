@@ -88,6 +88,9 @@ services:
       IDEN_ISSUER: ${IDEN_ISSUER:-http://localhost:8000}
       IDEN_AUTH_UI_BASE_URL: ${IDEN_AUTH_UI_BASE_URL:-http://localhost:4000}
       IDEN_ALLOWED_ADMIN_ORIGINS: '${IDEN_ALLOWED_ADMIN_ORIGINS:-["http://localhost:3000","http://localhost:5173","http://localhost:5100"]}'
+      # The provider reads the organization name too: it is what an
+      # authenticator app files someone's second factor under.
+      IDEN_ORG_NAME: ${IDEN_ORG_NAME:-}
       # Whose X-Forwarded-For is believed. Empty here because nothing is in
       # front; the tunnel overlay names the network nginx proxies from.
       IDEN_FORWARDED_ALLOW_IPS: ${IDEN_FORWARDED_ALLOW_IPS:-}

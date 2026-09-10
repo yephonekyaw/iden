@@ -41,6 +41,7 @@ at `localhost:5432`, and inside a container that address is the container itself
 | `IDEN_FORWARDED_ALLOW_IPS` | *empty* | Addresses whose `X-Forwarded-For` is believed, comma-separated; CIDRs accepted. Empty trusts nobody, which is right with nothing in front. Behind a proxy, **name the proxy's network** — see below. Never `*`. |
 | `IDEN_ISSUER` | `http://localhost:8000` | **The identity of this deployment.** It appears in every token, and clients validate against it. Changing it invalidates everything already issued. |
 | `IDEN_AUTH_UI_BASE_URL` | `http://localhost:4000` | The **origin** the Auth UI is served from; `/auth/login`, `/auth/consent` and `/auth/reset` are appended to it. On a single-origin deployment this is the same value as `IDEN_ISSUER`. |
+| `IDEN_ORG_NAME` | *empty* | Whose deployment this is. The same variable the two frontends read — set it on all three. Here it names the TOTP credential an authenticator app files, so it is what someone sees beside their code. Empty means IDEN. |
 | `IDEN_DATABASE_URL` | `postgresql+asyncpg://iden:iden@localhost:5432/iden` |  |
 | `IDEN_REDIS_URL` | `redis://localhost:6379/0` | Sessions, pending sign-ins, the denylist, and rate-limit counters. |
 | `IDEN_S3_ENDPOINT_URL` | *empty* | Blob storage, over the S3 API. Empty means none is attached and profile photos are unavailable; nothing else changes. |
@@ -72,7 +73,7 @@ than compiled in — one image serves any deployment. The entrypoint writes thes
 | Variable | Default | Notes |
 |---|---|---|
 | `IDEN_ISSUER` | `http://localhost:8000` | The provider's origin, which is what these apps call. If it differs from the origin the app itself is served from, that **serving** origin is the one that has to appear in `IDEN_ALLOWED_ADMIN_ORIGINS` — CORS permits the caller, not the callee. |
-| `IDEN_ORG_NAME` | *empty* | Whose sign-in page this is. Takes the larger type wherever both appear, with IDEN as a caption beneath. Empty and IDEN stands alone. |
+| `IDEN_ORG_NAME` | *empty* | Whose sign-in page this is. Takes the larger type wherever both appear, with IDEN as a caption beneath. Empty and IDEN stands alone. The provider reads the same variable — give all three services the same value. |
 | `IDEN_ORG_LOGO_URL` | *empty* | Any URL the browser can reach. Sits beside the name. |
 
 Under `pnpm dev` there is no container, so the same three are read from Vite environment variables
