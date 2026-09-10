@@ -8,11 +8,24 @@
 | **PostgreSQL 18** | With the `pgvector` extension, for the biometrics that come later. |
 | **Redis 8** | Sessions, pending sign-ins, the denylist, rate limits. |
 | **An S3-compatible store** | Profile photos, and the biometric module's images later. Optional: leave `IDEN_S3_ENDPOINT_URL` empty and photos are unavailable, nothing else changes. |
-| **A reverse proxy** | TLS termination, and flood protection IDEN cannot do for itself. |
+| **A reverse proxy** | Puts all three applications on one origin, limits floods, and tells the provider who the caller is. |
 
 `provider/Dockerfile` and `deploy/docker-compose.yml` build and wire the first four;
-`docker compose -f deploy/docker-compose.yml up --build` is a working deployment. The proxy is not in
-that file, because certificates are site-specific.
+`docker compose -f deploy/docker-compose.yml up --build` is a working development deployment, with
+every port published on loopback.
+
+The proxy is `deploy/docker-compose.tunnel.yml`, an overlay adding nginx and `cloudflared`:
+
+```bash
+docker compose -f deploy/docker-compose.yml \
+               -f deploy/docker-compose.tunnel.yml up -d --build
+```
+
+TLS is **not** the proxy's job in that arrangement — Cloudflare terminates it at the edge, and the
+tunnel means no inbound port is open at all. [Behind a Cloudflare
+Tunnel](cloudflare-tunnel.md) is the full walkthrough. Terminating TLS on your own proxy instead is
+fine; `deploy/nginx/iden.conf.example` is then the routing to copy, with a `listen 443 ssl` block
+and certificates added.
 
 The object store there is SeaweedFS, chosen for its licence rather than its features — the provider
 speaks the S3 API and nothing else, so MinIO, Garage, or AWS S3 need only different values for
@@ -40,10 +53,27 @@ match the code.
 
 ## Upgrading
 
-```bash
-uv run alembic upgrade head
-uv run python -m scripts.seed     # only if new permissions shipped
-```
+=== "Compose"
+
+    ```bash
+    git pull
+    docker compose -f deploy/docker-compose.yml up -d --build
+    ```
+
+    The `migrate` service runs `alembic upgrade head` to completion before the provider starts, so
+    the schema is handled. Add the tunnel overlay's `-f` if you deploy with it. Then, **only if the
+    release shipped new permissions**:
+
+    ```bash
+    docker compose -f deploy/docker-compose.yml exec provider python -m scripts.seed
+    ```
+
+=== "Running it directly"
+
+    ```bash
+    uv run alembic upgrade head
+    uv run python -m scripts.seed     # only if new permissions shipped
+    ```
 
 Read the release notes for new permissions — the seed adds them to the `administrator` role, and
 skipping it leaves administrators unable to reach new endpoints.

@@ -190,9 +190,35 @@ Tunnel](../operations/cloudflare-tunnel.md).
 
 ## 4. Start everything
 
-```bash
-docker compose -f deploy/docker-compose.yml up -d --build
-```
+=== "On a laptop"
+
+    ```bash
+    docker compose -f deploy/docker-compose.yml up -d --build
+    ```
+
+    Every port is published on `127.0.0.1`, so the provider is at
+    <http://localhost:8000> and the two frontends at
+    <http://localhost:4000/auth/login> and <http://localhost:3000/console/>.
+
+=== "On a real hostname"
+
+    Add the tunnel overlay, which puts nginx in front of all three applications and opens no
+    inbound port at all:
+
+    ```bash
+    cp deploy/nginx/iden.conf.example deploy/nginx/iden.conf
+
+    docker compose -f deploy/docker-compose.yml \
+                   -f deploy/docker-compose.tunnel.yml up -d --build
+    ```
+
+    This needs `CLOUDFLARE_TUNNEL_TOKEN` in `deploy/.env` and a tunnel whose public hostname points
+    at `nginx:80`. Both are in [Behind a Cloudflare Tunnel](../operations/cloudflare-tunnel.md) —
+    read that page before this step rather than after, because several Cloudflare settings have to
+    change too.
+
+    Terminating TLS on your own proxy instead is fine; use `deploy/nginx/iden.conf.example` as the
+    routing and add a `listen 443 ssl` block with your certificates.
 
 The first build takes a few minutes. Startup then runs in a fixed order: PostgreSQL, Redis and
 SeaweedFS come up and report healthy, `migrate` creates the schema and exits, and only then does the

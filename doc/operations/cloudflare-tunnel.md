@@ -400,6 +400,48 @@ wider than the network nginx sits on.
 
 ---
 
+## Running it day to day
+
+Every command needs both files, which gets tedious. Set this once per shell, or in your profile:
+
+```bash
+export COMPOSE_FILE=deploy/docker-compose.yml:deploy/docker-compose.tunnel.yml
+```
+
+Then `docker compose ps`, `docker compose logs -f cloudflared` and the rest work unqualified. The
+examples below spell the flags out, so they work either way.
+
+| To | Run |
+|---|---|
+| See what is up | `docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.tunnel.yml ps` |
+| Follow the tunnel | `... logs -f cloudflared` |
+| Follow the application | `... logs -f provider` |
+| Apply a change to `deploy/.env` | `... up -d` — **not `restart`** |
+| Apply a change to `nginx/iden.conf` | `... restart nginx` |
+| Deploy a new version | `git pull && ... up -d --build` |
+
+!!! warning "`restart` does not re-read `deploy/.env`"
+    Compose fixes a container's environment when it is **created**. `restart` starts the same
+    container with the same environment, so a changed hostname, branding or trusted network appears
+    to have no effect. `up -d` notices the difference and recreates what needs it.
+
+    The frontends are the usual casualty, because they write `/config.js` from their environment at
+    start-up. After changing `IDEN_ISSUER` or the branding:
+
+    ```bash
+    docker compose -f deploy/docker-compose.yml \
+                   -f deploy/docker-compose.tunnel.yml up -d auth-ui dashboard
+
+    curl -s https://iden.example.org/console/config.js
+    ```
+
+One more worth knowing: nginx resolves its upstreams **once, at start-up**. Recreate `provider`,
+`auth-ui` or `dashboard` on their own and they come back on new addresses that nginx does not know,
+which presents as `502` from a stack where everything is running. `restart nginx` fixes it, and
+bringing the whole stack up together never hits it because nginx starts last.
+
+---
+
 ## When something is wrong
 
 ??? failure "`ERR_TOO_MANY_REDIRECTS` in the browser"
