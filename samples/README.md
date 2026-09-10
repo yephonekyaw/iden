@@ -28,62 +28,25 @@ laptop with no network still looks right.
 
 ## Running all four at once
 
-Each sample has its own Dockerfile, and [`docker-compose.yml`](docker-compose.yml)
-brings up all four together — four, because `single-sign-out` is two
-applications and collapsing them into one container would demonstrate nothing.
+Each sample has a Dockerfile, and [`docker-compose.yml`](docker-compose.yml)
+brings up all four — four, because `single-sign-out` is two applications.
 
 ```bash
-cp samples/.env.example samples/.env    # then fill in the two secrets
-docker compose -f samples/docker-compose.yml up --build
+cp samples/.env.example samples/.env    # fill it in
+docker compose -f samples/docker-compose.yml up -d --build
 ```
 
-| | |
-|---|---|
-| Playground | <http://localhost:5100> |
-| Campus Portal | <http://localhost:5200> |
-| Library | <http://localhost:5201> |
-| Next.js | <http://localhost:5300> |
+Playground 5100 · Portal 5200 · Library 5201 · Next.js 5300, published on every
+interface so a tunnel or proxy elsewhere can reach them at
+`host.docker.internal:<port>`. On a machine with a public address that is the
+internet too, so firewall them if that matters.
 
-`IDEN_ISSUER` goes in verbatim — scheme and port included — and `deploy/.env`
-must hold that exact string, because the issuer is compared character for
-character.
-
-**Against a deployment with real DNS**, that is all there is to it:
-`IDEN_ISSUER=https://iden.example.org`, and leave `IDEN_LOCAL_HOST` alone.
-
-**Against IDEN on this machine**, the default is `http://iden.localtest.me:8000`
-rather than `localhost`, and the reason is worth knowing before it confuses you.
-One issuer string has to work from two places at once — your browser follows a
-redirect to it, and the sample containers fetch discovery and exchange codes at
-it — and inside a container `localhost` is the container. `iden.localtest.me` is
-a public name that resolves to `127.0.0.1`, so your browser reaches your
-published port, and `IDEN_LOCAL_HOST` makes `extra_hosts` point it at the host
-gateway inside each container. Nothing goes in `/etc/hosts`.
-
-Do not put a real public hostname in `IDEN_LOCAL_HOST`. It would resolve to your
-own machine inside these containers, and they would never reach the deployment
-at all.
-
-### Behind the Cloudflare tunnel
-
-[`docker-compose.tunnel.yml`](docker-compose.tunnel.yml) gives each sample its
-own hostname on the tunnel the deployment already uses:
-
-```bash
-docker compose -f samples/docker-compose.yml \
-               -f samples/docker-compose.tunnel.yml up -d
-```
-
-It joins the samples to the deployment's network so cloudflared reaches them by
-service name — `http://nextjs:5300` and so on, mapped in the Cloudflare
-dashboard.
-
-Do not point the tunnel at `host.docker.internal`. The base file publishes to
-`127.0.0.1`, and a port bound there is on the host's loopback and nowhere else;
-on Linux `host-gateway` is the bridge gateway address, which is not loopback, so
-the connection is refused even though `curl localhost:5300` on the same host
-works. Both facts are true at once, which is what makes it confusing. Reaching
-containers by name avoids the host entirely.
+Two rules cover the configuration. `IDEN_ISSUER` must be a name your browser
+*and* these containers can both resolve, and must equal your deployment's own
+`IDEN_ISSUER` character for character — a public hostname is both, `localhost`
+is neither, because inside a container it is the container. And each
+`*_ORIGIN` is where the browser reaches that sample, which is what its redirect
+URI must be registered against.
 
 ## Registering a client
 
