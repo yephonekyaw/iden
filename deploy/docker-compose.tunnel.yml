@@ -53,6 +53,8 @@ services:
       nginx:
         condition: service_started
     restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
 # A fixed subnet so the address nginx trusts is knowable in advance. Left to
 # Docker it is assigned at creation time and changes between hosts, which would
