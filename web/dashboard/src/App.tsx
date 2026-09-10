@@ -35,71 +35,74 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
 });
 
-const router = createBrowserRouter([
-  {
-    path: "/",
-    element: <Shell />,
-    children: [
-      { index: true, element: <Navigate to="/account/profile" replace /> },
-      { path: "account/profile", element: <ProfileRoute /> },
-      { path: "account/security", element: <SecurityRoute /> },
-      { path: "account/sessions", element: <SessionsRoute /> },
-      { path: "account/connections", element: <ConnectionsRoute /> },
-      { path: "account/permissions", element: <PermissionsRoute /> },
+const router = createBrowserRouter(
+  [
+    {
+      path: "/",
+      element: <Shell />,
+      children: [
+        { index: true, element: <Navigate to="/account/profile" replace /> },
+        { path: "account/profile", element: <ProfileRoute /> },
+        { path: "account/security", element: <SecurityRoute /> },
+        { path: "account/sessions", element: <SessionsRoute /> },
+        { path: "account/connections", element: <ConnectionsRoute /> },
+        { path: "account/permissions", element: <PermissionsRoute /> },
 
-      { path: "admin/users", element: guarded("admin:users:read", <UsersRoute />) },
-      {
-        path: "admin/users/new",
-        element: guarded("admin:users:write", <UserCreateRoute />),
-      },
-      { path: "admin/users/:userId", element: guarded("admin:users:read", <UserDetailRoute />) },
-      { path: "admin/groups", element: guarded("admin:groups:read", <GroupsRoute />) },
-      {
-        path: "admin/groups/new",
-        element: guarded("admin:groups:write", <GroupCreateRoute />),
-      },
-      {
-        path: "admin/groups/:groupId",
-        element: guarded("admin:groups:read", <GroupDetailRoute />),
-      },
-      { path: "admin/roles", element: guarded("admin:roles:read", <RolesRoute />) },
-      {
-        path: "admin/roles/new",
-        element: guarded("admin:roles:write", <RoleCreateRoute />),
-      },
-      { path: "admin/roles/:roleId", element: guarded("admin:roles:read", <RoleDetailRoute />) },
-      { path: "admin/apis", element: guarded("admin:apis:read", <ApisRoute />) },
-      {
-        path: "admin/apis/new",
-        element: guarded("admin:apis:write", <ApiCreateRoute />),
-      },
-      { path: "admin/apis/:apiId", element: guarded("admin:apis:read", <ApiDetailRoute />) },
-      { path: "admin/clients", element: guarded("admin:clients:read", <ClientsRoute />) },
-      {
-        path: "admin/clients/new",
-        element: guarded("admin:clients:write", <ClientCreateRoute />),
-      },
-      {
-        path: "admin/clients/:clientId",
-        element: guarded("admin:clients:read", <ClientDetailRoute />),
-      },
-      {
-        path: "admin/profile-fields",
-        element: guarded("admin:profile-fields:read", <ProfileFieldsRoute />),
-      },
-      {
-        path: "admin/profile-fields/new",
-        element: guarded("admin:profile-fields:write", <ProfileFieldCreateRoute />),
-      },
-      {
-        path: "admin/profile-fields/:fieldId",
-        element: guarded("admin:profile-fields:write", <ProfileFieldEditRoute />),
-      },
-      { path: "admin/audit", element: guarded("admin:audit:read", <AuditRoute />) },
-      { path: "*", element: <Navigate to="/account/profile" replace /> },
-    ],
-  },
-], { basename: basePath });
+        { path: "admin/users", element: guarded("admin:users:read", <UsersRoute />) },
+        {
+          path: "admin/users/new",
+          element: guarded("admin:users:write", <UserCreateRoute />),
+        },
+        { path: "admin/users/:userId", element: guarded("admin:users:read", <UserDetailRoute />) },
+        { path: "admin/groups", element: guarded("admin:groups:read", <GroupsRoute />) },
+        {
+          path: "admin/groups/new",
+          element: guarded("admin:groups:write", <GroupCreateRoute />),
+        },
+        {
+          path: "admin/groups/:groupId",
+          element: guarded("admin:groups:read", <GroupDetailRoute />),
+        },
+        { path: "admin/roles", element: guarded("admin:roles:read", <RolesRoute />) },
+        {
+          path: "admin/roles/new",
+          element: guarded("admin:roles:write", <RoleCreateRoute />),
+        },
+        { path: "admin/roles/:roleId", element: guarded("admin:roles:read", <RoleDetailRoute />) },
+        { path: "admin/apis", element: guarded("admin:apis:read", <ApisRoute />) },
+        {
+          path: "admin/apis/new",
+          element: guarded("admin:apis:write", <ApiCreateRoute />),
+        },
+        { path: "admin/apis/:apiId", element: guarded("admin:apis:read", <ApiDetailRoute />) },
+        { path: "admin/clients", element: guarded("admin:clients:read", <ClientsRoute />) },
+        {
+          path: "admin/clients/new",
+          element: guarded("admin:clients:write", <ClientCreateRoute />),
+        },
+        {
+          path: "admin/clients/:clientId",
+          element: guarded("admin:clients:read", <ClientDetailRoute />),
+        },
+        {
+          path: "admin/profile-fields",
+          element: guarded("admin:profile-fields:read", <ProfileFieldsRoute />),
+        },
+        {
+          path: "admin/profile-fields/new",
+          element: guarded("admin:profile-fields:write", <ProfileFieldCreateRoute />),
+        },
+        {
+          path: "admin/profile-fields/:fieldId",
+          element: guarded("admin:profile-fields:write", <ProfileFieldEditRoute />),
+        },
+        { path: "admin/audit", element: guarded("admin:audit:read", <AuditRoute />) },
+        { path: "*", element: <Navigate to="/account/profile" replace /> },
+      ],
+    },
+  ],
+  { basename: basePath },
+);
 
 /**
  * Sits between the OIDC provider and the router: nothing renders until there is
