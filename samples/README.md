@@ -44,19 +44,25 @@ docker compose -f samples/docker-compose.yml up --build
 | Library | <http://localhost:5201> |
 | Next.js | <http://localhost:5300> |
 
-One thing there is worth understanding before it confuses you. The issuer is
-**not** `http://localhost:8000`, because one issuer string has to work from two
-places at once — your browser follows a redirect to it, and the sample
-containers fetch discovery and exchange codes at it — and it has to be the same
-string in both, since the issuer is compared character for character. Inside a
-container `localhost` is the container.
+`IDEN_ISSUER` goes in verbatim — scheme and port included — and `deploy/.env`
+must hold that exact string, because the issuer is compared character for
+character.
 
-So the default is `http://iden.localtest.me:8000`: a public name that resolves
-to `127.0.0.1`, which your browser follows to your published port, and which
-`extra_hosts` overrides to the host gateway inside each container. Nothing is
-added to `/etc/hosts`. Your deployment has to agree — set `IDEN_ISSUER` to the
-same string in `deploy/.env` before registering the sample clients, because
-every token already issued names the old one.
+**Against a deployment with real DNS**, that is all there is to it:
+`IDEN_ISSUER=https://iden.example.org`, and leave `IDEN_LOCAL_HOST` alone.
+
+**Against IDEN on this machine**, the default is `http://iden.localtest.me:8000`
+rather than `localhost`, and the reason is worth knowing before it confuses you.
+One issuer string has to work from two places at once — your browser follows a
+redirect to it, and the sample containers fetch discovery and exchange codes at
+it — and inside a container `localhost` is the container. `iden.localtest.me` is
+a public name that resolves to `127.0.0.1`, so your browser reaches your
+published port, and `IDEN_LOCAL_HOST` makes `extra_hosts` point it at the host
+gateway inside each container. Nothing goes in `/etc/hosts`.
+
+Do not put a real public hostname in `IDEN_LOCAL_HOST`. It would resolve to your
+own machine inside these containers, and they would never reach the deployment
+at all.
 
 ## Registering a client
 

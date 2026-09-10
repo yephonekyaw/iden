@@ -31,19 +31,31 @@
 #
 # and restart it. Every token already issued names the old value, so treat this
 # as a change you make once, before registering the sample clients.
+#
+# None of this applies to a deployment that already has public DNS. Set
+# IDEN_ISSUER to it verbatim — `https://iden.example.org`, scheme and no port —
+# and leave IDEN_LOCAL_HOST alone: the extra_hosts entry then names something
+# nothing looks up. Do NOT put the real hostname there. It would resolve to
+# your own machine inside these containers, and they would never reach the
+# deployment at all.
 # ---------------------------------------------------------------------------
 
 name: iden-samples
 
 x-iden: &iden
-  # Resolved by extra_hosts, not DNS. Change the name in .env and both follow.
-  IDEN_ISSUER: http://${IDEN_HOST:-iden.localtest.me}:${IDEN_PORT:-8000}
+  # Verbatim, scheme and port included, and identical to your deployment's own
+  # IDEN_ISSUER. Built from pieces this would quietly produce things like
+  # http://iden.example.org:443, which is neither the right scheme nor a string
+  # any issuer check would accept.
+  IDEN_ISSUER: ${IDEN_ISSUER:-http://iden.localtest.me:8000}
 
 x-reach-the-host: &reach-the-host
   extra_hosts:
-    # Without this the name resolves to 127.0.0.1 by public DNS, which inside a
-    # container is the container — the request never leaves it.
-    - "${IDEN_HOST:-iden.localtest.me}:host-gateway"
+    # Only does anything when IDEN runs on this machine, where the issuer names
+    # a loopback host: without it that name resolves to 127.0.0.1 by public DNS,
+    # which inside a container is the container, and the request never leaves.
+    # Against a deployment with real DNS this names nothing and is ignored.
+    - "${IDEN_LOCAL_HOST:-iden.localtest.me}:host-gateway"
 
 services:
   # No backend and no configuration: the issuer, the client id and every
