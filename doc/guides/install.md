@@ -70,9 +70,22 @@ on the host:
 ```bash
 docker compose -f deploy/docker-compose.yml build provider
 
-docker run --rm -v "$PWD/provider/keys:/keys" -e IDEN_SIGNING_KEY_DIR=/keys \
+mkdir -p provider/keys
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/provider/keys:/keys" -e IDEN_SIGNING_KEY_DIR=/keys \
   --entrypoint python iden-dev-provider:latest -m scripts.gen_keys
 ```
+
+!!! info "Why `mkdir` and `--user`"
+    The image runs as an unprivileged user with uid **1000**, which is almost certainly not yours.
+    Without these two, on Linux you get `Permission denied`: Docker creates a missing bind-mount
+    directory as `root`, and the container is not root.
+
+    Creating the directory yourself and telling the container to write as you avoids it, and leaves
+    the key owned by you rather than by a uid you would need `sudo` to touch again.
+
+    Docker Desktop on macOS maps ownership and hides this, so the plainer command works on a laptop
+    and then fails on a Linux server.
 
 ```text
 Wrote signing key: /keys/iden-20260907.pem (kid: iden-20260907)
@@ -358,6 +371,35 @@ TLS with `IDEN_ENV=prod`, a proxy doing flood protection, the bootstrap password
 signing keys backed up somewhere that is not this server.
 
 ## Common problems
+
+??? failure "`Permission denied` writing the signing key"
+    The image runs as uid 1000 and cannot write into `provider/keys`. On Linux the directory belongs
+    either to `root` — if Docker created it for you when the bind mount had nowhere to point — or to
+    your own uid if you made it. Neither is 1000.
+
+    Use the `mkdir` and `--user` form in [step 2](#2-generate-a-signing-key), which writes as you and
+    sidesteps it. If you have already hit the error and want the shortest way out:
+
+    ```bash
+    sudo chown 1000:1000 provider/keys
+    ```
+
+    Pick one or the other, not both: `--user` needs the directory owned by **you**, the `chown` needs
+    it owned by **1000**. Mixing them reproduces the same error from the other side.
+
+    Simplest of all, if the host has Python and `uv`:
+
+    ```bash
+    cd provider && uv run python -m scripts.gen_keys
+    ```
+
+??? failure "`Read-only file system: '/keys/iden-....pem'`"
+    The generator was run inside the *running* provider — `docker compose ... exec provider python -m
+    scripts.gen_keys`. `deploy/docker-compose.yml` mounts the keys `:ro`, deliberately: the provider
+    signs with them and never writes them.
+
+    Use the standalone `docker run` in [step 2](#2-generate-a-signing-key), which mounts the
+    directory writable, then restart the provider so it picks the key up.
 
 ??? failure "`No signing keys in /keys`"
     Step 2 was skipped, or the keys directory did not exist when Docker mounted it — in which case

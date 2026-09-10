@@ -631,7 +631,9 @@ cd iden
 
 # IDEN signs tokens with a key you own, and refuses to start without one.
 docker compose -f deploy/docker-compose.yml build provider
-docker run --rm -v "$PWD/provider/keys:/keys" -e IDEN_SIGNING_KEY_DIR=/keys \
+mkdir -p provider/keys
+docker run --rm --user "$(id -u):$(id -g)" \
+  -v "$PWD/provider/keys:/keys" -e IDEN_SIGNING_KEY_DIR=/keys \
   --entrypoint python iden-dev-provider:latest -m scripts.gen_keys
 
 docker compose -f deploy/docker-compose.yml up -d --build
