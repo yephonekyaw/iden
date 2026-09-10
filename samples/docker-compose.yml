@@ -100,6 +100,6 @@ services:
       IDEN_CLIENT_SECRET: ${NEXTJS_CLIENT_SECRET:?set NEXTJS_CLIENT_SECRET in samples/.env}
       # Signs Auth.js's own cookie. Nothing to do with IDEN.
       AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in samples/.env — openssl rand -base64 32}
-      AUTH_URL: http://localhost:5300
+      AUTH_URL: ${AUTH_URL:-http://localhost:5300}
     ports:
       - "127.0.0.1:5300:5300"
