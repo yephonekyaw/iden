@@ -178,11 +178,31 @@ loops.
 ```bash
 docker compose -f deploy/docker-compose.yml exec -T postgres \
   psql -U iden -d iden -c \
-  "update clients set redirect_uris = '[\"https://iden.example.org/console/callback\"]'
+  "update clients set redirect_uris = ARRAY['https://iden.example.org/console/callback']
    where client_id = 'dashboard';"
 ```
 
-Note `/console/callback` — the dashboard's redirect URI moved with it.
+`redirect_uris` is a PostgreSQL array (`character varying[]`), not JSON — hence `ARRAY[...]` rather
+than a bracketed string. A JSON literal here fails with *malformed array literal*.
+
+Note `/console/callback`: the dashboard's redirect URI moved with the app.
+
+**Check it worked**, since a wrong value here presents as a sign-in loop rather than an error:
+
+```bash
+docker compose -f deploy/docker-compose.yml exec -T postgres \
+  psql -U iden -d iden -c \
+  "select client_id, redirect_uris from clients where client_id = 'dashboard';"
+```
+
+```text
+ client_id |                redirect_uris
+-----------+--------------------------------------
+ dashboard | {https://iden.example.org/console/callback}
+```
+
+Once you can sign in, the **Clients** screen in the dashboard edits this without SQL. Direct
+`psql` is for the bootstrap, when there is no way in yet.
 
 ## 5. Cloudflare's settings
 
