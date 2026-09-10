@@ -53,15 +53,23 @@ export function Brand({
         {organization ? (
           <span
             className={cn(
-              "block truncate font-display",
+              // `truncate` clips at the line box, and the display serif's
+              // ascenders and descenders both overrun a 1.2 line-height — so
+              // without the padding a name like "Luang" loses the tail of its g.
+              "block truncate py-0.5 font-display",
               page ? "text-display-sm" : "text-title-md",
             )}
           >
             {organization}
           </span>
         ) : null}
-        <span className="mt-0.5 flex items-center gap-1.5 text-caption-upper uppercase opacity-65">
-          <Mark className="h-2.5 w-2.5 text-primary" />
+        <span
+          className={cn(
+            "flex items-center gap-2 text-caption-upper uppercase opacity-65",
+            page ? "mt-3" : "mt-2",
+          )}
+        >
+          <Mark className={cn("text-primary", page ? "h-3 w-3" : "h-2.5 w-2.5")} />
           {page ? "Secured by IDEN" : "IDEN"}
         </span>
       </span>
