@@ -61,9 +61,10 @@ Open <http://localhost:5173/console/> and you are sent through a real sign-in: t
 redirects to `/oauth2/authorize`, the provider redirects to auth-ui at
 <http://localhost:4000/auth/login>, and you come back to `/console/callback` with a code.
 
-Note the trailing paths. Vite's dev server redirects its root to the `base`, so
-<http://localhost:5173> lands on `/console/` — the same `302` the production proxy sends, which
-means the dev loop and the deployed one agree about where things live.
+Note the trailing paths — though you do not have to type them. All three ways of serving these apps
+redirect their root to the base: Vite's dev server, each app's own container, and the production
+proxy. <http://localhost:5173> and <http://localhost:3000> both land on `/console/`, so the dev loop
+and the deployment agree about where things live.
 
 ### Pointing them somewhere else
 

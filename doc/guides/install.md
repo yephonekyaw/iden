@@ -348,7 +348,8 @@ curl -X PATCH https://iden.example.org/admin/clients/{uuid} \
 
 ## 7. Sign in
 
-Open <http://localhost:3000/console/> — or your own hostname, which redirects `/` there for you.
+Open <http://localhost:3000/console/> — or your own hostname. Either way `/` redirects there, so
+the bare address works too.
 
 You are redirected to the sign-in page, and back to the dashboard afterwards. That round trip is the
 whole system working: the dashboard is an ordinary OIDC client of the provider, with no special path
