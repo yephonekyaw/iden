@@ -15,8 +15,8 @@ optional — several of its defaults break an identity provider in ways that loo
 
 ```
 browser --HTTPS--> Cloudflare edge --tunnel--> cloudflared --HTTP--> nginx --> provider
-                                                                          --> auth-ui
-                                                                          --> dashboard
+                                                                           --> auth-ui
+                                                                           --> dashboard
 ```
 
 Four things follow from that picture, and they are the reasons this page exists.
