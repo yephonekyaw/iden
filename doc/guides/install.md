@@ -268,11 +268,43 @@ Skip this on a laptop — the seeded client already allows `http://localhost:300
 and `http://localhost:5173/console/callback`.
 
 Anywhere else, the `dashboard` client's redirect URIs still name localhost, and the sign-in will loop
-until they name your origin. Fix it from the dashboard's **Clients** page once you are in, or
-directly:
+until they name your origin.
+
+This is a bootstrap problem: the **Clients** screen and the admin API both edit this, and both need
+you to be signed in — which is the thing that is broken. So do it in the database:
 
 ```bash
-curl -X PATCH https://iden.example.org/admin/clients/{id} \
+docker compose -f deploy/docker-compose.yml exec -T postgres \
+  psql -U iden -d iden -c \
+  "update clients set redirect_uris = ARRAY['https://iden.example.org/console/callback']
+   where client_id = 'dashboard';"
+```
+
+`redirect_uris` is a PostgreSQL array (`character varying[]`), not JSON, so it is `ARRAY[...]` and
+not a bracketed string — a JSON literal fails with *malformed array literal*. Note
+`/console/callback`: the dashboard's redirect URI moved with the app.
+
+**Check it worked.** A wrong value here presents as a sign-in loop rather than an error, so it is
+worth ten seconds now:
+
+```bash
+docker compose -f deploy/docker-compose.yml exec -T postgres \
+  psql -U iden -d iden -c \
+  "select client_id, redirect_uris from clients where client_id = 'dashboard';"
+```
+
+```text
+ client_id |                redirect_uris
+-----------+---------------------------------------------
+ dashboard | {https://iden.example.org/console/callback}
+```
+
+Once you can sign in, the dashboard's **Clients** page is the place to change this. The admin API
+can too, though it identifies a client by its UUID rather than by `dashboard`, so it takes a lookup
+first:
+
+```bash
+curl -X PATCH https://iden.example.org/admin/clients/{uuid} \
   -H "Authorization: Bearer $ADMIN_TOKEN" -H "Content-Type: application/json" \
   -d '{"redirectUris": ["https://iden.example.org/console/callback"]}'
 ```
