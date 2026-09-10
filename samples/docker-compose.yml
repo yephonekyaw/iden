@@ -76,6 +76,11 @@ services:
       <<: *iden
       APP: portal
       CLIENT_ID: ${PORTAL_CLIENT_ID:-demo-portal}
+      # Where the browser reaches this app. The redirect URI and the post-logout
+      # redirect are both built from it, and both are matched exactly, so behind
+      # a tunnel this has to be the public hostname rather than localhost.
+      ORIGIN: ${PORTAL_ORIGIN:-http://localhost:5200}
+      SIBLING_ORIGIN: ${LIBRARY_ORIGIN:-http://localhost:5201}
     ports:
       - "127.0.0.1:5200:5200"
 
@@ -86,6 +91,8 @@ services:
       <<: *iden
       APP: library
       CLIENT_ID: ${LIBRARY_CLIENT_ID:-demo-library}
+      ORIGIN: ${LIBRARY_ORIGIN:-http://localhost:5201}
+      SIBLING_ORIGIN: ${PORTAL_ORIGIN:-http://localhost:5200}
     ports:
       - "127.0.0.1:5201:5201"
 

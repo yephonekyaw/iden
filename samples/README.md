@@ -64,6 +64,27 @@ Do not put a real public hostname in `IDEN_LOCAL_HOST`. It would resolve to your
 own machine inside these containers, and they would never reach the deployment
 at all.
 
+### Behind the Cloudflare tunnel
+
+[`docker-compose.tunnel.yml`](docker-compose.tunnel.yml) gives each sample its
+own hostname on the tunnel the deployment already uses:
+
+```bash
+docker compose -f samples/docker-compose.yml \
+               -f samples/docker-compose.tunnel.yml up -d
+```
+
+It joins the samples to the deployment's network so cloudflared reaches them by
+service name — `http://nextjs:5300` and so on, mapped in the Cloudflare
+dashboard.
+
+Do not point the tunnel at `host.docker.internal`. The base file publishes to
+`127.0.0.1`, and a port bound there is on the host's loopback and nowhere else;
+on Linux `host-gateway` is the bridge gateway address, which is not loopback, so
+the connection is refused even though `curl localhost:5300` on the same host
+works. Both facts are true at once, which is what makes it confusing. Reaching
+containers by name avoids the host entirely.
+
 ## Registering a client
 
 Every sample needs an OAuth client registered in your deployment before it will
