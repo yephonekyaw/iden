@@ -3,8 +3,32 @@
 Every setting is read from the environment or a `.env` file, prefixed `IDEN_`. Defaults are
 development defaults — the ones that matter in production are called out below the table.
 
-`provider/.env.example` carries the same list with the reasoning next to each one, and is the file to
-copy when running the provider outside a container.
+## Where settings live
+
+There are several `.env` files in the repository, which looks like more configuration than it is.
+Each belongs to **one process**, and only one of them is ever in play at a time:
+
+| File | Read by | In play when |
+|---|---|---|
+| `deploy/.env` | Docker Compose, substituting `${VAR}` into `docker-compose.yml` | any `docker compose` run |
+| `provider/.env` | the provider process itself | `uv run provider` or `uv run pytest` **on the host** |
+| `web/auth-ui/.env`, `web/dashboard/.env` | Vite | `pnpm dev` |
+
+They hold overlapping *keys* but cannot hold the same *values*: `provider/.env` points the database
+at `localhost:5432`, and inside a container that address is the container itself. Each has an
+`.env.example` beside it to copy.
+
+!!! info "`environment:` in docker-compose.yml is not another place to configure things"
+    That block holds two kinds of value, and only one is yours:
+
+    - **`${VAR:-default}`** — a deployment setting. It comes from `deploy/.env`, and the default is
+      a laptop. This is the group you edit, and `deploy/.env` is where.
+    - **A plain value** — wiring. `postgres:5432`, `/keys`, `seaweedfs:8333` are the service names
+      and mount points defined by that same file. There is nothing to configure; change one and it
+      stops resolving.
+
+    Editing `docker-compose.yml` to set a hostname works, but it is a tracked file, so every upgrade
+    then conflicts with your deployment. That is what `deploy/.env` exists to avoid.
 
 ## The provider
 
