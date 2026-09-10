@@ -87,6 +87,18 @@ pnpm dev
 No CORS configuration is needed: the browser only ever follows redirects, and
 the token exchange happens server to server.
 
+### In a container
+
+```bash
+docker build -t iden-nextjs-nextauth .
+docker run --rm -p 5300:5300 --env-file .env.local iden-nextjs-nextauth
+```
+
+The five variables above are read when the server starts, not when the image is
+built, so one image serves any deployment. `.env.local` is kept out of the image
+by `.dockerignore` for the same reason — a secret in a layer is readable by
+anyone who can pull it.
+
 ## What to point at
 
 - **`auth.ts`** — the provider block above, and nothing else IDEN-specific.

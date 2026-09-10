@@ -100,6 +100,22 @@ No CORS configuration is needed. Unlike the playground, these apps talk to IDEN
 from their own servers; the browser only ever follows redirects, and a redirect
 is not a cross-origin request.
 
+### In containers
+
+One image, run twice — `APP` picks which application it is, exactly as the two
+pnpm scripts do. Two processes is the point of the demo, so resist the urge to
+collapse them into one container:
+
+```bash
+docker build -t iden-single-sign-out .
+docker run --rm -e APP=portal  -p 5200:5200 iden-single-sign-out
+docker run --rm -e APP=library -p 5201:5201 iden-single-sign-out
+```
+
+Every variable in the table above works as `-e`. Behind a proxy set `ORIGIN` to
+the public URL: the redirect URI and the post-logout redirect are both built
+from it, and both are matched exactly.
+
 ## The demo
 
 1. Open both, side by side.

@@ -60,6 +60,16 @@ pnpm dev
 <http://localhost:5100>. The port is fixed rather than incidental — it is in the
 redirect URI you just registered, and a redirect URI is matched exactly.
 
+Or in a container, on the same port so the same registered client works:
+
+```bash
+docker build -t iden-oidc-playground .
+docker run --rm -p 5100:5100 iden-oidc-playground
+```
+
+Nothing is baked into the image — the issuer and every parameter are typed into
+the page — so one build works against any deployment.
+
 ## Things worth trying
 
 - **Turn PKCE off.** IDEN requires `S256` from every client, public or
