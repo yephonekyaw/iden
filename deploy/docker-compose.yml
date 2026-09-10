@@ -91,11 +91,16 @@ services:
       # Whose X-Forwarded-For is believed. Empty here because nothing is in
       # front; the tunnel overlay names the network nginx proxies from.
       IDEN_FORWARDED_ALLOW_IPS: ${IDEN_FORWARDED_ALLOW_IPS:-}
-      # Read by `scripts.seed`, and only when it creates the account. Setting
-      # them against an administrator that already exists does nothing — the
-      # seed leaves existing credentials alone rather than resetting them.
+      # Read by `scripts.seed`, and only when it creates the account: against an
+      # administrator that already exists the seed changes nothing.
+      #
+      # The matching password is deliberately absent. A value here would live in
+      # the container's environment for as long as the container does, readable
+      # by `docker inspect`, to save typing a password once. Let the seed
+      # generate one, or pass it to that single command:
+      #   docker compose exec -e IDEN_BOOTSTRAP_ADMIN_PASSWORD=... provider \
+      #     python -m scripts.seed
       IDEN_BOOTSTRAP_ADMIN_EMAIL: ${IDEN_BOOTSTRAP_ADMIN_EMAIL:-admin@localhost}
-      IDEN_BOOTSTRAP_ADMIN_PASSWORD: ${IDEN_BOOTSTRAP_ADMIN_PASSWORD:-}
 
       IDEN_DATABASE_URL: postgresql+asyncpg://iden:iden@postgres:5432/iden
       IDEN_REDIS_URL: redis://redis:6379/0

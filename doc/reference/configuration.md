@@ -60,7 +60,7 @@ at `localhost:5432`, and inside a container that address is the container itself
 | `IDEN_REFRESH_GRACE_PERIOD` | `30` (seconds) | How long a spent refresh token keeps returning what it was exchanged for. `0` restores strict single use, at the price of signing people out over a double-click. |
 | `IDEN_RATE_LIMIT_ENABLED` | `true` | Off only for a load test against a deployment you own. |
 | `IDEN_BOOTSTRAP_ADMIN_EMAIL` | `admin@localhost` | The first administrator's address. Read only when the seed **creates** the account; changing it later seeds a second administrator rather than renaming the first. |
-| `IDEN_BOOTSTRAP_ADMIN_PASSWORD` | *empty* | Left empty, the seed generates one and prints it once. Set it to keep a password out of the terminal — but it then lives in the process environment, so clear it after first login. Ignored once the account exists. |
+| `IDEN_BOOTSTRAP_ADMIN_PASSWORD` | *empty* | Left empty, the seed generates one and prints it once. `deploy/docker-compose.yml` deliberately does not carry it — a password there would outlive its one use, in an environment `docker inspect` reads. Pass it to the seed command itself if you want to choose it. Ignored once the account exists. |
 | `IDEN_BIOMETRIC_ENABLED` | `false` | Mounts `/biometric/*` and seeds its permissions. The module is not built yet. |
 | `IDEN_ENGINE_BASE_URL` | `http://engine:8000` |  |
 

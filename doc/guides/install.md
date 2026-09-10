@@ -244,11 +244,15 @@ Seeded 25 system scopes across 2 APIs.
     They are hashed on the way into the database and cannot be recovered. If you lose the
     administrator password, the only way back in is a fresh database.
 
-    You can choose both instead of having them generated — set
-    `IDEN_BOOTSTRAP_ADMIN_EMAIL` and `IDEN_BOOTSTRAP_ADMIN_PASSWORD` in `deploy/.env` *before* the
-    first seed. That keeps a password out of your terminal, at the cost of one sitting in the
-    container's environment where `docker inspect` can read it; clear the value once you have
-    signed in.
+    Set `IDEN_BOOTSTRAP_ADMIN_EMAIL` in `deploy/.env` *before* the first seed to choose the
+    address. To choose the password too, give it to that one command rather than to the
+    deployment — a password in `deploy/.env` would live in the container's environment for as long
+    as the container does:
+
+    ```bash
+    docker compose -f deploy/docker-compose.yml exec \
+      -e IDEN_BOOTSTRAP_ADMIN_PASSWORD='...' provider python -m scripts.seed
+    ```
 
     Both apply **only when the seed creates the account**. Against an administrator that already
     exists the seed changes nothing — it never resets a credential — so setting a new email later
