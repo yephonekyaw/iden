@@ -26,6 +26,38 @@ laptop with no network still looks right.
 | [`single-sign-out`](single-sign-out/) | Two Node servers | Single sign-on across two applications, and single sign-*out* — the back-channel logout receiver most libraries make you write yourself |
 | [`nextjs-nextauth`](nextjs-nextauth/) | Next.js, stock Auth.js | That IDEN works with an OIDC library that knows nothing about it. No custom code, no adapter |
 
+## Running all four at once
+
+Each sample has its own Dockerfile, and [`docker-compose.yml`](docker-compose.yml)
+brings up all four together — four, because `single-sign-out` is two
+applications and collapsing them into one container would demonstrate nothing.
+
+```bash
+cp samples/.env.example samples/.env    # then fill in the two secrets
+docker compose -f samples/docker-compose.yml up --build
+```
+
+| | |
+|---|---|
+| Playground | <http://localhost:5100> |
+| Campus Portal | <http://localhost:5200> |
+| Library | <http://localhost:5201> |
+| Next.js | <http://localhost:5300> |
+
+One thing there is worth understanding before it confuses you. The issuer is
+**not** `http://localhost:8000`, because one issuer string has to work from two
+places at once — your browser follows a redirect to it, and the sample
+containers fetch discovery and exchange codes at it — and it has to be the same
+string in both, since the issuer is compared character for character. Inside a
+container `localhost` is the container.
+
+So the default is `http://iden.localtest.me:8000`: a public name that resolves
+to `127.0.0.1`, which your browser follows to your published port, and which
+`extra_hosts` overrides to the host gateway inside each container. Nothing is
+added to `/etc/hosts`. Your deployment has to agree — set `IDEN_ISSUER` to the
+same string in `deploy/.env` before registering the sample clients, because
+every token already issued names the old one.
+
 ## Registering a client
 
 Every sample needs an OAuth client registered in your deployment before it will

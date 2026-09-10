@@ -1,0 +1,93 @@
+# All four sample applications, against a deployment you already have running.
+#
+#   cp samples/.env.example samples/.env   # then edit it
+#   docker compose -f samples/docker-compose.yml up --build
+#
+#   Playground     http://localhost:5100
+#   Campus Portal  http://localhost:5200
+#   Library        http://localhost:5201
+#   Next.js        http://localhost:5300
+#
+# Four services, not three: single-sign-out is two applications on purpose, and
+# collapsing them into one container would demonstrate nothing.
+#
+# ---------------------------------------------------------------------------
+# Why the issuer is not http://localhost:8000
+# ---------------------------------------------------------------------------
+# One issuer string has to work from two places at once. Your browser follows a
+# redirect to it; these containers fetch discovery and exchange codes at it. And
+# it has to be the *same* string in both, because the issuer is compared
+# character for character — a mismatch fails as a sign-in loop, not an error.
+#
+# `localhost` cannot be that string: inside a container it means the container.
+# `iden.localtest.me` can. It is a public name that resolves to 127.0.0.1, so
+# the browser reaches your published port, and `extra_hosts` below overrides it
+# to the host gateway inside each container, so they reach it too. Nothing is
+# added to /etc/hosts.
+#
+# Your deployment has to agree. In deploy/.env:
+#
+#   IDEN_ISSUER=http://iden.localtest.me:8000
+#
+# and restart it. Every token already issued names the old value, so treat this
+# as a change you make once, before registering the sample clients.
+# ---------------------------------------------------------------------------
+
+name: iden-samples
+
+x-iden: &iden
+  # Resolved by extra_hosts, not DNS. Change the name in .env and both follow.
+  IDEN_ISSUER: http://${IDEN_HOST:-iden.localtest.me}:${IDEN_PORT:-8000}
+
+x-reach-the-host: &reach-the-host
+  extra_hosts:
+    # Without this the name resolves to 127.0.0.1 by public DNS, which inside a
+    # container is the container — the request never leaves it.
+    - "${IDEN_HOST:-iden.localtest.me}:host-gateway"
+
+services:
+  # No backend and no configuration: the issuer, the client id and every
+  # parameter are typed into the page. It needs no `extra_hosts` either, because
+  # every request it makes is made by your browser, not by this container.
+  #
+  # It does need the provider's CORS allowlist to name http://localhost:5100 —
+  # it is the one sample that talks to IDEN from the browser.
+  playground:
+    build: ./oidc-playground
+    ports:
+      - "127.0.0.1:5100:5100"
+
+  portal:
+    build: ./single-sign-out
+    <<: *reach-the-host
+    environment:
+      <<: *iden
+      APP: portal
+      CLIENT_ID: ${PORTAL_CLIENT_ID:-demo-portal}
+    ports:
+      - "127.0.0.1:5200:5200"
+
+  library:
+    build: ./single-sign-out
+    <<: *reach-the-host
+    environment:
+      <<: *iden
+      APP: library
+      CLIENT_ID: ${LIBRARY_CLIENT_ID:-demo-library}
+    ports:
+      - "127.0.0.1:5201:5201"
+
+  nextjs:
+    build: ./nextjs-nextauth
+    <<: *reach-the-host
+    environment:
+      <<: *iden
+      IDEN_CLIENT_ID: ${NEXTJS_CLIENT_ID:-demo-nextjs}
+      # Confidential: Auth.js exchanges the code server side, so unlike the
+      # other three this one has a secret and needs it.
+      IDEN_CLIENT_SECRET: ${NEXTJS_CLIENT_SECRET:?set NEXTJS_CLIENT_SECRET in samples/.env}
+      # Signs Auth.js's own cookie. Nothing to do with IDEN.
+      AUTH_SECRET: ${AUTH_SECRET:?set AUTH_SECRET in samples/.env — openssl rand -base64 32}
+      AUTH_URL: http://localhost:5300
+    ports:
+      - "127.0.0.1:5300:5300"

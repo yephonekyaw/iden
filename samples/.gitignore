@@ -1,0 +1,2 @@
+# Real client secrets. .env.example carries the shape; this carries the values.
+.env
