@@ -61,3 +61,28 @@ services:
       AUTH_URL: ${NEXTJS_ORIGIN:-http://localhost:5300}
     ports:
       - "5300:5300"
+
+  # Access control, in two processes. The controller decides and the panel asks;
+  # see door-access/README.md for the objects you must register first.
+  door-api:
+    build: ./door-access/api
+    environment:
+      IDEN_ISSUER: ${IDEN_ISSUER:?set IDEN_ISSUER in samples/.env}
+      # Must equal the audience on the `door` resource API in your deployment.
+      DOOR_AUDIENCE: ${DOOR_AUDIENCE:-https://api.example.org/door}
+    ports:
+      - "5400:5400"
+
+  door-panel:
+    build: ./door-access/panel
+    environment:
+      IDEN_ISSUER: ${IDEN_ISSUER:?set IDEN_ISSUER in samples/.env}
+      DOOR_PANEL_CLIENT_ID: ${DOOR_PANEL_CLIENT_ID:-demo-door-panel}
+      # Confidential: the panel exchanges the code server side.
+      DOOR_PANEL_CLIENT_SECRET: ${DOOR_PANEL_CLIENT_SECRET:?set DOOR_PANEL_CLIENT_SECRET in samples/.env}
+      DOOR_PANEL_ORIGIN: ${DOOR_PANEL_ORIGIN:-http://localhost:5401}
+      # By service name, not through the host: these two share a network, and
+      # localhost inside this container is this container.
+      DOOR_API_ORIGIN: http://door-api:5400
+    ports:
+      - "5401:5401"
