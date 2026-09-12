@@ -79,24 +79,70 @@ function VerdictBanner({ verdict }: { verdict: Verdict }) {
 
       {verdict.status === 403 && !stepUp && (
         <p className="verdict__note">
-          <b>403, not 401.</b> The token is valid and signing in again produces exactly the
-          same one. What is missing is a permission, and only an administrator can change
-          that.
+          <b>403, not 401.</b> The token is valid and signing in again produces exactly the same
+          one. What is missing is a permission, and only an administrator can change that.
         </p>
       )}
 
       {stepUp && (
         <>
           <p className="verdict__note">
-            The refusal carried <code>WWW-Authenticate</code> naming what would satisfy it.
-            The panel does not have to understand second factors — it copies those parameters
-            onto the next authorization request and IDEN handles the rest.
+            The refusal carried <code>WWW-Authenticate</code> naming what would satisfy it. The
+            panel does not have to understand second factors — it copies those parameters onto the
+            next authorization request and IDEN handles the rest.
           </p>
           <a className="button" href={`/api/login?${query.toString()}`}>
             Prove it again
           </a>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * A door that actually opens.
+ *
+ * Pure CSS — a `rotateY` on a leaf hinged at its left edge, under a
+ * perspective, with the dark opening painted behind it. There is no
+ * JavaScript here and there could not be: the page ships none. The animation
+ * runs because the server rendered an element with a different class than
+ * last time, which is the whole rendering model of this sample expressed as
+ * a moving picture.
+ *
+ * Three answers, three behaviours, and they are distinguishable across a room
+ * without reading the status code underneath:
+ *
+ * - allowed     — swings wide and stays there
+ * - refused     — does not move at all, and rattles in the frame
+ * - step-up     — cracks open, then shuts again: you were close
+ */
+function Doorway({ door, verdict }: { door: doorApi.Door; verdict?: Verdict }) {
+  const answered = verdict?.door === door.id ? verdict : undefined;
+  const stepUp = answered?.acrValues !== undefined || answered?.maxAge !== undefined;
+
+  const state = !answered
+    ? ""
+    : answered.allowed
+      ? "doorway--open"
+      : stepUp
+        ? "doorway--tease"
+        : "doorway--barred";
+
+  return (
+    <div
+      // Remounted per attempt so the animation restarts. Without this, pressing
+      // a locked door twice animates once.
+      key={answered?.at ?? "idle"}
+      className={`doorway ${state}`}
+      aria-hidden="true"
+    >
+      <span className="doorway__opening">{answered?.allowed ? "IN" : ""}</span>
+      <span className="doorway__leaf">
+        <span className="doorway__panel" />
+        <span className="doorway__panel" />
+        <span className="doorway__knob" />
+      </span>
     </div>
   );
 }
@@ -113,38 +159,42 @@ function Doors({ doors, verdict }: { doors: doorApi.Door[]; verdict?: Verdict })
       <ul className="doors">
         {doors.map((door) => (
           <li key={door.id} className="door">
-            <div className="door__head">
-              <h3 className="door__name">{door.name}</h3>
-              <code>{door.scope}</code>
+            <Doorway door={door} verdict={verdict} />
+
+            <div className="door__body">
+              <div className="door__head">
+                <h3 className="door__name">{door.name}</h3>
+                <code>{door.scope}</code>
+              </div>
+              <p className="door__blurb">{door.blurb}</p>
+
+              {(door.acr || door.maxAge !== undefined) && (
+                <p className="door__extra">
+                  Also demands{" "}
+                  {door.acr && (
+                    <>
+                      assurance <b>{door.acr}</b>
+                    </>
+                  )}
+                  {door.acr && door.maxAge !== undefined && " and "}
+                  {door.maxAge !== undefined && (
+                    <>
+                      a sign-in within <b>{door.maxAge}s</b>
+                    </>
+                  )}
+                  .
+                </p>
+              )}
+
+              <form action={openDoor}>
+                <input type="hidden" name="door" value={door.id} />
+                <button className="button button--primary" type="submit">
+                  Open
+                </button>
+              </form>
+
+              {verdict?.door === door.id && <VerdictBanner verdict={verdict} />}
             </div>
-            <p className="door__blurb">{door.blurb}</p>
-
-            {(door.acr || door.maxAge !== undefined) && (
-              <p className="door__extra">
-                Also demands{" "}
-                {door.acr && (
-                  <>
-                    assurance <b>{door.acr}</b>
-                  </>
-                )}
-                {door.acr && door.maxAge !== undefined && " and "}
-                {door.maxAge !== undefined && (
-                  <>
-                    a sign-in within <b>{door.maxAge}s</b>
-                  </>
-                )}
-                .
-              </p>
-            )}
-
-            <form action={openDoor}>
-              <input type="hidden" name="door" value={door.id} />
-              <button className="button button--primary" type="submit">
-                Open
-              </button>
-            </form>
-
-            {verdict?.door === door.id && <VerdictBanner verdict={verdict} />}
           </li>
         ))}
       </ul>
@@ -195,10 +245,9 @@ function TokenCard({ session }: { session: Session }) {
       </dl>
 
       <p className="hint">
-        The panel asked for all three door scopes. Anything absent from <b>scope</b> was
-        dropped <em>silently</em> — IDEN grants the intersection of what was requested, what
-        this client may request, and what this person holds, and narrowing a token is not an
-        error.
+        The panel asked for all three door scopes. Anything absent from <b>scope</b> was dropped{" "}
+        <em>silently</em> — IDEN grants the intersection of what was requested, what this client may
+        request, and what this person holds, and narrowing a token is not an error.
       </p>
 
       <div className="actions">
@@ -213,12 +262,12 @@ function TokenCard({ session }: { session: Session }) {
       </div>
 
       <p className="hint">
-        <b>These two are not the same, and the difference is the surprising part.</b> A
-        refresh re-resolves permissions but may only ever <em>narrow</em> the grant it was
-        issued from, so it is how a <em>revoked</em> role disappears. A permission you have
-        just been <em>given</em> cannot arrive that way — RFC 6749 forbids a refresh
-        returning more than was originally granted — so it takes a new authorization
-        request. You will not be asked for a password: the IDEN session is still there.
+        <b>These two are not the same, and the difference is the surprising part.</b> A refresh
+        re-resolves permissions but may only ever <em>narrow</em> the grant it was issued from, so
+        it is how a <em>revoked</em> role disappears. A permission you have just been <em>given</em>{" "}
+        cannot arrive that way — RFC 6749 forbids a refresh returning more than was originally
+        granted — so it takes a new authorization request. You will not be asked for a password: the
+        IDEN session is still there.
       </p>
     </section>
   );
@@ -230,9 +279,9 @@ function Provenance({ data }: { data: Permissions }) {
     <section className="card card--quiet">
       <h2>Why you hold what you hold</h2>
       <p>
-        A token carries <code>scope</code> and nothing else — no roles, no groups. A resource
-        server should not need an org chart to check a permission. A person looking at a
-        locked door does want one, so IDEN answers that separately.
+        A token carries <code>scope</code> and nothing else — no roles, no groups. A resource server
+        should not need an org chart to check a permission. A person looking at a locked door does
+        want one, so IDEN answers that separately.
       </p>
 
       <dl className="claims">
@@ -267,8 +316,8 @@ function Provenance({ data }: { data: Permissions }) {
 
       {data.scopes.every((source) => !source.value.startsWith("door:")) && (
         <p className="hint">
-          You hold no door permissions at all. Somebody has to put you in a group or give you
-          a role before any of this opens.
+          You hold no door permissions at all. Somebody has to put you in a group or give you a role
+          before any of this opens.
         </p>
       )}
     </section>
@@ -280,8 +329,8 @@ function SignedOut() {
     <section className="card">
       <h2>Not signed in</h2>
       <p>
-        This panel has no idea who you are, and no opinion about what you may open. Signing in
-        hands the first question to IDEN; the second belongs to the door controller.
+        This panel has no idea who you are, and no opinion about what you may open. Signing in hands
+        the first question to IDEN; the second belongs to the door controller.
       </p>
       <form action="/api/login" method="get">
         <button className="button button--primary" type="submit">
@@ -303,17 +352,17 @@ function HowThisWorks({ audience }: { audience: string }) {
             issues the token                │
             ◄─── public keys, fetched once ───┘`}</pre>
       <p>
-        The controller never calls IDEN to ask about you. It fetched the public signing keys
-        once and validates every token offline — no round trip, no shared database, and no
-        outage here when the identity provider restarts.
+        The controller never calls IDEN to ask about you. It fetched the public signing keys once
+        and validates every token offline — no round trip, no shared database, and no outage here
+        when the identity provider restarts.
       </p>
       <p>
-        The price is honest: a permission revoked now keeps working until the token expires,
-        ten minutes by default. For a door that is the right trade.
+        The price is honest: a permission revoked now keeps working until the token expires, ten
+        minutes by default. For a door that is the right trade.
       </p>
       <p className="hint">
-        Tokens for this API are addressed to <code>{audience}</code>. The controller checks
-        that, and a token minted for anything else is refused even though IDEN signed it.
+        Tokens for this API are addressed to <code>{audience}</code>. The controller checks that,
+        and a token minted for anything else is refused even though IDEN signed it.
       </p>
     </section>
   );
@@ -364,8 +413,8 @@ export default async function Page({
 
       {session && (
         <p className="strip">
-          <a href="/api/logout">Sign out</a> — ends the IDEN session too, so the next sign-in
-          starts from nothing.
+          <a href="/api/logout">Sign out</a> — ends the IDEN session too, so the next sign-in starts
+          from nothing.
         </p>
       )}
     </>

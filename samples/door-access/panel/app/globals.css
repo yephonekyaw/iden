@@ -233,11 +233,17 @@ a:hover { background: var(--mustard); }
 .doors { list-style: none; margin: 1.5rem 0 0; padding: 0; }
 
 .door {
+  display: flex; align-items: flex-start; gap: 1.25rem;
   border: var(--rule) solid var(--ink);
   background: var(--paper);
   padding: 1.25rem;
 }
 .door + .door { margin-top: 1.25rem; }
+
+/* Everything that is not the door itself. `min-width: 0` because a flex item
+   defaults to min-content, and a long scope in a <code> would otherwise push
+   the card wider than the page. */
+.door__body { flex: 1; min-width: 0; }
 
 .door__head {
   display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem 0.85rem;
@@ -332,3 +338,113 @@ h3 { margin: 0; }
    live in are block elements that would otherwise stack them. */
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 1.5rem; }
 .actions form { margin: 0; }
+
+/* The door itself ----------------------------------------------------------
+
+   A leaf hinged at its left edge, rotated in 3D over the dark opening behind
+   it. No images and no JavaScript: the page ships none, and it does not need
+   any, because the thing that starts an animation here is the server having
+   rendered a different class than it did last time.
+
+   Sizes are in px rather than rem on purpose. This is a drawing, and it should
+   not resize with the reader's font settings — the proportions are the point,
+   and a door twice as tall as it is wide stops reading as a door. */
+
+.doorway {
+  position: relative; flex: none;
+  width: 84px; height: 122px;
+  /* Shallow enough that the leaf visibly swings toward you rather than merely
+     getting narrower, which is what a flat scale would look like. */
+  perspective: 620px;
+}
+
+/* What is behind the door. Painted first and covered by the leaf at rest, so
+   it is only ever seen through a door that actually opened. */
+.doorway__opening {
+  position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: flex-end;
+  padding-right: 0.5rem;
+  background: var(--ink); color: var(--paper);
+  font-family: var(--mono); font-size: 0.6875rem; font-weight: 700;
+  letter-spacing: 1.5px;
+}
+
+.doorway__leaf {
+  position: absolute; inset: 0;
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 9px;
+  background: var(--accent);
+  border: var(--rule) solid var(--ink);
+  /* Hinged on the left, like a door. The default centre origin would make it
+     pivot through its own frame, which reads as a playing card flipping. */
+  transform-origin: left center;
+  transform-style: preserve-3d;
+}
+
+/* The two raised panels every panelled door has. Purely so the leaf reads as a
+   door at a glance rather than as a coloured rectangle. */
+.doorway__panel {
+  flex: 1;
+  border: 2px solid var(--ink);
+}
+
+.doorway__knob {
+  position: absolute; right: 8px; top: 50%;
+  width: 9px; height: 9px; margin-top: -4px;
+  background: var(--ink);
+}
+
+/* Opened. Overshoots a little and settles, because a door with mass does. */
+@keyframes door-swing {
+  0%   { transform: rotateY(0deg); }
+  55%  { transform: rotateY(-82deg); }
+  75%  { transform: rotateY(-68deg); }
+  100% { transform: rotateY(-74deg); }
+}
+
+/* Refused outright. It does not open at all — it does not even begin to. The
+   shake is lateral, in the frame, which is what a locked door does when you
+   pull the handle. */
+@keyframes door-rattle {
+  0%, 100% { transform: translateX(0); }
+  15% { transform: translateX(-3px); }
+  30% { transform: translateX(3px); }
+  45% { transform: translateX(-2px); }
+  60% { transform: translateX(2px); }
+  80% { transform: translateX(-1px); }
+}
+
+/* Refused for assurance rather than permission. You hold the permission, so it
+   starts to open — and then shuts, because you have not proved enough. The
+   difference between this and the rattle is the difference between 'no' and
+   'not like this'. */
+@keyframes door-tease {
+  0%   { transform: rotateY(0deg); }
+  30%  { transform: rotateY(-24deg); }
+  45%  { transform: rotateY(-20deg); }
+  100% { transform: rotateY(0deg); }
+}
+
+.doorway--open .doorway__leaf {
+  animation: door-swing 700ms cubic-bezier(0.22, 0.9, 0.3, 1) forwards;
+}
+.doorway--barred .doorway__leaf {
+  animation: door-rattle 420ms ease-in-out;
+}
+.doorway--tease .doorway__leaf {
+  animation: door-tease 1100ms cubic-bezier(0.3, 0.8, 0.4, 1);
+}
+
+@media (max-width: 34rem) {
+  /* The drawing is the first thing in the card, so stacking puts it on top
+     where it reads as a heading rather than as a margin ornament. */
+  .door { flex-direction: column; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The outcome still has to be visible, so the opened door is shown open —
+     it just gets there without the swing. The two refusals end shut anyway,
+     which is their whole point, so they need no end state of their own. */
+  .doorway__leaf { animation: none !important; }
+  .doorway--open .doorway__leaf { transform: rotateY(-74deg); }
+}
