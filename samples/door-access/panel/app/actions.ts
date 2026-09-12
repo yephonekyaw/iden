@@ -53,6 +53,7 @@ export async function refreshTokens(): Promise<void> {
   } catch (problem) {
     session.verdict = {
       door: "—",
+      at: Date.now(),
       allowed: false,
       status: 400,
       code: "refresh_failed",

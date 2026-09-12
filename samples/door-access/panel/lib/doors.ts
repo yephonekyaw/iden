@@ -67,6 +67,7 @@ export async function open(session: Session, doorId: string): Promise<Verdict> {
   if (response.ok) {
     return {
       door: doorId,
+      at: Date.now(),
       allowed: true,
       status: response.status,
       code: "ok",
@@ -81,6 +82,7 @@ export async function open(session: Session, doorId: string): Promise<Verdict> {
 
   return {
     door: doorId,
+    at: Date.now(),
     allowed: false,
     status: response.status,
     code: body.error ?? "unknown",

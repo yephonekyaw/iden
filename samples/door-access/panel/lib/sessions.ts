@@ -19,6 +19,13 @@ import { peek, type Tokens } from "./oidc";
 /** What the door controller said, last time it was asked. */
 export interface Verdict {
   door: string;
+  /**
+   * When this answer came back. Not shown anywhere — it exists so React
+   * remounts the door on every attempt, which is what restarts a CSS
+   * animation. Pressing a door twice and seeing it move once would read as a
+   * broken page rather than as the same answer twice.
+   */
+  at: number;
   allowed: boolean;
   status: number;
   code: string;
