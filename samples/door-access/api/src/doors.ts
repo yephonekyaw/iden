@@ -54,8 +54,7 @@ export const DOORS: Door[] = [
   },
 ];
 
-export const doorById = (id: string): Door | undefined =>
-  DOORS.find((door) => door.id === id);
+export const doorById = (id: string): Door | undefined => DOORS.find((door) => door.id === id);
 
 /** Every scope this API defines, which is also what `setup.ts` registers. */
 export const ALL_SCOPES = DOORS.map((door) => door.scope);

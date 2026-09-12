@@ -156,10 +156,7 @@ export const refresh = (refreshToken: string): Promise<Tokens> =>
     }),
   );
 
-export async function verifyIdToken(
-  idToken: string,
-  expectedNonce?: string,
-): Promise<JWTPayload> {
+export async function verifyIdToken(idToken: string, expectedNonce?: string): Promise<JWTPayload> {
   await metadata();
   if (!jwks) throw new Error("Discovery has not run yet.");
 

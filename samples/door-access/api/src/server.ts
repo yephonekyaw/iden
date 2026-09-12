@@ -74,12 +74,9 @@ function decide(door: Door, claims: AccessClaims): void {
     // 403, not 401. The token is perfectly valid and signing in again will
     // produce exactly the same one — what is missing is a permission, and only
     // an administrator can change that.
-    throw new Refusal(
-      403,
-      "insufficient_scope",
-      `This token does not carry ${door.scope}.`,
-      { scope: door.scope },
-    );
+    throw new Refusal(403, "insufficient_scope", `This token does not carry ${door.scope}.`, {
+      scope: door.scope,
+    });
   }
 
   if (door.acr && !meetsAcr(claims.acr, door.acr)) {
@@ -187,7 +184,11 @@ app.post("/doors/:id/open", async (request, response) => {
     // Discovery or the JWKS fetch failed. That is this service being unable to
     // answer, which is not the same as the caller being refused.
     return refuse(
-      new Refusal(503, "server_error", problem instanceof Error ? problem.message : String(problem)),
+      new Refusal(
+        503,
+        "server_error",
+        problem instanceof Error ? problem.message : String(problem),
+      ),
     );
   }
 
