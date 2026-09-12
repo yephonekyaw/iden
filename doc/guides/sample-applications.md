@@ -1,6 +1,6 @@
 # Sample applications
 
-Three working applications live in [`samples/`](https://github.com/yephonekyaw/iden/tree/dev/samples).
+Four working applications live in [`samples/`](https://github.com/yephonekyaw/iden/tree/dev/samples).
 Each one shows a different way of integrating, and each is its own project — its own dependencies,
 its own build, its own README. Nothing in them imports from `web/` or `provider/`, so you can copy a
 directory out of the repository, change the issuer, and run it against your own deployment.
@@ -10,6 +10,7 @@ directory out of the repository, change the issuer, and run it against your own 
 | **[`oidc-playground`](https://github.com/yephonekyaw/iden/tree/dev/samples/oidc-playground)** | 5100 | React SPA, no backend, no OIDC library | The authorization code flow one parameter at a time — PKCE computed with `crypto.subtle`, the callback checks, the token exchange, and every claim in every token |
 | **[`single-sign-out`](https://github.com/yephonekyaw/iden/tree/dev/samples/single-sign-out)** | 5200, 5201 | Two Node servers | One session across two applications, and the back-channel logout receiver that most libraries make you write yourself |
 | **[`nextjs-nextauth`](https://github.com/yephonekyaw/iden/tree/dev/samples/nextjs-nextauth)** | 5300 | Next.js with stock Auth.js | That a library which has never heard of IDEN works against it with no adapter and no glue |
+| **[`door-access`](https://github.com/yephonekyaw/iden/tree/dev/samples/door-access)** | 5400, 5401 | A Next.js panel and an Express resource server | Authorization rather than authentication — offline validation with the audience check, `401` against `403`, step-up via `acr_values` and `max_age`, and why a revoked permission dies at the next refresh while a granted one needs a new sign-in |
 
 ## Which one to read
 
@@ -20,8 +21,13 @@ every request is a `fetch` you can copy — so it is the one that shows what
 **Convincing someone it is standards-compliant?** `nextjs-nextauth`. The whole integration is nine
 lines of Auth.js configuration naming no endpoint at all, because discovery supplies them.
 
-**Implementing sign-out?** `single-sign-out`, which is the only one of the three showing the
-receiving end. See also [Handle single sign-out](single-sign-out.md).
+**Implementing sign-out?** `single-sign-out`, which is the only one showing the receiving end.
+See also [Handle single sign-out](single-sign-out.md).
+
+**Writing the API that trusts these tokens?** `door-access`. It is the only sample with a resource
+server in it, and it is the runnable form of
+[Validate tokens in your API](protect-an-api.md) — including the audience check that guide calls
+the one people skip.
 
 ## Two things to set up first
 
@@ -31,6 +37,10 @@ The seed does not create sample clients on purpose — a client with a live redi
 something to leave lying around in a deployment by accident. Register each from the dashboard under
 **Clients → Register client**; every sample's README names the exact `client_id`, redirect URI,
 application type and scopes it expects.
+
+`door-access` needs a resource API, three scopes, three roles and a group as well — it is the one
+sample about permissions rather than identity, and those are the objects permissions are made of.
+Its README walks through each in order, with the admin API call beside every dashboard step.
 
 ### Let browser samples through CORS
 

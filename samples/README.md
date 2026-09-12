@@ -25,21 +25,23 @@ laptop with no network still looks right.
 | [`oidc-playground`](oidc-playground/) | React SPA, no backend | The authorization code flow one parameter at a time — PKCE, the callback, the token exchange, and every claim in every token |
 | [`single-sign-out`](single-sign-out/) | Two Node servers | Single sign-on across two applications, and single sign-*out* — the back-channel logout receiver most libraries make you write yourself |
 | [`nextjs-nextauth`](nextjs-nextauth/) | Next.js, stock Auth.js | That IDEN works with an OIDC library that knows nothing about it. No custom code, no adapter |
+| [`door-access`](door-access/) | A Next.js panel and an Express resource server | Authorization rather than authentication — a scope check, 401 against 403, step-up, and why a revoked permission dies at the next refresh while a granted one needs a new sign-in |
 
-## Running all four at once
+## Running them all at once
 
 Each sample has a Dockerfile, and [`docker-compose.yml`](docker-compose.yml)
-brings up all four — four, because `single-sign-out` is two applications.
+brings up six containers — six, because `single-sign-out` is two applications
+and `door-access` is a panel and the service it asks.
 
 ```bash
 cp samples/.env.example samples/.env    # fill it in
 docker compose -f samples/docker-compose.yml up -d --build
 ```
 
-Playground 5100 · Portal 5200 · Library 5201 · Next.js 5300, published on every
-interface so a tunnel or proxy elsewhere can reach them at
-`host.docker.internal:<port>`. On a machine with a public address that is the
-internet too, so firewall them if that matters.
+Playground 5100 · Portal 5200 · Library 5201 · Next.js 5300 · Door controller
+5400 · Door panel 5401, published on every interface so a tunnel or proxy
+elsewhere can reach them at `host.docker.internal:<port>`. On a machine with a
+public address that is the internet too, so firewall them if that matters.
 
 Two rules cover the configuration. `IDEN_ISSUER` must be a name your browser
 *and* these containers can both resolve, and must equal your deployment's own
@@ -57,6 +59,10 @@ is not something to leave lying around in a deployment by accident.
 Register one from the dashboard under **Clients → Register client**, or through
 the admin API. Each sample's README names the exact `client_id`, redirect URI and
 scopes it expects.
+
+`door-access` needs more than a client — a resource API, its scopes, roles and a
+group as well, since it is the one sample about permissions rather than
+identity. Its README walks through each object in order.
 
 ## Letting a browser sample talk to the provider
 
