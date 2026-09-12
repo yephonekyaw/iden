@@ -57,6 +57,12 @@ separate process read a signed token and did arithmetic on it.
 | Lab | `door:lab:open` | — |
 | Server room | `door:server:open` | `acr` of `iden:loa:2`, and a sign-in within 300s |
 
+The doors on the page are drawn rather than described, and they move: one
+swings open, one rattles in its frame without budging, and the server room
+cracks open and shuts again — permission held, assurance missing. It is all
+CSS. The panel ships no client JavaScript, and an animation starts because the
+server rendered a different class than it did last time.
+
 One scope per door rather than one `door:open` for all three, because IDEN has
 no resource-instance permissions — there is no way to say *may open door 7 but
 not door 12*. A door that needs its own answer needs its own scope. That is
